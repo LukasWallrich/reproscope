@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>reproscope — Scope</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔬</text></svg>">
+<style>
+  :root {
+    --ink: #1a1f2b; --muted: #5b6472; --accent: #0f6a5f; --accent-soft: #e4f2ef;
+    --warn: #8a4b08; --warn-soft: #fdf2e3; --line: #dde2e9; --bg: #fbfaf7; --card: #ffffff;
+    --mono: "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+  h1 { font-size: 2.1rem; margin: 0 0 .2rem; letter-spacing: -.02em; }
+  h1 code { font-family: var(--mono); background: none; }
+  h2 { font-size: 1.35rem; margin: 2.6rem 0 .8rem; padding-top: 1.2rem; border-top: 1px solid var(--line); letter-spacing: -.01em; }
+  h3 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
+  p, li { max-width: 72ch; }
+  .kicker { color: var(--muted); font-size: 1.05rem; margin-bottom: 1.4rem; }
+  .flag { background: var(--warn-soft); border: 1px solid #ecd9bd; border-radius: 8px;
+          padding: .7rem 1rem; color: var(--warn); font-size: .95rem; margin: 1.2rem 0; }
+  .pos { background: var(--accent-soft); border-left: 4px solid var(--accent); border-radius: 0 8px 8px 0;
+         padding: .9rem 1.1rem; margin: 1.2rem 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .93rem; }
+  th { text-align: left; border-bottom: 2px solid var(--ink); padding: .45rem .6rem; }
+  td { border-bottom: 1px solid var(--line); padding: .5rem .6rem; vertical-align: top; }
+  td:first-child { white-space: nowrap; font-weight: 600; }
+  .tablewrap { overflow-x: auto; }
+  code { font-family: var(--mono); font-size: .88em; background: #eef0f3; padding: .1em .35em; border-radius: 4px; }
+  .stage { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+           padding: 1rem 1.2rem; margin: .9rem 0; }
+  .stage h3 { margin-top: 0; }
+  .stage .who { font-size: .82rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .attr { font-size: .85rem; color: var(--muted); margin-top: .5rem; }
+  .attr b { color: var(--accent); }
+  .pipe { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: 1.2rem 0; font-size: .9rem; }
+  .pipe span { background: var(--card); border: 1.5px solid var(--accent); border-radius: 999px;
+               padding: .3rem .85rem; white-space: nowrap; }
+  .pipe em { color: var(--muted); font-style: normal; }
+  .refs { font-size: .88rem; color: var(--muted); }
+  ul { padding-left: 1.3rem; }
+  li { margin: .3rem 0; }
+  .decision-why { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>🔬 <code>reproscope</code></h1>
+<p class="kicker">An open-source instrument that puts a social-science paper through a pipeline of
+escalating scrutiny — <b>does it compute → is it sound → does it hold up</b> — given only the
+paper and its data, without the original analysis code.</p>
+
+<div class="flag">⚗️ <b>Status: experiment.</b> This project is exploratory and open from the start.
+It may or may not yield a broadly useful tool; findings about where it fails are treated as
+deliverables alongside the tool itself.</div>
+
+<h2>Positioning</h2>
+<div class="pos">
+reproscope is an open review-stage instrument that extends the Kohler et&nbsp;al. (2026,
+arXiv:2604.21965) re-derivation design from verdict benchmarking to robustness measurement —
+replacing single-shot reproduction with a k-replica agreement statistic and locating the published
+specification within its defensible analysis space (m-value).
+</div>
+<p>Kohler et&nbsp;al. already established the core re-derivation machinery on 48 pre-certified
+reproducible I4R papers: vision-based extraction from rendered pages, results-redacted methods
+documents with a numeral leak-check, blinded implementation templates, tolerance grading, and an
+unblinded diagnosis pass. reproscope adopts those elements with attribution rather than
+re-inventing them. Its three genuine contributions:</p>
+<ul>
+  <li><b>Multiverse + m-value.</b> Kohler et&nbsp;al. explicitly classify robustness-to-alternative-specifications
+      as a reproducibility type they did not address and name it as future work. Their observation that agents
+      succeed when "implicit assumptions happen to align with the original implementation" is precisely the
+      quantity the multiverse measures.</li>
+  <li><b>k-replica agreement as a primary statistic.</b> Their agreement analysis requires ground truth,
+      which does not exist for an unvetted paper; replica-to-replica agreement needs no target. Their own
+      finding that ~50% of coefficients differ from themselves across repeated runs motivates k&gt;1.</li>
+  <li><b>Review-stage instrument, not benchmark study.</b> Their corpus was pre-certified reproducible,
+      so grades never had to answer "what does a C mean for an unknown paper?". reproscope must: complete
+      claim coverage, and a report that separates decision-relevant output from context.</li>
+</ul>
+<p>Planned: contact Kohler and Ash — no repo or data-availability statement exists, their per-cause
+failure counts are unpublished, and this extension sits on the axis they disclaimed. A collaboration
+or materials-sharing ask is natural. Independently, the ERROR project (Elson/Hussey) holds the ideal
+psychology corpus of expert-confirmed errors with no LLM arm — evaluating reproscope's Stage&nbsp;2
+against it would itself be a contribution.</p>
+
+<h2>What it does</h2>
+<div class="pipe">
+  <span>Intake &amp; extraction</span> <em>→</em>
+  <span>Stage 1 · Computation</span> <em>→</em>
+  <span>Stage 2 · Correctness</span> <em>→</em>
+  <span>Stage 3 · Robustness</span> <em>→</em>
+  <span>Report</span>
+</div>
+<p><b>Framing rule (report header, always):</b> Stage&nbsp;1's match table is decision-relevant.
+Stages&nbsp;2 and&nbsp;3 are context for human evaluation, explicitly labeled as such — never verdicts.</p>
+
+<div class="stage">
+  <h3>Stage 0 — Intake &amp; extraction</h3>
+  <div class="who">Two vision models, cross-checked · deterministic guards</div>
+  <ul>
+    <li>Input: per-paper manifest — PDF + data file(s) + optional codebook; optional focal claim
+        (default: all inferential claims in the abstract). No auto-fetching in v1.</li>
+    <li>Two independent vision models each extract the claims table from rendered pages; the run
+        proceeds only on agreement, disagreements are flagged for human review. This redundancy
+        replaces a human gate — the pipeline is otherwise fully unattended batch.</li>
+    <li>A results-redacted methods document is produced, with a deterministic leak-check
+        (claims-table values scanned for in the redacted text; run blocked on failure). The redacted
+        variant ships with the report for auditability.</li>
+    <li>Deterministic checkers (metacheck modules, statcheck on source formats, GRIM/SPRITE via
+        scrutiny/rsprite2) run here; their output lands in the report appendix with coverage stats
+        alongside flags.</li>
+  </ul>
+  <div class="attr">Vision extraction, redaction and leak-check: <b>adopted from Kohler et&nbsp;al.</b>
+  (three teams converged on vision over PDF text). New: the two-model cross-check.</div>
+</div>
+
+<div class="stage">
+  <h3>Stage 1 — Computation (decision-relevant)</h3>
+  <div class="who">k = 6 blinded replicas: 3 cheap model families × 2 runs</div>
+  <ul>
+    <li>Each replica independently re-implements the analysis from the redacted methods + data.
+        Replicas never see the paper's results — the documented fabrication/anchoring trigger
+        (100%→63% accuracy drop when the PDF is supplied). A hardcoded-results audit
+        (from Kohler) checks each replica's code.</li>
+    <li>Families: <code>glm-5.3-flash</code>, <code>gpt-5.6-luna</code>, third TBD after calibration
+        (not Haiku; <code>deepseek-v4-flash</code> only if needed — replicas read redacted markdown,
+        so vision binds only Stage&nbsp;0).</li>
+    <li>Execution in one pinned Docker image (R + Python scientific stacks). Paper-specified versions
+        trigger a matched per-paper environment; version-sensitive defaults (lme4/lavaan optimizers,
+        seeds) are named multiverse dimensions, not archaeology.</li>
+    <li>Matching by the Kohler tolerance scheme: sign gate → round to reported precision →
+        bands A&nbsp;&lt;2% / B&nbsp;&lt;20% / C&nbsp;&lt;40% → absolute threshold (&lt;0.002) when |x|&nbsp;&lt;&nbsp;0.001.</li>
+    <li><b>Headline statistics:</b> per-claim match band + within-family vs between-family replica
+        agreement ("is the methods section under-specified?" — a statistic no existing tool reports).</li>
+    <li>When original code exists: an additional reconstruct + re-run arm, always reported, quarantined
+        from the blind arms; code also feeds the diagnosis pass.</li>
+    <li>Divergence diagnosis: one unblinded top-model pass over paper + all replica code
+        (+ re-execution arm), writing "plausible sources of divergence" — labeled conjecture, placed
+        below the match table.</li>
+    <li>Per-analysis-family reporting (OLS/ANOVA vs multilevel vs SEM vs meta-analysis …): no a-priori
+        exclusions; the tool's own reliability limits per family are findings.</li>
+  </ul>
+  <div class="attr">Blinding, templates, tolerance bands, diagnosis pass: <b>adopted from Kohler et&nbsp;al.</b>
+  New: the k-replica agreement design and its decomposition.</div>
+</div>
+
+<div class="stage">
+  <h3>Stage 2 — Correctness (context)</h3>
+  <div class="who">Rubric-constrained LLM checks · no open-ended flaw-hunting</div>
+  <ul>
+    <li>Three rubrics in v1, each with an external anchor: (1) causal language vs design strength
+        (Haber CLAIMS rubric — validated, human-rated reference data); (2) sensitivity/power given
+        achieved N (computed, not judged); (3) claim–analysis alignment (does the model actually test
+        the stated hypothesis — verifiable against the replicas' own modeling choices).</li>
+    <li>Deferred: generalization-scope and measurement-validity rubrics.</li>
+    <li>Expected precision on checkable classes: 70–85% (scope-constrained evidence); the widely
+        cited ~6% figure comes from a benchmark with no social science content and an artifactual
+        precision cap. No number exists for causal-overclaiming/design-judgment rubrics in any field —
+        hence the context label carries real weight, and an ERROR-corpus evaluation is the path to one.</li>
+    <li>Guardrails: never feed the paper's own abstract as context when judging that abstract;
+        explicit cautionary prompting (LLM summaries otherwise amplify overclaiming by stripping hedges).</li>
+  </ul>
+  <div class="attr">New assembly; individual rubrics anchored in published instruments.</div>
+</div>
+
+<div class="stage">
+  <h3>Stage 3 — Robustness (context)</h3>
+  <div class="who">Top model enumerates &amp; screens · cheap models execute</div>
+  <ul>
+    <li>Specification space = union of three sources: the replicas' organic disagreements; a
+        systematically enumerated decision grid (exclusions, operationalizations, covariates,
+        estimators) from methods + data schema; and standard-practice defaults even when the paper
+        is silent (e.g. outlier treatment).</li>
+    <li>Adversarial reasonableness screen classifies each specification defensible/not, with a
+        logged rationale for every rejection — the reader judges the space, not just the curve.
+        (Motivation: 86% of mutually contradictory analyses passed AI review, 78% passed human
+        expert review — an unscored screen adds little.)</li>
+    <li>Execution through existing engines (<code>specr</code>/<code>multiverse</code>/<code>boba</code>);
+        PIMA considered for valid inference over the set.</li>
+    <li>Reported: specification curve + <b>m-value</b> (probability the published specification is at
+        least as extreme within its own defensible analysis space — Miao, Pritchard &amp; Zou 2026),
+        estimated via their Agentic-Bootstrap approach.</li>
+    <li>Estimation and interpretation run as separate, differently-prompted stages: a confirmatory
+        prompt flips verdicts 10%→90% with unchanged coefficient distributions — bias lives in
+        interpretation, not estimation.</li>
+  </ul>
+  <div class="attr"><b>The core novel stage.</b> Kohler et&nbsp;al. name exactly this as future work.</div>
+</div>
+
+<div class="stage">
+  <h3>Report</h3>
+  <ul>
+    <li>One HTML report per paper (claims table with match bands → agreement decomposition →
+        specification curve + m-value → rubric commentary → deterministic-checker appendix), plus a
+        machine-readable JSON sidecar for batch aggregation.</li>
+    <li>Decision/context separation stated at the top; the redacted methods document and all replica
+        code attached for audit.</li>
+  </ul>
+</div>
+
+<h2>Models &amp; orchestration</h2>
+<ul>
+  <li><b>Multi-model orchestration over single-expensive-model</b> is the scale strategy. Kohler
+      et&nbsp;al. suggest expensive models may be needed; the bet here is that k cheap replicas from
+      different families + top-model reasoning stages beat one expensive generalist at batch scale.
+      An escalation path stays open: if calibration shows cheap families underperforming, a top-model
+      replica arm or arbiter is added.</li>
+  <li><b>Cheap tier (implementation/replicas):</b> <code>glm-5.3-flash</code> ($0.075/$0.25 per MTok;
+      calibration required — GLM-5 was Kohler's <i>worst</i> configuration at 52% vs 72% cell
+      completion, though 5.3-flash is a newer model), <code>gpt-5.6-luna</code> ($0.20/$1.20;
+      subscription coverage unconfirmed — test locally).</li>
+  <li><b>Top tier (extraction arbitration, spec enumeration/screening, matching, diagnosis):</b>
+      GPT-5.6 Sol (subscription-confirmed via Codex CLI) and/or Claude via <code>claude -p</code>.</li>
+  <li><b>Routing:</b> standalone Python driver; headless CLI clients (<code>claude -p</code>,
+      <code>codex exec</code>, <code>opencode run --format json -m provider/model</code> — installed,
+      tested; note ~17k-token system-prompt overhead per opencode call) plus direct API calls
+      (OpenRouter with price-sort + throughput floor; Z.ai's Anthropic-compatible endpoint).
+      Bring-your-own-subscription is a design requirement.</li>
+  <li><b>Cost target:</b> experiment toward the floor; design envelope ~$20–50/paper equivalent,
+      with per-run token/cost capture so real numbers are reportable.</li>
+</ul>
+
+<h2>Corpora &amp; validation</h2>
+<div class="tablewrap"><table>
+  <tr><th>Corpus</th><th>Role</th><th>Notes</th></tr>
+  <tr><td>Multi100</td><td>Development</td><td>MIT on GitHub; 100 papers, predefined claims, 11k per-analyst
+      results — the only setting where "would humans have diverged too?" is directly answerable.
+      ~47/100 with easily obtainable data; no paper DOIs (title matching needed).</td></tr>
+  <tr><td>ReplicatorBench</td><td>Development / discriminant validity</td><td>Apache-2.0; 39 SCORE studies
+      with human replication reports incl. non-replicable ground truth; its data-only condition matches
+      reproscope's task exactly. Deduplicate against Multi100 (both SCORE-derived).</td></tr>
+  <tr><td>I4R × Psychological Science</td><td>Quasi-held-out</td><td>Reports online individually but not
+      aggregated; memorization implausible but possible. Contact I4R for materials.</td></tr>
+</table></div>
+<ul>
+  <li><b>Contamination probes:</b> pre/post-training-cutoff split of the dev corpus (Kohler template);
+      dev corpora are public, so no dev result is claimed as generalization.</li>
+  <li><b>Validation sequence:</b> develop on Multi100 ∪ ReplicatorBench → discriminant test on
+      ReplicatorBench's non-replicable ground truth → held-out on I4R×PS → (Stage&nbsp;2) ERROR corpus.</li>
+  <li><b>Headline comparison to aim for:</b> agent crowd vs analyst crowd on identical papers
+      (Multi100's 34% ±0.05d human recovery is the reference band; Holtdirk's LLM pipeline sits at
+      24%, 40% vs 28% on the matched subset — tolerance comparability unverified).</li>
+</ul>
+
+<h2>Decision register</h2>
+<div class="tablewrap"><table>
+  <tr><th>Decision</th><th>Choice</th><th class="decision-why">Why</th></tr>
+  <tr><td>Corpus</td><td>Social science; R + Python; paper + data, no code required</td>
+      <td class="decision-why">Re-derivation is the review-stage reality; Stata deferred (systematically weakest, no tooling).</td></tr>
+  <tr><td>Purpose</td><td>Review tool: self-review + peer-review embedding</td>
+      <td class="decision-why">Stage 1 decision-relevant; Stages 2–3 context — framing stated in every report.</td></tr>
+  <tr><td>Substrate</td><td>Standalone Python batch driver, versioned stage prompts, BYO subscription</td>
+      <td class="decision-why">"Clearly documented tool" + batch requirement; open-source tool, not a one-off research pipeline.</td></tr>
+  <tr><td>Replica design</td><td>3 families × 2 runs, all cheap tier</td>
+      <td class="decision-why">Within- vs between-family decomposition; ~50% self-disagreement in Kohler motivates k&gt;1.</td></tr>
+  <tr><td>Original code, if present</td><td>Always reconstruct + re-run + report; also feeds diagnosis</td>
+      <td class="decision-why">Quarantined from blind arms.</td></tr>
+  <tr><td>Environment</td><td>Pinned Docker image; paper-specified versions → matched env; silent defaults → multiverse dimensions</td>
+      <td class="decision-why">Nothing to "match" without original code; comparability across papers.</td></tr>
+  <tr><td>Human involvement</td><td>Fully unattended batch; two-model extraction cross-check replaces the gate</td>
+      <td class="decision-why">All human judgment on the finished report.</td></tr>
+  <tr><td>Appropriateness</td><td>Rubric-constrained only (3 rubrics); metacheck appendix; no open-ended flaw-hunting</td>
+      <td class="decision-why">Scope-constrained checking reaches 70–85% precision; open-ended does not.</td></tr>
+  <tr><td>Analysis families</td><td>No a-priori exclusions; report per-family reliability</td>
+      <td class="decision-why">The tool's limits are themselves findings.</td></tr>
+  <tr><td>Name</td><td><code>reproscope</code> (PyPI/GitHub clean)</td>
+      <td class="decision-why">Keeps the repro anchor; "-scope" = instrument + widening scope of scrutiny.</td></tr>
+  <tr><td>Licence / openness</td><td>MIT, public from the start, flagged as experimentation</td>
+      <td class="decision-why">Open-science posture; AEA precedent shows the audience exists.</td></tr>
+  <tr><td>Parked</td><td>coarse psych-field overlay (3–5 days, separate project); Stata; auto-fetching of papers/data</td>
+      <td class="decision-why">Off the critical path.</td></tr>
+</table></div>
+
+<h2>Risks &amp; honest limits</h2>
+<ul>
+  <li><b>Prior art proximity.</b> Stages 0–1 are substantially Kohler et&nbsp;al.'s design; the
+      contribution claims are confined to the three deltas above and must stay that way in any writeup.</li>
+  <li><b>Cheap-replica quality is unproven.</b> Kohler's grid puts GLM-class models last. First
+      milestone is a calibration run before committing the family lineup.</li>
+  <li><b>The m-value inherits the screen's judgment.</b> If the defensibility screen is miscalibrated,
+      the m-value is too; the rejection log and adversarial design mitigate but don't remove this.</li>
+  <li><b>Stage 2 is unvalidated by construction in v1.</b> It ships only because it is labeled
+      context; the ERROR-corpus evaluation is the path to a real number.</li>
+  <li><b>Contaminated dev corpora.</b> All open ground-truth corpora are public; only I4R×PS
+      approximates held-out.</li>
+</ul>
+
+<h2>Next steps</h2>
+<ul>
+  <li><code>git init</code> + initial commit (research/, SCOPE); create public GitHub repo
+      <code>reproscope</code> after your confirmation.</li>
+  <li>Calibration experiment: 3–5 Multi100 papers × candidate cheap models on the blind
+      re-implementation task — settles the third family and the escalation question.</li>
+  <li>Test Luna subscription coverage: <code>codex exec --skip-git-repo-check --sandbox read-only -m gpt-5.6-luna "say OK"</code>.</li>
+  <li>Build Stage 0 first (extraction + redaction + leak-check), one worked paper end-to-end by hand
+      to establish the recipe, then the driver.</li>
+  <li>Draft the contact notes: Kohler &amp; Ash (materials, collaboration); I4R (Psych Science
+      materials); ERROR team (Stage-2 evaluation).</li>
+</ul>
+
+<p class="refs">Grounding: <code>research/synthesis.md</code> and eight research reports in
+<code>research/</code>, all citation-verified 2026-08-31. Key sources: Kohler et&nbsp;al.
+arXiv:2604.21965; Miao, Pritchard &amp; Zou arXiv:2607.01507; Holtdirk et&nbsp;al. arXiv:2606.13670;
+Multi100 (Nature 2026); ReplicatorBench arXiv:2602.11354; Brodeur et&nbsp;al. (PNAS 2026);
+AEA Data Editor replication template (Aug 2026).</p>
+
+</main>
+</body>
+</html>
