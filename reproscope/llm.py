@@ -486,6 +486,10 @@ def call(
             break
         except Exception as e:  # noqa: BLE001 - every failure must still be ledgered
             error = f"{type(e).__name__}: {e}"
+            # CLI routes fail transiently (rate limits, concurrent sessions); retry once.
+            if attempt == 1 and route != "openrouter" and not agentic:
+                time.sleep(20)
+                continue
             break
 
         if schema is None:

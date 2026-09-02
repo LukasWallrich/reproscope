@@ -12,7 +12,7 @@ Five Multi100 psychology papers set up under `corpus/` (see `reproscope/corpus_s
 | Hurst_EvoHumanBehavior_2017_yypJ | correlation / OLS, n = 138 | Dataset.csv + Codebook.xlsx | publisher PDF via institutional access |
 | Axt_JournExpSocPsych_2018_zK2 | t-test on IAT D-scores, n = 856 | Study1Data.csv + codebook + original SPSS syntax | PsyArXiv preprint (pagination differs from the journal version) |
 | Petersen_Cognition_2017_yJwG | paired t-test on TVA parameters, n = 28 | three CSVs | author-repository copy of the published article |
-| Hertel_ClinPsychSci_2018_YabW | 2×2 mixed ANOVA, n = 54 | one .sav | author accepted manuscript (Trinity repository); pagination differs from the journal |
+| Hertel_ClinPsychSci_2018_YabW | 2×2 mixed ANOVA, n = 54 | one .sav | publisher PDF via institutional access (user download) |
 
 Multi100 ground truth per paper (claim, reported statistic, analysts' Cohen's d range) is in each manifest.
 
