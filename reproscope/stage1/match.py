@@ -409,6 +409,8 @@ def targeted_trigger(result: artifacts.ComparableResult) -> tuple[bool, list[str
     for s in result.summaries:
         if getattr(s, "importance", None) != "headline" or not s.n_ran:
             continue
+        if s.fraction_matched is None:  # abstained at intake: nothing to reconstruct
+            continue
         if (s.fraction_matched or 0) < 0.5:
             reasons.append(f"{s.claim_id}: {s.fraction_matched:.0%} of {s.n_ran} replicas in A/B")
         elif getattr(s, "fraction_a", None) == 0:
