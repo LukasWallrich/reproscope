@@ -1,0 +1,50 @@
+{
+  "paper_id": "Petersen_Cognition_2017_yJwG",
+  "title": "The effect of phasic auditory alerting on visual perception",
+  "doi": "10.1016/j.cognition.2017.04.004",
+  "pdf": null,
+  "pdf_source": null,
+  "licence": "unknown",
+  "oa_status": "closed",
+  "data_files": [
+    "data/1-s2.0-S0010027717300987-mmc1.csv",
+    "data/1-s2.0-S0010027717300987-mmc3.csv",
+    "data/1-s2.0-S0010027717300987-mmc5.csv"
+  ],
+  "codebook": null,
+  "original_code": [],
+  "focal_claim": {
+    "text": "Phasic auditory alertness affects visual perception by increasing the visual processing speed (p. 73.)",
+    "source": "multi100",
+    "reported": {
+      "statistic": "Fitting the theory of visual attention (TVA) model to each participant (separately for each condition, cue/no cue), there was an increase in processing speed v, t(27) = 4.71, p < 0.001, dz = 0.89 when a 85 dB cue is presented prior to the letter, compared to when no cue was present.",
+      "family": "t",
+      "value": 4.71,
+      "df": 27.0,
+      "n": 28.0,
+      "page": "nan"
+    }
+  },
+  "multi100": {
+    "paper_id": "Petersen_Cognition_2017_yJwG",
+    "n_analysts": 5,
+    "analyst_d": {
+      "min": 1.812,
+      "median": 1.812,
+      "max": 2.279
+    },
+    "processed_stat": [
+      -4.7079
+    ],
+    "processed_df": [
+      27.0
+    ],
+    "processed_n": [
+      28.0
+    ]
+  },
+  "environment": {
+    "language_hint": "R",
+    "versions_named": {}
+  }
+}

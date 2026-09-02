@@ -1,0 +1,48 @@
+{
+  "paper_id": "Hertel_ClinPsychSci_2018_YabW",
+  "title": "Ruminators (Unlike Others) Fail to Show Suppression-Induced Forgetting on Indirect Measures of Memory",
+  "doi": "10.1177/2167702618785339",
+  "pdf": null,
+  "pdf_source": null,
+  "licence": "unknown",
+  "oa_status": "closed",
+  "data_files": [
+    "data/Ashley_labels.sav"
+  ],
+  "codebook": null,
+  "original_code": [],
+  "focal_claim": {
+    "text": "Nonruminators’ responses in the ... transfer tasks revealed that suppression practice can be beneficial (p. 879.)",
+    "source": "multi100",
+    "reported": {
+      "statistic": "There was a significant interaction between rumination category and reactions to the baseline vs. suppressed conditions, F(1, 48) = 6.20, MSE = 746.04, p = .016, partial eta squared = .11. Clear evidence of SIF (suppression induced forgetting, i.e. negative interpretations for baseline cues but not suppression cues) was obtained for non-ruminators; but not for ruminators.",
+      "family": "F",
+      "value": 6.2,
+      "df": 1.0,
+      "n": null,
+      "page": "nan"
+    }
+  },
+  "multi100": {
+    "paper_id": "Hertel_ClinPsychSci_2018_YabW",
+    "n_analysts": 5,
+    "analyst_d": {
+      "min": 0.79,
+      "median": 1.188,
+      "max": 3.594
+    },
+    "processed_stat": [
+      6.2037
+    ],
+    "processed_df": [
+      1.0
+    ],
+    "processed_n": [
+      54.0
+    ]
+  },
+  "environment": {
+    "language_hint": "R",
+    "versions_named": {}
+  }
+}

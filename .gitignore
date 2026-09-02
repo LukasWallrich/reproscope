@@ -1,1 +1,11 @@
 *.commentable.html
+# pilot inputs and outputs: paper PDFs and datasets are not redistributable
+corpus/*/paper.pdf
+corpus/*/pages/
+corpus/*/data/
+corpus/*/code/
+runs/
+.venv/
+__pycache__/
+*.pyc
+scratch*

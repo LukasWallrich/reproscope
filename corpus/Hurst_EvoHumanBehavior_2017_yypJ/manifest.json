@@ -1,0 +1,50 @@
+{
+  "paper_id": "Hurst_EvoHumanBehavior_2017_yypJ",
+  "title": "Life history strategies and psychopathology: the faster the life strategies, the more symptoms of psychopathology",
+  "doi": "10.1016/j.evolhumbehav.2016.06.001",
+  "pdf": null,
+  "pdf_source": null,
+  "licence": "unknown",
+  "oa_status": "closed",
+  "data_files": [
+    "data/author_notes_analysis.txt",
+    "data/Dataset.csv",
+    "data/author_notes_materials.txt"
+  ],
+  "codebook": "data/Codebook.xlsx",
+  "original_code": [],
+  "focal_claim": {
+    "text": "... those with a faster life strategy report greater levels ... of psychopathology (p. 1.)",
+    "source": "multi100",
+    "reported": {
+      "statistic": "The results revealed significant associations between both life history measures and total psychopathology symptom frequency with faster life strategies associated with more symptoms of psychopathology. (From Table 5: Mini-K life history strategy predicting total psychopathology correlation coefficient = -0.51, p < 0.002)",
+      "family": "nan",
+      "value": null,
+      "df": null,
+      "n": null,
+      "page": "page 5"
+    }
+  },
+  "multi100": {
+    "paper_id": "Hurst_EvoHumanBehavior_2017_yypJ",
+    "n_analysts": 5,
+    "analyst_d": {
+      "min": 0.929,
+      "median": 1.196,
+      "max": 1.607
+    },
+    "processed_stat": [
+      -6.9511
+    ],
+    "processed_df": [
+      135.0
+    ],
+    "processed_n": [
+      138.0
+    ]
+  },
+  "environment": {
+    "language_hint": "R",
+    "versions_named": {}
+  }
+}

@@ -1,0 +1,52 @@
+# Model configuration. Tiers name the job; routes name the client.
+# route: openrouter | claude_p | codex | opencode
+
+[tiers.vision_a]
+route = "openrouter"
+model = "z-ai/glm-5.3-flash"
+
+[tiers.vision_b]
+route = "openrouter"
+model = "openai/gpt-5.6-luna"
+
+[tiers.cheap]
+route = "openrouter"
+model = "z-ai/glm-5.3-flash"
+
+[tiers.strong]
+route = "claude_p"
+model = "opus"
+
+[tiers.strong_alt]          # second family for the Stage 3 screen and second-opinion steps
+route = "codex"
+model = "gpt-5.6-sol"
+
+# Replica lineup: family -> route/model. `runs` is per family.
+[replicas.opus]
+route = "claude_p"
+model = "opus"
+runs = 2
+
+[replicas.fable]
+route = "claude_p"
+model = "claude-fable-5-1"
+runs = 1
+
+[replicas.sol]
+route = "codex"
+model = "gpt-5.6-sol"
+runs = 1
+
+[replicas.glm]
+route = "opencode"
+model = "z-ai/glm-5.3-flash"
+runs = 2
+
+[replicas.deepseek]
+route = "opencode"
+model = "deepseek/deepseek-v4-flash"
+runs = 2
+
+[executor]                  # Stage 3 multiverse execution
+route = "opencode"
+model = "z-ai/glm-5.3-flash"

@@ -1,0 +1,7 @@
+# Task: find a defensible route to the paper's reported numbers
+
+Several blind analysts reproduced the analyses in CONTRACT.json without seeing the paper's results, and their results differ from the reported values. You see everything: `PAPER.md` (full paper text), `CONTRACT.json`, `REPORTED.json` (the reported values per claim_id), `data/`, and `replicas/<id>/` (each analyst's script, results and trace).
+
+Starting from the closest replica's script, search the space of analytical choices that the paper's methods leave open or that are standard practice, one change at a time, and try to reach the reported values for the headline claims. Log every attempt in `out/attempts.json`: `{"attempts": [{"n": i, "change": "...", "defensible": true|false, "why_defensible": "...", "result": {claim_id: value}, "distance": "..."}]}`. Stop when the headline claims match within rounding, or after 12 attempts.
+
+Write `out/analysis.R` (or .py) as the final script, `out/results.json` in the same format as the replicas, and `out/outcome.json`: `{"outcome": "reachable"|"reachable_indefensibly"|"not_reachable", "added_choices": ["each choice that had to be added to the methods to reach the numbers"], "attempts": n, "closest_distance": "...", "notes": "..."}`. "reachable_indefensibly" means the only route you found uses a choice that a careful analyst would reject (state which). Never hard-code results; every value must be computed.

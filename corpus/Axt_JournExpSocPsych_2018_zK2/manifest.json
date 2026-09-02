@@ -1,0 +1,54 @@
+{
+  "paper_id": "Axt_JournExpSocPsych_2018_zK2",
+  "title": "Simultaneous ingroup and outgroup favoritism in implicit social cognition",
+  "doi": "10.1016/j.jesp.2018.08.007",
+  "pdf": "paper.pdf",
+  "pdf_source": "paper_preprint_psyarxiv.pdf",
+  "licence": "unknown",
+  "oa_status": "closed",
+  "data_files": [
+    "data/Study1Syntax.txt",
+    "data/Study1Data.csv",
+    "data/Study1Data.sav"
+  ],
+  "codebook": "data/Study1Codebook.csv",
+  "original_code": [
+    "code/FourCatGBSyntax_Cleaning.sps",
+    "code/FourCatRaceAlpha.sps",
+    "code/Study1Syntax.sps"
+  ],
+  "focal_claim": {
+    "text": "On indirect measures focusing on positive valence, members of non-dominant racial groups showed ingroup favoritism. (p. 275.)",
+    "source": "multi100",
+    "reported": {
+      "statistic": "MC-IAT White-Black associations among black participants: good N = 856, bad N = 751, Good-focal = −0.12 (0.60), Bad-focal = 0.16 (0.64), t = 9.01, p < .001, d [95% CI] = 0.45 [0.35, 0.55]",
+      "family": "t",
+      "value": -5.79,
+      "df": null,
+      "n": null,
+      "page": "page 279\n\ncorrected: 280\n\n"
+    }
+  },
+  "multi100": {
+    "paper_id": "Axt_JournExpSocPsych_2018_zK2",
+    "n_analysts": 5,
+    "analyst_d": {
+      "min": 0.297,
+      "median": 0.432,
+      "max": 1.335
+    },
+    "processed_stat": [
+      -5.7872
+    ],
+    "processed_df": [
+      855.0
+    ],
+    "processed_n": [
+      856.0
+    ]
+  },
+  "environment": {
+    "language_hint": "R",
+    "versions_named": {}
+  }
+}
