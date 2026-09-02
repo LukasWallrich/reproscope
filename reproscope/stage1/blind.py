@@ -207,5 +207,9 @@ def collect(iso: Path, work: Path) -> None:
 
 def transcript_hits(agent_log: str) -> list[str]:
     """Lines of the agent transcript that reference material outside the blind directory."""
-    pattern = re.compile(r"\.\./|stage0|claims\.json|paper\.(pdf|txt)|/corpus/|/runs/", re.IGNORECASE)
+    # "../data/" from inside out/ stays within the work directory; two levels up does not.
+    pattern = re.compile(
+        r"\.\./(?!(data|out)/|METHODS\.md|CONTRACT\.json|TASK\.md)|stage0|claims\.json|paper\.(pdf|txt)|/corpus/|/runs/",
+        re.IGNORECASE,
+    )
     return [ln[:200] for ln in agent_log.splitlines() if pattern.search(ln)]
