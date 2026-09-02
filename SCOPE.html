@@ -20,6 +20,7 @@
   h2 { font-size: 1.35rem; margin: 2.6rem 0 .8rem; padding-top: 1.2rem; border-top: 1px solid var(--line); letter-spacing: -.01em; }
   h3 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
   p, li { max-width: 72ch; }
+  a { color: var(--accent); }
   .kicker { color: var(--muted); font-size: 1.05rem; margin-bottom: 1.4rem; }
   .flag { background: var(--warn-soft); border: 1px solid #ecd9bd; border-radius: 8px;
           padding: .7rem 1rem; color: var(--warn); font-size: .95rem; margin: 1.2rem 0; }
@@ -41,69 +42,65 @@
   .pipe span { background: var(--card); border: 1.5px solid var(--accent); border-radius: 999px;
                padding: .3rem .85rem; white-space: nowrap; }
   .pipe em { color: var(--muted); font-style: normal; }
-  .refs { font-size: .88rem; color: var(--muted); }
+  .refs { font-size: .9rem; }
+  .refs li { margin: .45rem 0; }
   ul { padding-left: 1.3rem; }
   li { margin: .3rem 0; }
   .decision-why { color: var(--muted); }
+  abbr[title] { text-decoration: underline dotted; cursor: help; text-underline-offset: 2px; }
 </style>
 </head>
 <body>
 <main>
 
 <h1><code>reproscope</code></h1>
-<p class="kicker">An open-source instrument that puts a social-science paper through a pipeline of
-escalating scrutiny: does it compute, is it sound, does it hold up. It needs only the paper and its
-data, not the original analysis code.</p>
+<p class="kicker">An open-source tool that puts a social-science paper through escalating scrutiny:
+does it compute, is the analysis sound, does the result hold up across defensible alternatives.
+It needs only the paper and its data. Where the original analysis code is provided, the code is
+re-run and its results are compared with those reconstructed from the paper alone, but the
+question whether the paper by itself allows the results to be reproduced is always answered.</p>
 
 <div class="flag"><b>Status: experiment.</b> This project is exploratory and open from the start.
-It may or may not yield a broadly useful tool. Findings about where it fails count as deliverables
-alongside the tool itself.</div>
+It may or may not yield a broadly useful tool, depending on initial results and my capacity.
+Contributions are welcome, but please check first whether they match the direction, and make sure
+AI-generated code is reviewed.</div>
 
-<h2>Positioning</h2>
-<div class="pos">
-reproscope is an open review-stage instrument that extends the Kohler et&nbsp;al. (2026,
-arXiv:2604.21965) re-derivation design from verdict benchmarking to robustness measurement.
-It replaces single-shot reproduction with a k-replica agreement statistic and locates the
-paper-stated specification within its defensible analysis space.
-</div>
-<p>Kohler et&nbsp;al. already established the core re-derivation machinery on 48 pre-certified
-reproducible I4R papers: vision-based extraction from rendered pages, results-redacted methods
-documents with a numeral leak-check, blinded implementation templates, tolerance grading, and an
-unblinded diagnosis pass. reproscope adopts those elements with attribution rather than
-re-inventing them. It makes three contributions of its own:</p>
+<h2>Design principles</h2>
 <ul>
-  <li><b>Multiverse + extremeness measure.</b> Kohler et&nbsp;al. classify robustness to alternative
-      specifications as a reproducibility type they did not address and name it as future work. Their
-      observation that agents succeed when "implicit assumptions happen to align with the original
-      implementation" describes exactly the quantity the multiverse measures. Adjacency, not proof of
-      feasibility — that is what the pilot tests.</li>
-  <li><b>k-replica dispersion as a primary statistic.</b> Their agreement analysis requires ground
-      truth, which does not exist for an unvetted paper. Replica-to-replica dispersion needs no
-      target, and their finding that about half of coefficients differ from themselves across
-      repeated runs is the case for k&gt;1 (it does not by itself justify any particular k or
-      decomposition; the pilot calibrates that).</li>
-  <li><b>A review-stage instrument, not a benchmark study.</b> Their corpus was pre-certified
-      reproducible, so their grades never had to answer "what does a C mean for an unknown paper?".
-      reproscope must, which forces explicit abstention states and a report that separates
-      decision-relevant output from context.</li>
+  <li><b>Surface errors and ambiguities; provide context on analytical choices and robustness.</b>
+      Stage&nbsp;1 findings usually call for action, be it a clearer methods description or a fix.
+      Stages&nbsp;2 and&nbsp;3 are context that a human reviewer weighs; their accuracy is assessed
+      in future evaluations.</li>
+  <li><b>Runs end-to-end by default and always produces a report.</b> Uncertainty is reported
+      prominently. Handover artifacts (the extracted
+      claims, the estimand contracts, the multiverse specification) are editable, and the pipeline
+      can be restarted from any of them.</li>
+  <li><b>Two modes.</b> Batch mode runs unattended over a corpus. Interactive mode, packaged as a
+      Claude Code skill, walks through the same pipeline and stops at each decision point with the
+      options and a resolution instruction. Interactive mode is also the validation tool: it makes
+      the intermediate decisions visible.</li>
+  <li><b>Balance model strength against cost.</b> Every stage names the model tier it needs.
+      Cheap models do implementation and enumeration; strong models do arbitration, screening,
+      diagnosis and interpretation. Models are user-configured so that accuracy and budget
+      trade-offs can be tested.</li>
+  <li><b>Blind where it matters.</b> Anything that writes analysis code never sees the paper's
+      results. Everything that judges the paper sees all of it.</li>
+  <li><b>Open, with bring-your-own key or subscription.</b> MIT licence, public repository, and
+      no dependency on a single provider.</li>
 </ul>
-<p>Planned: contact Kohler and Ash. No repo or data-availability statement exists, their per-cause
-failure counts are unpublished, and this extension sits on the axis they disclaimed, so a
-collaboration or materials-sharing ask is natural. Independently, the ERROR project (Elson/Hussey)
-holds the ideal psychology corpus of expert-confirmed errors with no LLM arm. Evaluating
-reproscope's Stage&nbsp;2 against it would itself be a contribution.</p>
 
 <h2>What it does</h2>
 <div class="pipe">
-  <span>Intake &amp; extraction</span> <em>→</em>
+  <span>Stage 0 · Intake &amp; extraction</span> <em>→</em>
   <span>Stage 1 · Computation</span> <em>→</em>
-  <span>Stage 2 · Correctness</span> <em>→</em>
+  <span>Stage 2 · Analysis review</span> <em>→</em>
   <span>Stage 3 · Robustness</span> <em>→</em>
   <span>Report</span>
 </div>
-<p><b>Framing rule, stated in every report header:</b> Stage&nbsp;1's match table is
-decision-relevant. Stages&nbsp;2 and&nbsp;3 are context for human evaluation and are labeled as
-such, never as verdicts.</p>
+<p><b>Different stages, different interpretations.</b> Stage&nbsp;1 highlights issues that should
+usually be addressed, be it by specifying the methods more clearly or by fixing errors. Stages&nbsp;2
+and&nbsp;3 are context for human evaluation and are labeled as such, with accuracy assessments
+pending future analyses.</p>
 
 <h3>The inter-stage contract</h3>
 <p>Every stage consumes and produces typed, versioned artifacts, and every downstream output
@@ -112,165 +109,233 @@ retains the claim identifier it descends from. The chain:</p>
 ComparableResult → SpecificationSpace</code></p>
 <p>Each artifact records provenance, confidence, failure state, and the exact upstream artifact it
 used. Every stage may return <code>abstained</code> instead of a result, and abstention propagates:
-a claim whose estimand cannot be bound to the data produces no match band, no dispersion statistic,
-and no multiverse — a recorded abstention with a reason, not a guess. Batch runs therefore finish
-in one of three states per claim: <code>complete</code>, <code>abstained</code>, or
-<code>human_review_required</code>. Unattended operation is a measured research hypothesis, not a
-promise: the report tracks abstention rate, escalation rate, and (on ground-truth corpora) the
-silent-error rate.</p>
+a claim whose estimand cannot be bound to the data produces no match table, no dispersion metric,
+and no multiverse, but a recorded abstention with a reason. Each claim therefore ends in one of two
+states, <code>complete</code> or <code>abstained</code>. Abstentions caused by missing data
+or inputs are excluded from every summary rate, so a replica that reports "cannot be attempted" is
+never scored below one that guesses. A complete result carries a confidence
+level and the list of open ambiguities (choices the replicas had to make because the paper or the
+data left them open), so the report is honest about what it rests on. The report tracks abstention
+rate and, on ground-truth corpora, the silent-error rate.</p>
 
 <div class="stage">
   <h3>Stage 0 — Intake, extraction &amp; data readiness</h3>
-  <div class="who">Two vision models, cross-checked · deterministic guards · abstention-first</div>
+  <div class="who">Two vision models, cross-checked · strong-model arbiter · deterministic guards</div>
   <ul>
-    <li>Input is a per-paper manifest: PDF, data file(s), codebook (required in the pilot; optional
-        later, with absence tracked as a measured failure mode), optional focal claim. Default claim
-        scope is all inferential claims in the abstract; the pilot runs one user-selected focal
-        estimand per paper. No auto-fetching in v1.</li>
+    <li>Input is a per-paper manifest: PDF, data file(s), optionally a codebook and the original
+        analysis code, optionally a focal claim. Codebooks will usually be absent, so matching
+        variables to the paper's descriptions is part of the task; variable labels in the data or a
+        codebook improve accuracy and are recommended. No auto-fetching in v1.</li>
+    <li>Extraction covers <b>all reported results</b>: every quantity, its report location, and
+        the description attached to it. Stage&nbsp;1 reproduces everything the data allow.
+        Stages&nbsp;2 and&nbsp;3 focus on the inferential claims in the abstract, or on a
+        user-selected claim.</li>
     <li>Each claim becomes a typed <code>ClaimRecord</code> → <code>EstimandContract</code>:
-        claim → study/sample → outcome and exposure → estimand → table/figure cell → dataset
-        variables → scale/transformation → uncertainty quantity. Multi-study papers get per-study
-        contracts; a claim that cannot be pinned to a single estimand and cell is escalated or
-        abstained, not approximated.</li>
-    <li>Two independent vision models extract the claims table; agreement is checked field by field
-        (cell identity, value, estimand — not just wording). Cross-model agreement is treated as a
-        confidence signal, not validation: disagreement or low confidence yields
-        <code>human_review_required</code>. On ground-truth corpora, extraction accuracy is scored
-        directly.</li>
+        claim → study/sample → variables → <abbr title="The quantity the analysis is meant to estimate, e.g. a regression coefficient, a mean difference, a correlation, an odds ratio.">estimand</abbr>
+        → report location (table or figure cell, or a passage in the text) → uncertainty quantity.
+        Each record carries a claim type (scalar, range, table, qualitative, figure), which selects
+        the comparison rule later, and an importance level (headline or supporting), which weights
+        the summary. Analysis-level settings that apply to every coefficient from one model (model type,
+        estimator, standard-error type, transformations) are recorded once per analysis and linked
+        from each cell. Multi-study papers get per-study contracts. Where the paper
+        designates a main analysis with robustness checks, the main analysis is the contract; where
+        several approaches are presented without ranking, all are extracted and reported together
+        under one claim.</li>
+    <li>Two independent vision models extract the results; a strong-model arbiter resolves
+        disagreements field by field (report location, value, estimand). Residual disagreement is
+        recorded as low confidence on the record. On ground-truth corpora, extraction accuracy is
+        scored directly.</li>
+    <li>Open design question for the pilot build: whether the analytical-choice part of the
+        contract (model, estimator, covariates) is extracted here, or only in Stage&nbsp;1's reading
+        of the redacted methods, which has to return to the full text anyway. Stage&nbsp;0 certainly
+        owns quantities, locations and descriptions.</li>
     <li>A <b>data-readiness check</b> inventories files, infers and cross-checks the schema (unit of
         observation, keys, missing-value sentinels, scale direction, weights, derived variables),
-        records variable provenance, and abstains when the estimand contract cannot be bound to the
-        data.</li>
-    <li>The stage produces a results-redacted methods document under a <b>typed redaction
-        policy</b>: design numerals (years, thresholds, scale ranges, lags, sample rules) are
-        permitted; outcome information is prohibited in any form — values, rounded variants,
-        intervals, significance stars, signs, and verbal directions ("negative and significant"),
-        including in captions and methods-interleaved passages. Enforcement is layered: an LLM
-        redactor, the deterministic value scan (which blocks the run on any hit), and a semantic
-        leakage audit on a validation sample, since the deterministic scan alone cannot carry the
-        blinding guarantee. The redacted variant ships with the report so the blinding can be
-        audited.</li>
-    <li>Deterministic checkers (metacheck modules, statcheck on source formats, GRIM/SPRITE via
-        scrutiny/rsprite2) run here. Their output lands in the report appendix, with coverage stats
-        printed next to the flags. (Phase 2 — see Phasing.)</li>
+        and records variable provenance. Where the data offer several plausible bindings (several
+        versions of a covariate, an unspecified exclusion rule), the check records the options;
+        replicas choose and log their choice, and the ambiguity is surfaced in the report and
+        offered to Stage&nbsp;3 as a multiverse dimension. The stage abstains only when the claim
+        cannot be bound to the data at all.</li>
+    <li>The stage produces a results-redacted methods document. The redaction policy distinguishes
+        numbers by kind: design numerals (years, thresholds, scale ranges, lags, sample rules) stay;
+        outcome information goes in any form, including values, rounded variants, intervals,
+        significance stars, signs, and result language ("negative relationship", "significant
+        association"), also in captions and methods-interleaved passages. Directional hypotheses
+        are removed from the replica document as well, since together with publication they hint
+        at the result; Stage&nbsp;2 reads the full paper and sees them. Enforcement is layered: an
+        LLM redactor, a deterministic value scan over both the redacted document and the estimand
+        contracts (which blocks the run on any hit), and a <b>semantic leakage audit</b>, in which
+        an LLM judge that has not seen the paper tries to infer the results from the redacted
+        material. The audit is mandatory during development and an optional pass at runtime.</li>
+    <li>The redacted document is attached to the report by default so the blinding can be
+        audited. Sharing a report beyond self-review requires that the paper's licence permits
+        redistribution of its text (CC-BY or similar).</li>
   </ul>
   <div class="attr">Vision extraction, redaction and leak-check: <b>adopted from Kohler et&nbsp;al.</b>
-  (three teams independently found vision beats the PDF text layer). New: the two-model cross-check,
-  the estimand contract, the data-readiness check, and the typed redaction policy.</div>
+  (three teams independently found vision beats the PDF text layer). New: the two-model
+  cross-check with arbitration, the estimand contract, the data-readiness check, and the
+  kind-aware redaction policy.</div>
 </div>
 
 <div class="stage">
-  <h3>Stage 1 — Computation (decision-relevant)</h3>
-  <div class="who">k = 6 blinded replicas: 3 cheap model families × 2 runs</div>
+  <h3>Stage 1 — Computation (worth acting on)</h3>
+  <div class="who">Re-run arm where code exists · blind reconstruction: k = 6 replicas, 3 model families × 2 runs, lineup settled by calibration · targeted reconstruction on mismatch</div>
   <ul>
-    <li>Each replica independently re-implements the analysis from the redacted methods, the
-        estimand contract, and the data. Replicas never see the paper's results: supplying them is
-        the documented fabrication trigger (accuracy on non-reproducible tasks drops from 100% to
-        63% when the PDF is provided) — necessary, though not by itself sufficient, for blinding
-        (hence the layered redaction above). A hardcoded-results audit, taken from Kohler, checks
-        each replica's code.</li>
-    <li>Each replica emits a <code>ReplicaDecisionTrace</code>: filters, transformations, model
-        formula, missingness handling, weights, estimator settings. Dispersion is reported on two
-        levels — decision-vector agreement and numeric-output agreement.</li>
-    <li><b>What the statistic is:</b> replica dispersion conditional on the shared extraction and
-        toolchain. It is not a direct measure of methods-section underspecification: high agreement
-        can be shared training priors or a common mistake, low agreement can be agent randomness or
-        extraction error, and common-mode Stage&nbsp;0 errors are invisible to it. With 3×2 the
-        within/between-family split stays descriptive (one within-family pair per family; dependent
-        between-family pairs) — no variance decomposition is claimed. Whether dispersion predicts
-        correctness is calibrated on ground-truth corpora before any interpretive weight is put on
-        it.</li>
-    <li>Families: <code>glm-5.3-flash</code>, <code>gpt-5.6-luna</code>, third to be settled by the
-        calibration run (not Haiku; <code>deepseek-v4-flash</code> qualifies since replicas read
-        redacted markdown, so vision only binds Stage&nbsp;0).</li>
-    <li><b>Stochasticity is layered, not lumped:</b> (1) agent/run variation — the k replicas;
-        (2) specification variation — Stage&nbsp;3's multiverse; (3) Monte&nbsp;Carlo/execution
-        variation — any stochastic estimation (bootstrap, MCMC, imputation) is rerun over controlled
-        seeds until its Monte&nbsp;Carlo uncertainty is estimated, and replica comparisons use that
-        distribution. Seeds and convergence noise never enter the multiverse; only substantively
-        defensible algorithm choices do.</li>
-    <li>Execution happens in one pinned Docker image (R and Python scientific stacks). When a paper
-        names specific versions, that replica gets a matched environment. Version-sensitive
-        <i>defensible</i> defaults (estimator, optimizer choice) become named multiverse
-        dimensions.</li>
+    <li><b>Re-run arm.</b> When the original analysis code is supplied, it is executed in
+        parallel with the reconstruction arm, in a matched environment where the paper names versions. Its output is compared with the
+        reported values and, separately, with the reconstruction arm. Agreement between the two
+        arms is stronger evidence for the paper's reporting than either alone; disagreement is
+        the most informative input to the divergence diagnosis. The arm is quarantined from the
+        replicas, which never see the original code. Environment reconstruction for arbitrary
+        archived code is its own engineering problem and is scheduled for v2.</li>
+    <li><b>Reconstruction arm.</b> Each replica independently re-implements the analysis from the
+        redacted methods, the estimand contract, and the data. Replicas never see the paper's
+        results: supplying them can trigger fabrication or overfitting (accuracy on non-reproducible
+        tasks drops from 100% to 63% when the PDF is provided; <a href="https://arxiv.org/abs/2606.11447">Alizadeh et al. 2026a</a>). A hardcoded-results
+        audit, taken from Kohler et&nbsp;al., has a model scan each replica's code for numeric
+        literals that appear as statistical results without a computation path from the data.
+        Every fix a replica applies to make its code run is rated minor, major or critical by a
+        separate model call, so silent changes to the analysis are visible in the trace.</li>
+    <li>Before any comparison, deterministic checks on each replica's run log (all planned steps
+        executed, exit codes, declared output files present, repeated-command loops, number of
+        fixes, wall-clock time) sort replicas into "ran" and "failed to run". Only replicas that ran
+        enter the match table and the dispersion metric; failures are reported as their own
+        category.</li>
+    <li>Each replica emits a <code>ReplicaDecisionTrace</code> in a fixed schema: filters,
+        transformations, model formula, missingness handling, weights, estimator settings.
+        Dispersion is reported on two levels, decision-vector agreement and numeric-output
+        agreement. Decision vectors are compared by an LLM judge for equivalence, since the same
+        choice has many names and many equivalent implementations.</li>
+    <li><b>What the dispersion metric is:</b> replica dispersion conditional on the shared
+        extraction and toolchain. High agreement can be shared training priors or a common
+        mistake, low agreement can be agent randomness or extraction error, and common-mode
+        Stage&nbsp;0 errors are invisible to it. With 3×2 the within/between-family split stays
+        descriptive; whether dispersion predicts correctness could be a fruitful research direction
+        using this framework, with ground-truth corpora (papers whose reproducibility is known)
+        providing the reference.</li>
+    <li>Families: <code>glm-5.3-flash</code>, <code>gpt-5.6-luna</code>, and
+        <code>deepseek-v4-flash</code> as the initial lineup; replicas read redacted markdown, so
+        vision capability only binds Stage&nbsp;0. The calibration run starts with frontier models
+        to establish what is achievable, then tests whether the cheap lineup reaches it.</li>
+    <li><b>Stochastic estimation.</b> Replicas fix their seeds and match the paper's stated number
+        of bootstrap draws or MCMC iterations. When a replica's result sits near a decision
+        threshold, its code is re-run over several seeds (compute only, no LLM tokens) and the
+        seed sensitivity is reported next to the result. The multiverse in Stage&nbsp;3 aims to
+        contain substantively defensible analysis choices only. Switching a stochastic step on or
+        off also changes later random draws, so seed noise cannot be fully separated from it.</li>
+    <li>Execution happens in one pinned Docker image (R and Python scientific stacks). When a
+        paper names specific versions, their replicas get a matched environment. Version-sensitive
+        defaults (estimator, optimizer choice) are recorded in the decision trace and fed to the
+        divergence diagnosis; they enter the multiverse only when both settings are pre-specified as
+        defensible.</li>
     <li><b>Matching uses quantity-specific equivalence rules</b>, with the Kohler bands (sign gate,
         round to reported precision, A&nbsp;&lt;2% / B&nbsp;&lt;20% / C&nbsp;&lt;40%, absolute
         threshold &lt;0.002 when |x|&nbsp;&lt;&nbsp;0.001) as the base scheme for unbounded
         coefficients only; p-values, odds ratios, standardized effects, and bounded or transformed
-        statistics get their own rules, and unit rescaling is checked before grading. The report
-        always shows raw and standardized differences, the paper's reported precision, and
-        uncertainty next to any band — a band summarizes, it does not adjudicate.</li>
+        statistics get their own rules, and unit rescaling is checked before grading. Matching has
+        two steps: a cheap model reads each replica's output and writes the replicated value, its
+        uncertainty and its location into the claim's structured record, one claim at a time with
+        no other claim in context; a deterministic rule then assigns the verdict. When a replica
+        reports its own standard error, the verdict also uses a sigma-based rule (is the reported
+        value within the replica's uncertainty). Tables are graded cell by cell and summarized as a
+        fraction matched, never as pass/fail per table. The report always shows raw and
+        standardized differences, the paper's reported precision, and uncertainty next to any
+        band.</li>
     <li><b>What a match means, stated in the report:</b> a close match shows one route to the
         reported number exists; a mismatch does not identify whether the paper or the replicas are
-        wrong — it triggers the diagnosis pass and is read jointly with the dispersion statistic
-        and Stage&nbsp;3. When valid original code exists, the reconstruct-and-re-run arm is
-        reported as a categorically stronger form of evidence, quarantined from the blind arms
-        (phase&nbsp;2).</li>
-    <li>Divergence diagnosis: one unblinded top-model pass over the paper, all replica traces and
-        code, and the re-execution arm where present, writing "plausible sources of divergence".
-        Labeled conjecture, placed below the match table.</li>
-    <li>Reporting is broken down by analysis family (OLS/ANOVA, multilevel, SEM, meta-analysis, …).
-        The pilot declares a small family (OLS/GLM); later phases add families with no a-priori
-        exclusions — the tool's own reliability limits per family are findings.</li>
+        wrong (or underspecified). It triggers the targeted reconstruction and the diagnosis pass,
+        and should be read jointly with the dispersion metric, the re-run arm where present, and
+        Stage&nbsp;3.</li>
+    <li><b>Targeted reconstruction arm.</b> When the blind replicas mismatch or disperse widely,
+        one strong-model agent that sees the reported values starts from the replicas' code and
+        traces and searches the space of defensible choices until it reaches the reported numbers
+        or gives up. It answers a question the blind arm cannot: is the result reachable from
+        this data at all? Its outcome is one of three, each reported with the list of choices the
+        agent had to add and the number of attempts it took: <i>reachable with defensible choices</i>
+        (the result exists; the methods are underspecified, and the added choices are the concrete
+        list of what the paper should have stated, and candidate multiverse dimensions);
+        <i>reachable only with choices the Stage&nbsp;3 screen rejects</i> (a red flag with its own
+        label); <i>not reachable</i> (the strongest available evidence for an error or a
+        data-version mismatch, short of the original code). The arm is subject to the hardcoding
+        audit and the rated fix log, contributes nothing to the match table or the dispersion
+        metric, and feeds only the diagnosis and the ambiguity list. On corpora where the original
+        code exists, it is evaluated by whether the choices it finds are the ones the code made.</li>
+    <li>Divergence diagnosis: one unblinded strong-model pass over the paper, all replica traces
+        and code, the targeted reconstruction, and the re-run arm where present, writing
+        "plausible sources of divergence". Labeled conjecture, placed below the match table.</li>
+    <li>Reporting is broken down by analysis family (OLS/ANOVA, multilevel, SEM, meta-analysis, …)
+        with no a-priori exclusions. The tool's reliability limits per family could be a fruitful
+        area for evaluation.</li>
   </ul>
   <div class="attr">Blinding, templates, tolerance bands, diagnosis pass: <b>adopted from Kohler et&nbsp;al.</b>
-  New: the k-replica dispersion design, decision traces, and quantity-specific matching.</div>
+  New: the re-run versus reconstruction comparison, the k-replica dispersion design, the targeted
+  reconstruction arm, decision traces, and quantity-specific matching.</div>
 </div>
 
 <div class="stage">
-  <h3>Stage 2 — Correctness (context)</h3>
-  <div class="who">Rubric-constrained LLM checks · no open-ended flaw-hunting</div>
+  <h3>Stage 2 — Analysis review (context)</h3>
+  <div class="who">Narrow focused checks plus one broad review pass · strong model · reads the full paper</div>
   <ul>
-    <li>Three rubrics in v1, each with an external anchor: causal language vs design strength (the
-        Haber CLAIMS rubric, validated with human-rated reference data); a
-        <b>minimum-detectable-effect / sensitivity curve</b> under explicit, stated assumptions
-        (variance structure, clustering, attrition) — not post-hoc power, which is uninformative;
-        and claim–analysis alignment, judged against the paper-derived estimand contract, with each
-        replica's differences from that contract stated separately. Generalization-scope and
-        measurement-validity rubrics are deferred.</li>
-    <li>Precision expectation: the 70–85% figure from scope-constrained error-checking is a planning
-        extrapolation from narrower tasks, not evidence about these rubrics. No measured number
-        exists for causal-overclaiming or design-judgment checks in any field. The context label
-        reduces the harm of shipping unvalidated output; the ERROR-corpus evaluation is the route
-        to a real number, and Stage&nbsp;2 stays out of the pilot except possibly the causal-language
-        rubric once separately validated.</li>
-    <li>Guardrails: the paper's own abstract is never given as context when judging that abstract,
-        and prompts carry explicit caution instructions, since LLM summaries otherwise amplify
-        overclaiming by stripping hedges.</li>
+    <li><b>Narrow checks</b>, each with an external anchor: causal language versus design strength
+        (the Haber
+        <abbr title="A rubric for classifying the strength of causal language in a paper's claims and comparing it with what the study design supports.">CLAIMS</abbr>
+        rubric, validated with human-rated reference data (<a href="https://doi.org/10.1371/journal.pone.0196346">Haber et al. 2018</a>)); a
+        <abbr title="The smallest effect the study could have detected with conventional power, given its sample, design and variance structure; more informative than post-hoc power.">minimum-detectable-effect</abbr>
+        / sensitivity curve under explicit, stated assumptions (variance structure, clustering,
+        attrition); and claim–analysis alignment, which judges whether the analysis in the estimand
+        contract answers the claim as worded. The alignment check also lists where the contract
+        left choices open and how each replica filled them, so the reader sees which of the
+        replicas' choices the claim depends on.</li>
+    <li><b>Broad check:</b> one open-ended review pass over the paper, the data schema, and the
+        replicas' code and results, asking for coding errors, inappropriate analytical choices,
+        and measurement-validity concerns. It is prompted like an
+        analysis-focused referee report, with quotes anchored to the paper or the code so every
+        comment can be checked. Full peer review of the paper is out of scope; coarse.ink
+        (<a href="https://github.com/Davidvandijcke/coarse">coarse</a>) covers that, but does not touch data or code.</li>
+    <li>Both kinds of check run in the pilot, so their usefulness can be compared. The ERROR
+        corpus of expert-confirmed errors in psychology papers (<a href="https://error.reviews">error.reviews</a>; <a href="https://doi.org/10.1038/d41586-024-01465-y">Elson 2024</a>) is the evaluation
+        target for the broad check.</li>
   </ul>
-  <div class="attr">New assembly; individual rubrics anchored in published instruments.</div>
+  <div class="attr">New assembly; the narrow checks are anchored in published instruments.</div>
 </div>
 
 <div class="stage">
   <h3>Stage 3 — Robustness (context)</h3>
-  <div class="who">Top model enumerates &amp; screens · cheap models execute</div>
+  <div class="who">Cheap model enumerates · strong model screens · cheap models execute · strong model interprets</div>
   <ul>
     <li>The specification space is the union of three sources: the replicas' organic disagreements
         (from their decision traces); a systematically enumerated decision grid (exclusions,
         operationalizations, covariates, estimators) built from the methods and data schema; and
-        standard-practice defaults even where the paper is silent (e.g. outlier treatment). The
-        pilot uses a small constrained grid.</li>
-    <li>An adversarial reasonableness screen classifies each specification as defensible or not,
-        logging a rationale for every rejection, so the reader can judge the space rather than just
-        the curve. The screen is itself an evaluation target, not a solved component: 86% of
-        mutually contradictory analyses passed AI review in Miao et&nbsp;al. (78% passed human
-        expert review), and enumeration and screening by related models risks correlated judgment —
-        so the screen is scored against the dev corpora and, where feasible, uses a different model
-        family than the enumerator.</li>
-    <li>Execution goes through existing engines (<code>specr</code>, <code>multiverse</code>,
-        <code>boba</code> — one chosen in the pilot, not all three); PIMA is a candidate for valid
-        inference over the set. Nonconvergent and failed specifications are reported as a category,
-        never silently dropped.</li>
-    <li><b>The extremeness measure, stated precisely:</b> an extremeness rank of the
-        <i>paper-stated specification</i> (as reconstructed via the estimand contract — the actual
-        published analysis path is unknowable without code) conditional on a declared specification
-        generator, screen, and weighting scheme. Sensitivity across generators, screeners, weights,
-        and failure handling is reported alongside it. The m-value framing (Miao, Pritchard &amp;
-        Zou 2026) and its p-value analogy are adopted only if calibration shows the quantity is
-        stable across those choices.</li>
-    <li>Estimation and interpretation run as separate, differently-prompted stages. A confirmatory
-        prompt flips verdicts from 10% to 90% support while the coefficient distributions stay
-        unchanged, so the bias sits in interpretation, not estimation.</li>
+        standard-practice defaults even where the paper is silent (e.g. outlier treatment). Where
+        original code exists, its decision points are a fourth source.</li>
+    <li>An adversarial reasonableness screen classifies each factor level as defensible or not,
+        logging a rationale for every rejection, so the reader can judge the space as well as
+        the curve. A second pass flags incompatible combinations (e.g. an outlier rule that only
+        makes sense with a parametric model), and the remaining full grid is run. This is a key,
+        and unsolved, step in constructing an appropriate multiverse: in <a href="https://arxiv.org/abs/2607.01507">Miao et&nbsp;al. (2026)</a>
+        86% of mutually contradictory analyses passed AI review and 78% passed human
+        expert review (the paper reports no test of that difference; screening is hard for both).
+        The screen uses a different model family than the enumerator, may propose adjustments to
+        the grid, and is evaluated against the Multi100 analysts' choices, which serve as a human
+        reference set of what experts considered defensible for the same papers.</li>
+    <li>Execution goes through an existing engine (<code>specr</code>, <code>multiverse</code>
+        or <code>boba</code>, chosen in the pilot);
+        <abbr title="A method for valid statistical inference across a whole set of multiverse specifications, correcting for the fact that many correlated analyses were run.">PIMA</abbr>
+        (<a href="https://doi.org/10.1007/s11336-024-09973-6">Girardi et al. 2024</a>) is a candidate for valid inference over the set. Nonconvergent and failed
+        specifications are reported as a category.</li>
+    <li><b>The extremeness measure:</b> the rank of the paper's reported estimate within the
+        distribution of estimates across the screened specification space, conditional on the
+        declared enumerator and screen. The
+        <abbr title="Miao, Pritchard &amp; Zou's statistic: the probability that a paper's reported analysis is among the most extreme within its own defensible analysis space.">m-value</abbr>
+        framing (<a href="https://arxiv.org/abs/2607.01507">Miao, Pritchard &amp; Zou 2026</a>) and its p-value analogy are a candidate headline once the
+        enumerator and screen have been evaluated.</li>
+    <li>Estimation and interpretation run as separate, differently prompted stages, and the
+        interpretation is itself LLM-written. On the Breznau et&nbsp;al. (<a href="https://doi.org/10.1073/pnas.2203150119">2022</a>) many-analysts data,
+        <a href="https://arxiv.org/abs/2606.11456">Alizadeh et al. (2026b)</a> found that a
+        confirmatory prompt flipped Claude Code's verdicts from 10% to 90% "supported" while the
+        coefficient distributions stayed unchanged; the bias sat in the interpretation step.
+        Separating it lets the interpretation be prompted neutrally and checked against the
+        curve.</li>
   </ul>
   <div class="attr"><b>The core novel stage.</b> Kohler et&nbsp;al. name exactly this as future work.</div>
 </div>
@@ -278,37 +343,46 @@ silent-error rate.</p>
 <div class="stage">
   <h3>Report</h3>
   <ul>
-    <li>One HTML report per paper (claims table with per-quantity match summaries, dispersion
-        statistics, specification curve with conditional extremeness rank, rubric commentary,
-        deterministic-checker appendix), plus a machine-readable JSON sidecar carrying the full
-        artifact chain for batch aggregation.</li>
-    <li>The decision/context separation is stated at the top, along with per-claim outcome states
-        (complete / abstained / human_review_required) and their reasons. The redacted methods
-        document, estimand contracts, and all replica code and traces are attached for audit.</li>
+    <li>One HTML report per paper (results table with per-quantity match summaries, dispersion
+        metrics, re-run versus reconstruction comparison where code exists, specification curve
+        with the conditional extremeness rank, analysis-review commentary), plus a machine-readable
+        JSON sidecar carrying the full artifact chain for batch aggregation.</li>
+    <li>Limitations and the interpretation differences between Stage&nbsp;1 (worth acting on) and
+        Stages&nbsp;2–3 (worth considering) are stated at the top, along with per-claim outcome
+        states, confidence levels and open ambiguities. The redacted methods document, estimand
+        contracts, and all replica code and traces are attached by default for audit.</li>
+    <li>A deterministic-checker appendix wraps existing tools (metacheck modules, statcheck on
+        source formats), with coverage statistics printed next to the flags.</li>
   </ul>
 </div>
 
 <h2>Models &amp; orchestration</h2>
 <ul>
   <li>Multi-model orchestration is the scale strategy. Kohler et&nbsp;al. suggest expensive models
-      may be needed; the bet here is that k cheap replicas from different families plus top-model
-      reasoning stages beat one expensive generalist at batch scale. An escalation path stays open:
-      if calibration shows cheap families underperforming, a top-model replica arm or arbiter is
-      added.</li>
-  <li>Cheap tier (implementation, replicas): <code>glm-5.3-flash</code> ($0.075/$0.25 per MTok;
-      calibration required, since GLM-5 was Kohler's worst configuration at 52% vs 72% cell
-      completion, though 5.3-flash is a newer model) and <code>gpt-5.6-luna</code> ($0.20/$1.20;
-      subscription coverage unconfirmed, test locally).</li>
-  <li>Top tier (extraction arbitration, spec enumeration and screening, matching, diagnosis):
-      GPT-5.6 Sol (subscription-confirmed via Codex CLI) and/or Claude via <code>claude -p</code>.</li>
-  <li>Routing: a standalone Python driver calling headless CLI clients (<code>claude -p</code>,
-      <code>codex exec</code>, <code>opencode run --format json -m provider/model</code>, installed
-      and tested; note the ~17k-token system-prompt overhead per opencode call) plus direct API
-      calls (OpenRouter with price sort and a throughput floor; Z.ai's Anthropic-compatible
-      endpoint). Bring-your-own-subscription is a design requirement.</li>
-  <li>Cost: experiment toward the floor within a design envelope of roughly $20–50/paper. The driver
-      records tokens and cost per run so real numbers are reportable. Seed-rerun requirements for
-      stochastic estimators are part of the cost model, not an afterthought.</li>
+      may be needed; the bet here is that k cheap replicas from different families plus strong-model
+      reasoning stages can beat one expensive generalist at batch scale. Scaffolding matters at
+      least as much as model size: with the same model held fixed, the Claude Code scaffold lifted
+      broken-R-script repair from about 53% to 96% (<a href="https://arxiv.org/abs/2602.08561">Shah,
+      Hopfgartner &amp; Bleier 2026</a>), and I4R's replication engine reports a quantised
+      <code>glm-4.7-flash</code> matching all 16 published metrics of a test paper. Models are
+      user-configured, so that evaluation is simple and accuracy/budget trade-offs can be
+      considered.</li>
+  <li>Cheap tier (replicas, specification enumeration, output-to-claim linking):
+      <code>glm-5.3-flash</code> ($0.075/$0.25 per MTok at the launch discount, roughly $0.15/$0.50 after 9&nbsp;September&nbsp;2026), <code>gpt-5.6-luna</code> ($0.20/$1.20, doubling above 272k prompt tokens),
+      <code>deepseek-v4-flash</code>.</li>
+  <li>Strong tier (extraction arbitration, specification screening, divergence diagnosis, analysis
+      review, multiverse interpretation): GPT-5.6 Sol via Codex CLI and/or Claude Fable or Opus via
+      <code>claude -p</code>.</li>
+  <li>Agentic versus chat-style calls: anything that writes or runs code (replicas, re-run arm,
+      multiverse execution) goes through headless agentic CLI clients (<code>claude -p</code>,
+      <code>codex exec</code>, <code>opencode run --format json -m provider/model</code>).
+      Extraction, redaction, enumeration, screening, diagnosis and interpretation are single
+      structured-output API calls (OpenRouter with price sort and a throughput floor; Z.ai's
+      Anthropic-compatible endpoint). A standalone Python driver routes both kinds.
+      Bring-your-own key or subscription is a design requirement.</li>
+  <li>Cost: experiment toward the floor within a design envelope of roughly $2–10/paper. The driver
+      records tokens and cost per run so real numbers are reportable. Seed reruns and multiverse
+      execution cost compute, not tokens.</li>
 </ul>
 
 <h2>Corpora &amp; validation</h2>
@@ -316,119 +390,197 @@ silent-error rate.</p>
   <tr><th>Corpus</th><th>Role</th><th>Notes</th></tr>
   <tr><td>Multi100</td><td>Development</td><td>MIT on GitHub; 100 papers, predefined claims, 11k per-analyst
       results, the only setting where "would humans have diverged too?" is directly answerable.
-      ~47/100 with easily obtainable data; no paper DOIs (title matching needed).</td></tr>
+      ~47/100 with easily obtainable data; no paper DOIs (title matching needed). The per-analyst
+      scripts live in one OSF component per analyst under each paper's node, not in the GitHub repo.</td></tr>
   <tr><td>ReplicatorBench</td><td>Development / discriminant validity</td><td>Apache-2.0; 39 SCORE studies
       with human replication reports including non-replicable ground truth; its data-only condition
       matches reproscope's task exactly. Deduplicate against Multi100 (both SCORE-derived).</td></tr>
-  <tr><td>I4R × Psychological Science</td><td>Quasi-held-out</td><td>Reports online individually but not
-      aggregated; memorization implausible but possible. Contact I4R for materials.</td></tr>
+  <tr><td>I4R × Psychological Science</td><td>Outside the dev set</td><td>Replication reports are published
+      individually on the I4R site, with no aggregated materials; they need to be scraped.
+      Memorization implausible but possible.</td></tr>
+  <tr><td>ERROR</td><td>Stage-2 evaluation</td><td>Expert-confirmed errors in psychology papers, with no
+      LLM arm; the target for evaluating the broad analysis-review check.</td></tr>
 </table></div>
 <ul>
   <li>Contamination probes: split the dev corpus at each model's training cutoff (the Kohler
       template). The dev corpora are public, so no dev result is claimed as generalization.</li>
   <li>Validation sequence: develop on Multi100 ∪ ReplicatorBench, then the discriminant test on
-      ReplicatorBench's non-replicable ground truth, then held-out on I4R×PS, then (for
-      Stage&nbsp;2) the ERROR corpus. Ground-truth corpora also calibrate the pieces the pipeline
-      leans on: extraction accuracy, whether dispersion predicts correctness, screen quality, and
-      extremeness-rank stability.</li>
-  <li>The headline comparison to aim for: agent crowd vs analyst crowd on identical papers.
-      Multi100's 34% recovery within ±0.05&nbsp;d is the human reference band, as orientation, not
-      a performance target — the Multi100–Holtdirk comparison is not methodologically
-      harmonized.</li>
+      ReplicatorBench's non-replicable ground truth, then I4R×PS, then (for Stage&nbsp;2) the ERROR
+      corpus.</li>
+  <li>Future validation opportunities, none of which exist yet: extraction accuracy against
+      hand-checked results tables; whether dispersion predicts correctness on papers with known
+      reproducibility; screen quality against the Multi100 analysts' choices.</li>
+  <li>The headline comparison to aim for: agent crowd versus analyst crowd on identical papers.
+      Multi100's 34% of re-analyses recovering the original effect within ±0.05&nbsp;d is the
+      human reference band, as orientation. Since the analysts' scripts are on OSF, an agentic pass
+      over their deviations could separate justifiable choices from human error, which would
+      sharpen that band.</li>
+</ul>
+
+<h2>Relation to prior work</h2>
+<div class="pos">
+reproscope extends the Kohler et&nbsp;al. (2026,
+<a href="https://arxiv.org/abs/2604.21965">arXiv:2604.21965</a>) re-derivation design from verdict
+benchmarking to robustness measurement. It replaces single-shot reproduction with a multi-model run
+that allows for more nuanced diagnostics, and locates the paper-stated specification within its
+defensible (multiverse) analysis space.
+</div>
+<p>Previous work established that LLMs can re-run code, and also recreate code from methods
+descriptions, yet it rarely addressed whether the analyses were appropriate and robust, and rarely
+packaged them in easy-to-use ways. Conversely, AI reviewers like coarse.ink can offer helpful review
+comments, but do not touch data and code. reproscope aims to bridge these approaches.</p>
+<p>Kohler et&nbsp;al. established the core re-derivation machinery on 48 pre-certified reproducible
+I4R papers: vision-based extraction from rendered pages, results-redacted methods documents with a
+numeral leak-check, blinded implementation templates, tolerance grading, and an unblinded diagnosis
+pass. reproscope adopts those elements with attribution. Other harnesses contribute ideas
+Kohler et&nbsp;al. did not use, and reproscope takes four of them: ReplicatorBench
+(<a href="https://arxiv.org/abs/2602.11354">Nguyen et&nbsp;al. 2026</a>) makes the agent preregister
+its analysis plan before executing and treats code access as an experimental variable, which is
+where the decision trace and the two Stage&nbsp;1 arms come from; PaperRepro
+(<a href="https://arxiv.org/abs/2603.00058">Zhang et&nbsp;al. 2026</a>) forces reproduced results
+into artifact files rather than the agent's context and is the only system with a controlled
+ablation showing that merging stages costs 10–13 accuracy points; I4R's replication engine tracks
+extraction recall and precision as first-class metrics and stores a page-and-region pointer for every
+extracted quantity; and CORE-Bench's (<a href="https://arxiv.org/abs/2409.11363">Siegel et&nbsp;al. 2024</a>) empirical tolerance (the 95% prediction interval of repeated
+runs) is more principled than any fixed band where several executions are affordable. VERITAS
+(<a href="https://arxiv.org/abs/2607.02931">Liu, Tjiaranata &amp; Tan 2026</a>), a replication
+executor with a verification wrapper, contributes the typed and importance-weighted claim schema,
+the split between an LLM that extracts the replicated value and a deterministic rule that grades
+it, cell-level partial credit, the severity-rated fix log, and the run-log checks that separate
+"failed to run" from "ran and disagrees". It has no multiverse, no repeat runs and no analysis
+review, and its own results show that blind reconstruction with a frontier model barely beats a
+plain agent session on the headline match rate while clearly improving trajectory honesty; see
+<code>research/veritas_digest.md</code>. Beyond all of these, reproscope adds:</p>
+<ul>
+  <li><b>Multiverse + extremeness measure.</b> Kohler et&nbsp;al. classify robustness to alternative
+      specifications as a reproducibility type they did not address and name it as future work.
+      Their observation that agents succeed when "implicit assumptions happen to align with the
+      original implementation" hints at the importance of identifying and testing these
+      assumptions.</li>
+  <li><b>Multi-model runs with dispersion as a diagnostic metric.</b> Kohler et&nbsp;al. already
+      show that non-deterministic LLM runs lead to coefficient differences across about half of
+      repeated runs. Here, we aim to indicate the extent of such variation and begin to surface its
+      drivers by running reproduction multiple times across multiple models, and reporting the
+      resulting differences in implementation and results.</li>
+  <li><b>Re-run versus reconstruction.</b> Where original code exists, both arms run and are
+      compared, which tests the reporting of the analysis rather than only its execution.</li>
+  <li><b>Targeted reconstruction.</b> On a mismatch, an unblinded strong-model search for a
+      defensible path to the reported numbers separates "underspecified" from "not reachable",
+      and turns the added choices into a list of what the paper should have stated.</li>
+  <li><b>A user-friendly open-source review tool, not just a proof of concept.</b> Explicit
+      abstention, confidence levels, a report that separates what to act on from what to consider,
+      and a batch and an interactive mode.</li>
 </ul>
 
 <h2>Decision register</h2>
 <div class="tablewrap"><table>
   <tr><th>Decision</th><th>Choice</th><th class="decision-why">Why</th></tr>
-  <tr><td>Corpus</td><td>Social science; R + Python; paper + data, no code required</td>
-      <td class="decision-why">Re-derivation is the review-stage reality; Stata deferred (systematically weakest, no tooling).</td></tr>
+  <tr><td>Corpus</td><td>Social science; R + Python; paper + data, code optional</td>
+      <td class="decision-why">Re-derivation is the review-stage reality; Stata deferred (would require code translation for openness, and bring new reasons for deviations).</td></tr>
   <tr><td>Purpose</td><td>Review tool: self-review + peer-review embedding</td>
-      <td class="decision-why">Stage 1 decision-relevant; Stages 2–3 context. Framing stated in every report.</td></tr>
-  <tr><td>Substrate</td><td>Standalone Python batch driver, versioned stage prompts, BYO subscription</td>
-      <td class="decision-why">"Clearly documented tool" + batch requirement; an open-source tool, not a one-off research pipeline.</td></tr>
-  <tr><td>Inter-stage contract</td><td>Typed artifact chain with per-claim outcome states and propagating abstention</td>
+      <td class="decision-why">Surface errors and ambiguities; provide context on analytical choices and robustness.</td></tr>
+  <tr><td>Substrate</td><td>Standalone Python batch driver, versioned stage prompts, BYO key/subscription; interactive mode as a Claude Code skill</td>
+      <td class="decision-why">"Clearly documented tool" + batch requirement; built as an open-source tool from the start.</td></tr>
+  <tr><td>Inter-stage contract</td><td>Typed artifact chain with per-claim outcome states, confidence and propagating abstention</td>
       <td class="decision-why">Localizes failures; stops later stages manufacturing precision from unresolved assumptions.</td></tr>
-  <tr><td>Replica design</td><td>3 families × 2 runs, all cheap tier; dispersion reported descriptively on decision and numeric levels</td>
-      <td class="decision-why">Kohler's ~50% self-disagreement motivates k&gt;1; the specific design is calibrated, not assumed.</td></tr>
-  <tr><td>Original code, if present</td><td>Reconstruct + re-run + report as stronger evidence; also feeds diagnosis (phase 2)</td>
-      <td class="decision-why">Quarantined from blind arms; effectively a second product, so sequenced after the no-code core.</td></tr>
-  <tr><td>Environment</td><td>Pinned Docker image; paper-specified versions get a matched env; defensible defaults become multiverse dimensions, seeds get controlled reruns</td>
-      <td class="decision-why">Nothing to "match" without original code; Monte Carlo noise kept out of the multiverse.</td></tr>
-  <tr><td>Human involvement</td><td>Unattended batch as measured hypothesis; per-claim outcome states, escalation instead of silent completion</td>
-      <td class="decision-why">The evidence base favors human gates; going unattended is a deliberate experiment with tracked abstention/error rates.</td></tr>
-  <tr><td>Appropriateness</td><td>Rubric-constrained only (3 rubrics); metacheck appendix; no open-ended flaw-hunting; out of the pilot</td>
-      <td class="decision-why">Scope-constrained checking is the only defensible mode; no rubric ships as validated until the ERROR evaluation.</td></tr>
-  <tr><td>Analysis families</td><td>Pilot: OLS/GLM. Then no a-priori exclusions; report per-family reliability</td>
-      <td class="decision-why">The tool's limits are themselves findings.</td></tr>
-  <tr><td>Name</td><td><code>reproscope</code> — PyPI and GitHub clean. Note: an INRAE observatory of
-      cattle reproductive performance shares the name and currently dominates web search for it;
-      no software or field overlap.</td>
+  <tr><td>Replica design</td><td>3 families × 2 runs, cheap tier; dispersion reported descriptively on decision and numeric levels</td>
+      <td class="decision-why">Kohler's ~50% self-disagreement motivates k&gt;1.</td></tr>
+  <tr><td>Original code, if present</td><td>Re-run first and in parallel with reconstruction; compare the arms; feed diagnosis</td>
+      <td class="decision-why">Reconstruction provides stronger evidence of the accuracy of analysis description and reporting than pure recomputation; the comparison tests both.</td></tr>
+  <tr><td>Targeted reconstruction</td><td>Unblinded strong-model search for a defensible path to the reported numbers, triggered on mismatch or wide dispersion; outcome reachable / reachable only indefensibly / not reachable</td>
+      <td class="decision-why">Separates underspecification from error; kept out of the match table and dispersion metric so blinding is preserved where it matters.</td></tr>
+  <tr><td>Environment</td><td>Pinned Docker image; paper-specified versions get a matched env; version-sensitive defaults feed diagnosis; seeds get compute-only reruns</td>
+      <td class="decision-why">A pinned image makes replica runs comparable; the multiverse aims to hold analysis choices only.</td></tr>
+  <tr><td>Human involvement</td><td>End-to-end by default with uncertainty reported prominently; editable handover artifacts; interactive mode for decision points</td>
+      <td class="decision-why">Batch and interactive modes place the human at different points; interactive mode doubles as the validation tool.</td></tr>
+  <tr><td>Analysis review</td><td>Narrow focused checks plus one broad open-ended pass; both in the pilot; deterministic-checker appendix</td>
+      <td class="decision-why">Compare which kind of check is useful; the ERROR corpus evaluates the broad pass.</td></tr>
+  <tr><td>Analysis families</td><td>No a-priori exclusions; report per-family reliability</td>
+      <td class="decision-why">The tool's limits per family are worth evaluating.</td></tr>
+  <tr><td>Name</td><td><code>reproscope</code> — PyPI and GitHub clean. An INRAE observatory of
+      cattle reproductive performance shares the name; no software or field overlap.</td>
       <td class="decision-why">Keeps the repro anchor; "-scope" reads as instrument plus widening scope of scrutiny.</td></tr>
   <tr><td>Licence / openness</td><td>MIT, public from the start, flagged as experimentation</td>
-      <td class="decision-why">Open-science posture; the AEA precedent shows the audience exists.</td></tr>
-  <tr><td>Parked</td><td>coarse psych-field overlay (3–5 days, separate project); Stata; auto-fetching of papers/data</td>
+      <td class="decision-why">Open-science posture.</td></tr>
+  <tr><td>Parked</td><td>Stata; auto-fetching of papers/data</td>
       <td class="decision-why">Off the critical path.</td></tr>
 </table></div>
 
-<h2>Phasing</h2>
+<h2>Versions</h2>
 <ul>
-  <li><b>v0 pilot — the narrow end-to-end test of the novel idea:</b> one user-selected focal
-      estimand per paper; tabular data with a codebook required; OLS/GLM only; Stage&nbsp;0 with
-      estimand contracts and data readiness, blinded replicas with decision traces, a small
-      constrained specification grid; abstention as a normal outcome. Run on 3–5 Multi100 papers.
-      This doubles as the model-calibration experiment.</li>
-  <li><b>v1:</b> all abstract claims, wider analysis families, the deterministic-checker appendix,
-      the full enumerated multiverse with sensitivity reporting, Stage&nbsp;2's three rubrics
-      (context-labeled), batch mode over the dev corpora.</li>
-  <li><b>Phase 2:</b> the re-execution arm (environment reconstruction is its own engineering
-      problem), the ERROR-corpus Stage-2 evaluation, I4R×PS held-out run, codebook-less input as a
-      measured failure mode.</li>
+  <li><b>v0 pilot, a minimal version of the full pipeline:</b> Stage&nbsp;0 extraction of all
+      results with estimand contracts and data readiness; Stage&nbsp;1 with the re-run arm where code
+      exists, blinded replicas with decision traces, and targeted reconstruction on mismatch; Stage&nbsp;2's narrow and broad checks;
+      Stage&nbsp;3 on one focal claim per paper with a broadly specified grid; abstention as a normal
+      outcome. Run on 3–5 Multi100 papers. This doubles as the model-calibration experiment, starting
+      with frontier models.</li>
+  <li><b>v1:</b> Stage&nbsp;3 over all abstract claims, the full enumerated multiverse with the
+      screen evaluated against Multi100 analyst choices, the deterministic-checker appendix, the
+      interactive Claude Code skill, batch mode over the dev corpora.</li>
+  <li><b>v2:</b> environment reconstruction for arbitrary archived code, the ERROR-corpus
+      evaluation of Stage&nbsp;2, the I4R×PS run.</li>
 </ul>
 
 <h2>Risks and limits</h2>
 <ul>
-  <li><b>Deliberate deviations from the evidence base, run as experiments.</b> Three scope choices
-      go against findings in the research synthesis and are flagged as such: unattended operation
-      (the evidence favors binding human gates — mitigated by outcome states and measured
-      abstention/silent-error rates); Stage&nbsp;2 shipping before a gold-set validation (mitigated
-      by the context label, rubric constraints, and pilot exclusion); and building the multiverse
-      without original code to mine decision points from (the re-derivation premise itself —
-      mitigated by decision traces and the constrained pilot grid). If the measurements go against
-      these bets, the design reverts.</li>
-  <li><b>Prior-art proximity.</b> Stages 0–1 are substantially Kohler et&nbsp;al.'s design. The
-      contribution claims are confined to the three deltas above and must stay that way in any
-      writeup.</li>
-  <li><b>Cheap-replica quality is unproven.</b> Kohler's grid puts GLM-class models last. The first
-      milestone is a calibration run before committing the family lineup.</li>
-  <li><b>The extremeness rank inherits its generator and screen.</b> It is conditional by
-      construction; the sensitivity reporting and rejection log make that legible without removing
-      it. Correlated enumerator/screener judgment is the specific failure mode to watch.</li>
-  <li><b>Blinding is layered, not guaranteed.</b> The deterministic scan catches exact values only;
-      the typed policy and semantic audit narrow the gap, and the audit quantifies what remains.</li>
-  <li><b>Contaminated dev corpora.</b> All open ground-truth corpora are public; only I4R×PS
-      approximates held-out.</li>
+  <li><b>Unattended operation is the hypothesis under test.</b> Outcome states, confidence levels
+      and measured abstention and silent-error rates make its failures visible; the interactive
+      mode is the fallback if they are too frequent.</li>
+  <li><b>The multiverse is built from statistical expertise and the data schema</b>, plus the
+      original code's decision points where code exists. Whether an LLM-enumerated space matches
+      what expert analysts consider defensible is measured against Multi100.</li>
+  <li><b>Prior-art proximity.</b> Stages 0–1 follow Kohler et&nbsp;al. and the other reproduction
+      harnesses closely. The contributions are the multi-model extraction and replica design, the
+      re-run versus reconstruction comparison, the multiverse with its extremeness measure, and the
+      packaging as a review tool. Writeups must confine the claims to those.</li>
+  <li><b>Cheap-replica quality is unproven.</b> VERITAS reaches a 0.33 match rate on
+      ReplicationBench with Opus 4.8 in paper-only mode, so blind reconstruction is hard even for
+      frontier models, and a non-match from a weak replica says nothing about the paper. The
+      calibration run starts with frontier models and then tests whether cheap families reach the
+      same results; the lineup is settled on that evidence.</li>
+  <li><b>The extremeness rank inherits its enumerator and screen.</b> It is conditional by
+      construction; the rejection log makes that legible.</li>
+  <li><b>Blinding is difficult and must be validated.</b> The deterministic scan catches exact
+      values only; the LLM-judged leakage audit is what measures the rest, so it is mandatory during
+      development.</li>
+  <li><b>Contaminated dev corpora.</b> All open ground-truth corpora are public; I4R×PS, with
+      nothing released, is the only set unlikely to be memorized.</li>
 </ul>
 
 <h2>Next steps</h2>
 <ul>
-  <li>Create the public GitHub repo. (Local git is initialized and committed.)</li>
-  <li>Run the v0 pilot: 3–5 Multi100 papers × candidate cheap models on the blind re-implementation
-      task with focal estimands. Settles the third family, the escalation question, and first
-      abstention-rate numbers.</li>
-  <li>Test Luna subscription coverage: <code>codex exec --skip-git-repo-check --sandbox read-only -m gpt-5.6-luna "say OK"</code>.</li>
-  <li>Build Stage 0 first (estimand contracts, data readiness, redaction, leak-check). Work one
-      paper end-to-end by hand to establish the recipe, then build the driver.</li>
-  <li>Draft the contact notes: Kohler &amp; Ash (materials, collaboration); I4R (Psych Science
-      materials); ERROR team (Stage-2 evaluation).</li>
+  <li>Create the public GitHub repo.</li>
+  <li>Build Stage 0 first (extraction, estimand contracts, data readiness, redaction, leak-check).
+      Work one paper end-to-end by hand to establish the recipe, then build the driver.</li>
+  <li>Run the v0 pilot: 3–5 Multi100 papers, frontier models first, then the candidate cheap
+      models. Settles the family lineup, the escalation question, and first abstention-rate
+      numbers.</li>
+  <li>Contact related projects after the proof of concept.</li>
+</ul>
+
+<h2>References</h2>
+<ul class="refs">
+  <li>Alizadeh, M., Mosleh, M., Gilardi, F., Kasirzadeh, A., &amp; Tucker, J. (2026a). <i>AI coding agents can reproduce social science findings</i> (SocSci-Repro-Bench). <a href="https://arxiv.org/abs/2606.11447">arXiv:2606.11447</a>. Source of the 100%→63% fabrication result when agents see the PDF.</li>
+  <li>Alizadeh, M., Gilardi, F., Mosleh, M., &amp; Kasneci, G. (2026b). <i>AI coding agents in social science: methodologically diverse, empirically consistent, interpretively vulnerable</i>. <a href="https://arxiv.org/abs/2606.11456">arXiv:2606.11456</a>. Confirmatory prompt flips verdicts 10%→90% with unchanged estimates.</li>
+  <li>Aczel, B., Szaszi, B., Clelland, A., Kovacs, M., et al. (2026). <i>Investigating the analytical robustness of the social and behavioural sciences</i> (Multi100). Nature, 652, 135–142. <a href="https://doi.org/10.1038/s41586-025-09844-9">doi:10.1038/s41586-025-09844-9</a>. Code: <a href="https://github.com/marton-balazs-kovacs/multi100">github.com/marton-balazs-kovacs/multi100</a>.</li>
+  <li>Breznau, N., Rinke, E. M., Wuttke, A., et al. (2022). <i>Observing many researchers using the same data and hypothesis reveals a hidden universe of uncertainty</i>. PNAS, 119(44). <a href="https://doi.org/10.1073/pnas.2203150119">doi:10.1073/pnas.2203150119</a>.</li>
+  <li>Brodeur, A., Valenta, et al. (2026). <i>AI-assisted teams outperform AI-led teams but not human-only teams in assessing research reproducibility in quantitative social science</i>. PNAS, 123(22). <a href="https://doi.org/10.1073/pnas.2524747123">doi:10.1073/pnas.2524747123</a>.</li>
+  <li>Elson, M. (2024). <i>Pay researchers to spot errors in published papers</i>. Nature, 629, 730. <a href="https://doi.org/10.1038/d41586-024-01465-y">doi:10.1038/d41586-024-01465-y</a>. The ERROR project: <a href="https://error.reviews">error.reviews</a>.</li>
+  <li>Girardi, P., Vesely, A., Lakens, D., Altoè, G., Pastore, M., et al. (2024). <i>Post-selection inference in multiverse analysis (PIMA)</i>. Psychometrika. <a href="https://doi.org/10.1007/s11336-024-09973-6">doi:10.1007/s11336-024-09973-6</a>.</li>
+  <li>Haber, N., Smith, E. R., Moscoe, E., et al. (2018). <i>Causal language and strength of inference in academic and media articles shared in social media (CLAIMS)</i>. PLOS ONE, 13(5), e0196346. <a href="https://doi.org/10.1371/journal.pone.0196346">doi:10.1371/journal.pone.0196346</a>.</li>
+  <li>Kohler, B., Zollikofer, D., Einsiedler, J., Hoyle, A., &amp; Ash, E. (2026). <i>Read the paper, write the code: agentic reproduction of social-science results</i>. <a href="https://arxiv.org/abs/2604.21965">arXiv:2604.21965</a>.</li>
+  <li>Liu, Tjiaranata &amp; Tan (2026). <i>VERITAS: towards a general-purpose replication tool for scientific research</i>. <a href="https://arxiv.org/abs/2607.02931">arXiv:2607.02931</a>. Code: <a href="https://github.com/ChicagoHAI/veritas">ChicagoHAI/veritas</a> (Apache-2.0).</li>
+  <li>Miao, J., Pritchard, J. K., &amp; Zou, J. (2026). <i>The agentic garden of forking paths</i>. <a href="https://arxiv.org/abs/2607.01507">arXiv:2607.01507</a>. Defines the m-value; 86% of contradictory analyses passed AI review, 78% passed human expert review.</li>
+  <li>Nguyen, B., Soós, D., Ma, Q., et al. (2026). <i>ReplicatorBench: benchmarking LLM agents for replicability in social and behavioral sciences</i>. <a href="https://arxiv.org/abs/2602.11354">arXiv:2602.11354</a>. Code: <a href="https://github.com/CenterForOpenScience/llm-benchmarking">CenterForOpenScience/llm-benchmarking</a>.</li>
+  <li>Shah, Hopfgartner &amp; Bleier (2026). <i>Automating computational reproducibility in social science: comparing prompt-based and agent-based approaches</i>. <a href="https://arxiv.org/abs/2602.08561">arXiv:2602.08561</a>.</li>
+  <li>Siegel, Z. S., Kapoor, S., Nadgir, N., Stroebl, B., &amp; Narayanan, A. (2024). <i>CORE-Bench: fostering the credibility of published research through a computational reproducibility agent benchmark</i>. <a href="https://arxiv.org/abs/2409.11363">arXiv:2409.11363</a>.</li>
+  <li>Zhang, Xia, Piao, Cui &amp; Li (2026). <i>PaperRepro: automated computational reproducibility assessment for social science papers</i>. <a href="https://arxiv.org/abs/2603.00058">arXiv:2603.00058</a>.</li>
+  <li>AEA Data Editor replication template with Claude Code skills (Aug 2026): <a href="https://github.com/AEADataEditor/replication-template">github.com/AEADataEditor/replication-template</a>. I4R AI Replication Engine: blog posts at <a href="https://i4replication.org">i4replication.org</a>, no paper or code released.</li>
 </ul>
 
 <p class="refs">Grounding: <code>research/synthesis.md</code> and the research reports in
-<code>research/</code>, all citation-verified 2026-08-31, plus an external design review
-(<code>research/review_sol_scope.md</code>, GPT-5.6 Sol) whose accepted findings are incorporated
-above. Key sources: Kohler et&nbsp;al. arXiv:2604.21965; Miao, Pritchard &amp; Zou
-arXiv:2607.01507; Holtdirk et&nbsp;al. arXiv:2606.13670; Multi100 (Nature 2026); ReplicatorBench
-arXiv:2602.11354; Brodeur et&nbsp;al. (PNAS 2026); AEA Data Editor replication template
-(Aug 2026).</p>
+<code>research/</code>, citation-verified 2026-08-31 with all identifiers above re-verified 2026-09-02, plus an external design review
+(<code>research/review_sol_scope.md</code>, GPT-5.6 Sol).</p>
 
 </main>
 </body>
