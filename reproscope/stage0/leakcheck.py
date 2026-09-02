@@ -147,7 +147,8 @@ def _pattern(form: str) -> re.Pattern[str]:
     # A number, not a digit run inside an identifier or a dotted label: "5.9" must
     # not match inside "5.91", "c591" or "Section 5.9.1", and a leading minus is
     # part of the number.
-    return re.compile(r"(?<![\w.])-?" + re.escape(form) + r"(?!\w)(?!\.\d)")
+    # A confidence level ("95% CI") is design text even when 95 is also a reported percentage.
+    return re.compile(r"(?<![\w.])-?" + re.escape(form) + r"(?!\w)(?!\.\d)(?!\s*%\s*(?:CI|confidence))")
 
 
 # JSON keys that carry bookkeeping rather than content: ids, hashes, timestamps
