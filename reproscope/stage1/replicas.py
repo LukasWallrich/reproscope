@@ -301,6 +301,9 @@ def run_one(
         pass
     else:
         work = blind.assemble(paper_id, replica_id)
+        # The agent runs in a copy outside the repository, so relative paths reach neither
+        # the paper nor the extracted claims; its outputs are copied back afterwards.
+        iso = blind.isolate(work, paper_id, replica_id)
         result = llm.call(
             "replica",
             (work / "TASK.md").read_text(),
@@ -308,12 +311,13 @@ def run_one(
             stage="1",
             route=spec.route,
             model=spec.model,
-            cwd=work,
+            cwd=iso,
             agentic=True,
             timeout_s=AGENT_TIMEOUT_S,
             log_path=rdir / "agent.log",
             extra={"replica_id": replica_id, "family": family},
         )
+        blind.collect(iso, work)
 
     out_dir = work / "out"
     agent_log = (rdir / "agent.log").read_text() if (rdir / "agent.log").exists() else ""
@@ -327,6 +331,7 @@ def run_one(
         "script_present": script is not None,
         "run_log_present": bool(run_log),
         "loops": count_loops([agent_log, run_log]),
+        "blind_transcript_hits": blind.transcript_hits(agent_log),
         "steps_done": _steps_done(result, agent_log),
     }
     if script is not None:

@@ -186,3 +186,26 @@ def assemble(paper_id: str, replica_id: str) -> Path:
             + "\n  ".join(str(h) for h in note_hits[:20])
         )
     return work
+
+
+ISOLATION_ROOT = Path("/private/tmp/reproscope_blind")
+
+
+def isolate(work: Path, paper_id: str, replica_id: str) -> Path:
+    """Copy the blind work directory to a location outside the repository and return it."""
+    iso = ISOLATION_ROOT / paper_id / replica_id
+    if iso.exists():
+        shutil.rmtree(iso)
+    shutil.copytree(work, iso)
+    return iso
+
+
+def collect(iso: Path, work: Path) -> None:
+    """Copy everything the agent produced back into the repository work directory."""
+    shutil.copytree(iso, work, dirs_exist_ok=True)
+
+
+def transcript_hits(agent_log: str) -> list[str]:
+    """Lines of the agent transcript that reference material outside the blind directory."""
+    pattern = re.compile(r"\.\./|stage0|claims\.json|paper\.(pdf|txt)|/corpus/|/runs/", re.IGNORECASE)
+    return [ln[:200] for ln in agent_log.splitlines() if pattern.search(ln)]

@@ -257,6 +257,7 @@ class MatchSummary(BaseModel):
     claim_id: str
     n_ran: int = 0
     fraction_matched: float | None = None
+    fraction_a: float | None = None
     dispersion: Dispersion | None = None
 
 

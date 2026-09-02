@@ -298,6 +298,7 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
         reported, comparator = parse_reported(claim.value)
         values: list[float] = []
         matched = 0
+        matched_a = 0
         found = 0
         for trace in traces:
             results_text = _results_text(paper_id, trace.replica_id)
@@ -314,6 +315,8 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
             )
             if graded["band"] in {"A", "B"}:
                 matched += 1
+            if graded["band"] == "A":
+                matched_a += 1
             if linked.found and linked.value is not None:
                 values.append(graded["replicated_used"])
             rows.append(
@@ -347,6 +350,7 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                 n_found=found,
                 n_matched=matched,
                 fraction_matched=(matched / n_ran) if n_ran else None,
+                fraction_a=(matched_a / n_ran) if n_ran else None,
                 importance=claim.importance,
                 dispersion=artifacts.Dispersion(
                     decision_agreement=equivalence.agreement, numeric_cv=cv
@@ -375,13 +379,15 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
 
 
 def targeted_trigger(result: artifacts.ComparableResult) -> tuple[bool, list[str]]:
-    """Headline claim with under half the ran replicas in band A/B, or CV above 0.2."""
+    """Headline claim with under half the ran replicas in A/B, none in A, or CV above 0.2."""
     reasons = []
     for s in result.summaries:
         if getattr(s, "importance", None) != "headline" or not s.n_ran:
             continue
         if (s.fraction_matched or 0) < 0.5:
             reasons.append(f"{s.claim_id}: {s.fraction_matched:.0%} of {s.n_ran} replicas in A/B")
+        elif getattr(s, "fraction_a", None) == 0:
+            reasons.append(f"{s.claim_id}: no replica reached band A")
         cv = s.dispersion.numeric_cv if s.dispersion else None
         if cv is not None and cv > 0.2:
             reasons.append(f"{s.claim_id}: numeric CV {cv:.2f} across replicas")

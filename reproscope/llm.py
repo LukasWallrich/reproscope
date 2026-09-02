@@ -261,15 +261,17 @@ def _claude_p(
 ) -> tuple[str, dict[str, Any], str]:
     # Project settings only: the user's global CLAUDE.md would otherwise steer every call
     # (orchestration, advisor, deviation flagging), which contaminates blind replicas.
-    cmd = ["claude", "-p", "--output-format", "json", "--model", model,
-           "--setting-sources", "project"]
+    cmd = ["claude", "-p", "--model", model, "--setting-sources", "project"]
     if agentic:
+        # stream-json + verbose logs every tool call, so the blinding audit can grep the
+        # transcript for reads outside the work directory.
         cmd += [
+            "--output-format", "stream-json", "--verbose",
             "--permission-mode", "bypassPermissions",
             "--allowedTools", "Bash,Read,Write,Edit,Glob,Grep",
         ]
     else:
-        cmd += ["--allowedTools", "Read"]
+        cmd += ["--output-format", "json", "--allowedTools", "Read"]
     if system:
         cmd += ["--append-system-prompt", system]
     if schema is not None:
@@ -286,8 +288,12 @@ def _claude_p(
     if proc.returncode != 0:
         raise LLMError(f"claude exited {proc.returncode}: {proc.stderr[-800:]}")
     try:
-        data = json.loads(proc.stdout)
-    except json.JSONDecodeError as e:
+        if agentic:
+            events = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+            data = next(e for e in reversed(events) if e.get("type") == "result")
+        else:
+            data = json.loads(proc.stdout)
+    except (json.JSONDecodeError, StopIteration) as e:
         raise LLMError(f"claude gave non-JSON output: {proc.stdout[:500]}") from e
     if data.get("is_error"):
         raise LLMError(f"claude reported an error: {str(data.get('result'))[:500]}")
