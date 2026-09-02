@@ -312,6 +312,9 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
     summaries: list[artifacts.MatchSummary] = []
     for claim in claims:
         reported, comparator = parse_reported(claim.value)
+        comparator = comparator or getattr(claim, "comparator", None)
+        if comparator == "=":
+            comparator = None
         values: list[float] = []
         matched = 0
         matched_a = 0
