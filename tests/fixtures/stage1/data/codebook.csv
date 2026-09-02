@@ -1,0 +1,5 @@
+variable,label,type,values
+pid,Participant identifier,string,P001-P060
+condition,Experimental condition,factor,control | attention
+age,Age in years,integer,years
+closeness,Felt closeness to the confederate after the conversation,numeric,1 (not at all close) to 7 (extremely close)

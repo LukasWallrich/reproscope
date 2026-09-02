@@ -1,0 +1,27 @@
+[
+  {
+    "analysis_id": "a1",
+    "claim_ids": ["c1", "c2", "c3", "c4", "c5"],
+    "study_id": "study1",
+    "sample_rule": "All 60 participants; no exclusions and no missing values.",
+    "outcome": "closeness (single item, 1-7)",
+    "predictors": ["condition (attention vs control)"],
+    "covariates": [],
+    "model_type": "independent-samples t test",
+    "estimator": "Student's t test with pooled variance (var.equal = TRUE), two-sided",
+    "se_type": "pooled",
+    "transformations": [],
+    "weights": null,
+    "missingness": "none",
+    "software_named": [],
+    "versions_named": {},
+    "ambiguities": [
+      {
+        "field": "effect_size",
+        "options": ["Cohen's d with pooled SD", "Hedges' g"],
+        "note": "The methods name Cohen's d with the pooled standard deviation."
+      }
+    ],
+    "state": "complete"
+  }
+]

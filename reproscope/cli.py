@@ -8,12 +8,12 @@ import sys
 
 from . import config, ledger, llm
 
-STAGES = ("0", "1", "2", "3")
+STAGES = ("0", "1", "2", "3", "report")
 
 
 def cmd_run(args: argparse.Namespace) -> int:
     for stage in args.stages:
-        mod = importlib.import_module(f"reproscope.stage{stage}")
+        mod = importlib.import_module("reproscope.report" if stage == "report" else f"reproscope.stage{stage}")
         print(f"== stage {stage} — {args.paper_id}", flush=True)
         mod.run(args.paper_id, force=args.force)
     print(ledger.format_summary(args.paper_id))

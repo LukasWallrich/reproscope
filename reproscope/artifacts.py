@@ -338,7 +338,7 @@ class FactorLevel(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     value: str
-    verdict: Literal["defensible", "rejected"] | None = None
+    verdict: Literal["defensible", "rejected", "paper"] | None = None
     rationale: str | None = None
 
 

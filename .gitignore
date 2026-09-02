@@ -9,3 +9,5 @@ runs/
 __pycache__/
 *.pyc
 scratch*
+corpus/_fixture*/
+corpus/*/paper.txt

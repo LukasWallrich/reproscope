@@ -1,0 +1,68 @@
+Attention increases cooperation in a one-shot public goods game
+
+Journal of Synthetic Social Psychology (2026), 12, 41-49
+
+ABSTRACT
+
+Being attended to by an interaction partner increases cooperative behaviour. In a
+laboratory experiment, 60 undergraduates were randomly assigned to receive attention
+from a confederate partner or not, and then played a one-shot public goods game. Giving
+participants attention raised contributions substantially, t(56) = 2.41, p = .019,
+d = 0.63. Attention is therefore a cheap and effective lever for organisations that want
+to increase cooperation among their members.
+
+INTRODUCTION
+
+Cooperation between strangers is fragile. A partner who signals interest may make
+cooperation feel safer, and small interpersonal cues are known to move behaviour in
+economic games. We tested whether receiving attention from a partner raises
+contributions in a one-shot public goods game.
+
+METHOD
+
+Participants. Sixty undergraduates (39 women, 21 men, mean age 20.4 years) took part
+for course credit. Two participants were excluded for failing the attention-check item
+at the end of the session, leaving 58 participants for analysis.
+
+Design and procedure. Participants were randomly assigned to the attention condition
+(n = 29) or the no-attention condition (n = 29). In the attention condition a
+confederate maintained eye contact and asked two brief questions about the
+participant's studies before the game. In the no-attention condition the confederate
+was present but read from a folder and did not speak. Participants then played one
+round of a public goods game with an endowment of 10 tokens and were told the
+contribution would be doubled and split between the two players.
+
+Measures. The outcome was the number of tokens contributed (0-10). Participants also
+rated felt closeness to the partner on three items (1-7); we report the mean of the
+three items. No reliability coefficient is reported for the closeness scale.
+
+Analysis. Contributions were compared between conditions with an independent-samples
+t test. Analyses were run in R 4.4.1. The significance threshold was .05, two-sided.
+
+RESULTS
+
+Contributions were higher in the attention condition than in the no-attention
+condition.
+
+Table 1. Contributions and felt closeness by condition (M, SD).
+
+  Condition        n    Contribution        Closeness
+  Attention       29    6.14 (2.02)         5.21 (1.10)
+  No attention    29    4.83 (2.11)         4.02 (1.24)
+
+The difference in contributions was significant, t(56) = 2.41, p = .019, d = 0.63,
+95% CI [0.22, 2.40]. Felt closeness was also higher in the attention condition,
+t(56) = 3.87, p < .001. Excluding the two participants who failed the attention check
+did not change the pattern of results.
+
+DISCUSSION
+
+Attention increases cooperation. Because the manipulation was brief and required no
+material incentive, it offers organisations a low-cost way to raise cooperative
+behaviour among members. The effect on felt closeness suggests that attention works by
+making the partner seem more approachable, though we did not test this mediation
+formally.
+
+Limitations. The sample was a student sample from one university and the game was
+played once, so we cannot speak to repeated interaction. The closeness measure was
+constructed for this study.

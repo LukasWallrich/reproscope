@@ -1,0 +1,16 @@
+{
+  "paper_id": "_fixture",
+  "title": "Attention and felt closeness: a synthetic fixture study",
+  "doi": null,
+  "pdf": "paper.pdf",
+  "licence": "synthetic",
+  "data_files": ["data/study1.csv"],
+  "codebook": "data/codebook.csv",
+  "original_code": [],
+  "focal_claim": {
+    "text": "Participants felt closer to a confederate who paid attention to them.",
+    "source": "fixture",
+    "reported": {"statistic": "t", "value": 4.69, "df": 58, "n": 60, "page": 3}
+  },
+  "environment": {"language_hint": "R", "versions_named": {}}
+}

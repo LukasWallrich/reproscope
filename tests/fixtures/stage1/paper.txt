@@ -1,0 +1,27 @@
+Attention and felt closeness: a synthetic fixture study
+
+Abstract
+Sixty undergraduates held a short conversation with a confederate who either
+attended to them or did not. Participants in the attention condition felt
+closer to the confederate afterwards.
+
+Methods
+Sixty undergraduates took part in exchange for course credit, randomly assigned
+in equal numbers to an attention or a control condition. Participants held a
+short conversation with a confederate. In the attention condition the
+confederate faced the participant, maintained eye contact and responded to what
+the participant said. In the control condition the confederate looked at a form
+on the desk and gave only minimal acknowledgements. Afterwards participants
+rated how close they felt to the confederate on a single item from one (not at
+all close) to seven (extremely close). We compared mean closeness between
+conditions with a two-sided independent-samples t test assuming equal variances,
+and computed Cohen's d with the pooled standard deviation. No participants were
+excluded and there are no missing values.
+
+Results
+Closeness was higher in the attention condition (M = 4.09, SD = 0.66) than in
+the control condition (M = 3.27, SD = 0.69), t(58) = 4.69, p < .001, d = 1.21.
+
+Discussion
+Being attended to during a brief conversation raised how close participants felt
+to their partner.

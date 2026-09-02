@@ -1,0 +1,29 @@
+{
+  "paper_id": "_fixture3",
+  "title": "A synthetic two-group experiment (Stage 3 fixture)",
+  "doi": null,
+  "pdf": "paper.pdf",
+  "licence": "fixture",
+  "data_files": [
+    "data/fixture_study.csv"
+  ],
+  "codebook": "data/codebook.md",
+  "original_code": [],
+  "focal_claim": {
+    "text": "The treatment raised post-test scores relative to control. (p. 4)",
+    "source": "fixture",
+    "reported": {
+      "statistic": "Participants in the treatment condition scored higher (M = 5.37) than controls (M = 4.43), t(64.76) = 2.69, p < .01, d = 0.63.",
+      "family": "t",
+      "value": 2.69,
+      "df": 64.76,
+      "n": 72,
+      "page": 4
+    }
+  },
+  "multi100": null,
+  "environment": {
+    "language_hint": "R",
+    "versions_named": {}
+  }
+}

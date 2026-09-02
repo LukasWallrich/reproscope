@@ -29,8 +29,8 @@ def setup(sweep: Path, paper_id: str) -> Path:
             continue
         name = f.name.split("__", 1)[-1]  # strip the "component:Data__" prefix
         ext = f.suffix.lower()
-        if name in seen:
-            continue
+        if name in seen or name.startswith("author_notes"):
+            continue  # author correspondence is not data and may mention results
         seen.add(name)
         if "codebook" in name.lower() or "dictionary" in name.lower():
             shutil.copy(f, dst / "data" / name); codebook = f"data/{name}"

@@ -1,0 +1,64 @@
+[
+  {
+    "claim_id": "c1",
+    "study_id": "study1",
+    "claim_type": "scalar",
+    "importance": "supporting",
+    "quantity_kind": "mean",
+    "value": 4.09,
+    "precision": 2,
+    "uncertainty": {"sd": 0.66},
+    "location": {"page": 3, "kind": "text", "label": "Results, first sentence"},
+    "description": "Mean closeness rating in the attention condition.",
+    "state": "complete"
+  },
+  {
+    "claim_id": "c2",
+    "study_id": "study1",
+    "claim_type": "scalar",
+    "importance": "supporting",
+    "quantity_kind": "mean",
+    "value": 3.27,
+    "precision": 2,
+    "uncertainty": {"sd": 0.69},
+    "location": {"page": 3, "kind": "text", "label": "Results, first sentence"},
+    "description": "Mean closeness rating in the control condition.",
+    "state": "complete"
+  },
+  {
+    "claim_id": "c3",
+    "study_id": "study1",
+    "claim_type": "scalar",
+    "importance": "headline",
+    "quantity_kind": "t",
+    "value": 4.69,
+    "precision": 2,
+    "location": {"page": 3, "kind": "text", "label": "Results, first sentence"},
+    "description": "Student's t statistic for the difference in closeness between the attention and control conditions, with 58 degrees of freedom.",
+    "state": "complete"
+  },
+  {
+    "claim_id": "c4",
+    "study_id": "study1",
+    "claim_type": "scalar",
+    "importance": "headline",
+    "quantity_kind": "p_value",
+    "value": "<.001",
+    "precision": 3,
+    "location": {"page": 3, "kind": "text", "label": "Results, first sentence"},
+    "description": "Two-sided p value of the t test comparing closeness between conditions, reported as below a threshold.",
+    "state": "complete"
+  },
+  {
+    "claim_id": "c5",
+    "study_id": "study1",
+    "claim_type": "scalar",
+    "importance": "headline",
+    "quantity_kind": "d",
+    "value": 1.21,
+    "precision": 2,
+    "location": {"page": 3, "kind": "text", "label": "Results, first sentence"},
+    "description": "Cohen's d for the condition difference in closeness, using the pooled standard deviation.",
+    "state": "complete"
+  }
+]

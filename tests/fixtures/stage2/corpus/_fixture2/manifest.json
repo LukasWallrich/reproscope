@@ -1,0 +1,24 @@
+{
+  "paper_id": "_fixture2",
+  "title": "Attention increases cooperation in a one-shot public goods game",
+  "doi": null,
+  "pdf": "paper.pdf",
+  "licence": "synthetic fixture, not a real paper",
+  "data_files": ["data/study1.csv"],
+  "codebook": null,
+  "original_code": [],
+  "focal_claim": {
+    "text": "Giving participants attention raised contributions in a one-shot public goods game.",
+    "source": "fixture",
+    "reported": {
+      "statistic": "t(56) = 2.41, p = .019, d = 0.63",
+      "family": "t",
+      "value": 2.41,
+      "df": 56.0,
+      "n": 58,
+      "page": 44
+    }
+  },
+  "multi100": null,
+  "environment": {"language_hint": "R", "versions_named": {"R": "4.4.1"}}
+}

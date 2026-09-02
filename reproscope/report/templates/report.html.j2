@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>reproscope — {{ title }}</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔬</text></svg>">
+<style>
+:root{
+  --ink:#16191d; --muted:#5d6672; --line:#d8dde5; --panel:#ffffff; --bg:#f6f7f9;
+  --accent:#20456e; --warn:#8a5a00; --bad:#b3261e; --good:#1f6f43;
+  --a:#c9e8d2; --b:#f6e6a8; --c:#f7cfa2; --f:#f3bdb8; --nf:#e6e8ec;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.wrap{max-width:1120px;margin:0 auto;padding:28px 22px 80px}
+h1{font-size:25px;line-height:1.25;margin:0 0 6px}
+h2{font-size:19px;margin:34px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--accent)}
+h3{font-size:15px;margin:22px 0 8px;color:var(--accent)}
+h4{font-size:14px;margin:16px 0 6px}
+p{margin:8px 0}
+a{color:var(--accent)}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+pre{background:#f0f2f5;border:1px solid var(--line);border-radius:6px;padding:10px;overflow-x:auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:12px 0}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.kv{display:flex;flex-wrap:wrap;gap:6px 26px;margin:6px 0}
+.kv div{font-size:13px}
+.kv b{font-weight:600}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+th{background:#eef1f5;font-weight:600}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.notrun{background:#eef0f3;border:1px dashed #b6bdc7;border-radius:8px;padding:14px 16px;margin:12px 0;color:var(--muted)}
+.abstained{background:#fdf6e6;border:1px solid #e3cf95;border-radius:8px;padding:14px 16px;margin:12px 0}
+.howto{background:#eef4fb;border:1px solid #bcd0e8;border-left:5px solid var(--accent);
+  border-radius:8px;padding:14px 18px;margin:16px 0}
+.howto ul{margin:8px 0 0;padding-left:20px}
+.conjecture{background:#fbf3f2;border:1px solid #e4bdb8;border-radius:8px;padding:6px 12px;
+  display:inline-block;font-size:12.5px;color:var(--bad);font-weight:600;margin-bottom:6px}
+.cell{text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap}
+.band-A{background:var(--a)} .band-B{background:var(--b)} .band-C{background:var(--c)}
+.fail{background:var(--f)} .notfound{background:var(--nf);color:var(--muted)}
+.failed{background:repeating-linear-gradient(45deg,#e6e8ec,#e6e8ec 5px,#cdd2da 5px,#cdd2da 10px);
+  color:var(--muted)}
+.headline td:first-child{border-left:4px solid var(--accent)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:12.5px;margin:8px 0}
+.legend span{padding:2px 8px;border:1px solid var(--line);border-radius:4px}
+.pill{display:inline-block;padding:1px 7px;border-radius:10px;font-size:12px;border:1px solid var(--line);background:#eef1f5}
+.pill.good{background:var(--a)} .pill.bad{background:var(--f)} .pill.warn{background:var(--b)}
+details{margin:8px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+details>summary{cursor:pointer;padding:8px 12px;font-size:13.5px;font-weight:600}
+details[open]>summary{border-bottom:1px solid var(--line)}
+details .body{padding:10px 14px}
+.md h1,.md h2{border:0;font-size:17px;margin:18px 0 6px;padding:0;color:var(--ink)}
+.md h3{font-size:14.5px}
+.md table{margin:8px 0}
+.md blockquote{margin:8px 0;padding:2px 12px;border-left:3px solid var(--line);color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.stat{display:inline-block;margin:0 22px 8px 0}
+.stat b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+svg{max-width:100%;height:auto}
+.foot{margin-top:40px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+{# ---------------- 1. header ---------------- #}
+<h1>{{ title }}</h1>
+<div class="kv">
+  <div><b>paper_id</b> <code>{{ paper_id }}</code></div>
+  {% if doi_url %}<div><b>DOI</b> <a href="{{ doi_url }}">{{ doi }}</a></div>{% endif %}
+  <div><b>report built</b> {{ run_date }}</div>
+  <div><b>API cost</b> ${{ '%.4f'|format(cost_api) }}</div>
+  <div><b>subscription equivalent</b> ${{ '%.4f'|format(cost_equiv) }}</div>
+  <div><b>model calls</b> {{ ledger.summary.total.calls }}</div>
+</div>
+<div class="kv">
+  <div><b>models used</b>
+  {% if ledger.models %}{{ ledger.models|join(', ') }}{% else %}<span class="muted">no ledger rows</span>{% endif %}
+  </div>
+</div>
+
+{# ---------------- 2. how to read ---------------- #}
+<div class="howto">
+  <h3 style="margin-top:0">How to read this report</h3>
+  <p><b>The stages carry different weight.</b> Stage 1 findings are worth acting on: they point at
+  methods that need to be specified more clearly, or at numbers that need fixing. Stages 2 and 3
+  are context for a human reviewer, not verdicts on the paper.</p>
+  <p><b>Every claim ends in one of two states</b> — <i>complete</i> or <i>abstained</i>. An
+  abstention is a recorded refusal with a reason (the estimand could not be bound to the data, an
+  input was missing). Abstentions are excluded from the summary rates, so a replica that says
+  "cannot be attempted" is never scored below one that guesses.</p>
+  <p><b>What a match means.</b> A close match shows that one route to the reported number exists.
+  A mismatch does not identify whether the paper or the replicas are wrong (or underspecified).
+  It triggers the targeted reconstruction and the diagnosis pass, and should be read jointly with
+  the dispersion metric, the re-run arm where present, and Stage 3.</p>
+  <p class="small muted">Replicas work from a redacted methods document and never see the reported
+  values. Bands are tolerance classes, not pass/fail: A within 2%, B within 20%, C within 40%,
+  with quantity-specific rules for p values, ratios and counts. Raw and standardised differences
+  are shown next to every band.</p>
+</div>
+
+{# ---------------- 3. focal claim ---------------- #}
+<h2>Focal claim</h2>
+<div class="panel">
+  {% if focal.text %}<p style="font-size:16px">“{{ focal.text }}”</p>{% endif %}
+  <div class="kv">
+    {% if focal.source %}<div><b>source</b> {{ focal.source }}</div>{% endif %}
+    <div><b>claim id</b> {% if focal.claim_id %}<code>{{ focal.claim_id }}</code>{% else %}<span class="muted">unresolved</span>{% endif %}</div>
+    {% if focal.quantity_kind %}<div><b>quantity</b> {{ focal.quantity_kind }}</div>{% endif %}
+  </div>
+  <p class="small muted">Identified by: {{ focal.rule }}.</p>
+
+  <div class="grid2">
+    <div>
+      <h4>Reported in the paper</h4>
+      {% if focal.reported %}
+      <table>
+        {% for k, v in focal.reported.items() %}
+        {% if v is not none %}<tr><th>{{ k }}</th><td>{{ v|num if v is number else v }}</td></tr>{% endif %}
+        {% endfor %}
+      </table>
+      {% else %}<p class="muted">no reported statistic in the manifest</p>{% endif %}
+    </div>
+    <div>
+      <h4>Multi100 analysts (Cohen's d)</h4>
+      {% if focal.multi100 and focal.multi100.analyst_d %}
+      <table>
+        <tr><th>analysts</th><td class="n">{{ focal.multi100.n_analysts }}</td></tr>
+        {% for k in ['min','median','max'] %}
+        <tr><th>d {{ k }}</th><td class="n">{{ focal.multi100.analyst_d.get(k)|num }}</td></tr>
+        {% endfor %}
+      </table>
+      <p class="small muted">These are standardised mean differences. Compare them with a
+      reproscope value only where that value is also a <i>d</i>.</p>
+      {% else %}
+      <p class="muted">No Multi100 record in the manifest for this paper.</p>
+      {% endif %}
+    </div>
+    <div>
+      <h4>reproscope replicas, this claim</h4>
+      {% if focal.claim and focal.claim.value is not none %}
+      <p class="small">Claim <code>{{ focal.claim_id }}</code> as reported:
+      <b>{{ focal.claim.value }}</b>{% if focal.quantity_kind %} ({{ focal.quantity_kind }}){% endif %}</p>
+      {% endif %}
+      {% if focal.replica_values %}
+      <table>
+        <tr><th>replica</th><th class="n">value</th><th>band</th></tr>
+        {% for r in focal.replica_values %}
+        <tr><td><code>{{ r.replica_id }}</code></td><td class="n">{{ r.value }}</td>
+            <td>{% if r.band %}<span class="pill {{ 'good' if r.band in ['A','B'] else 'bad' }}">{{ r.band }}</span>{% else %}—{% endif %}</td></tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p class="muted">No Stage 1 comparison rows for this claim.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# ---------------- 4. stage 0 ---------------- #}
+<h2>Stage 0 — Intake, extraction and data readiness</h2>
+{% if not s0 %}
+<div class="notrun"><b>Stage 0 not run.</b> No artifacts under <code>stage0/</code>, so there are no
+claim records, estimand contracts, readiness record or redaction report for this paper.</div>
+{% else %}
+<div class="panel">
+  <div>
+    <span class="stat"><b>{{ s0.n_claims }}</b><span>claims extracted</span></span>
+    {% for k, v in s0.by_importance %}<span class="stat"><b>{{ v }}</b><span>{{ k }}</span></span>{% endfor %}
+    {% for k, v in s0.by_type %}<span class="stat"><b>{{ v }}</b><span>type: {{ k }}</span></span>{% endfor %}
+    <span class="stat">
+      <b>{% if s0.extraction.rate is not none %}{{ s0.extraction.rate|pct }}{% else %}n/a{% endif %}</b>
+      <span>two-model extraction agreement</span></span>
+  </div>
+  {% if s0.extraction.n_with_records == 0 %}
+  <p class="small muted">No <code>extraction</code> records on the claims, so the two-model
+  agreement rate could not be computed (this is not a 0% agreement).</p>
+  {% else %}
+  <p class="small muted">{{ s0.extraction.n_agreed }} of {{ s0.extraction.n_with_records }} claims
+  agreed between the two extraction models before arbitration.</p>
+  {% endif %}
+</div>
+
+<h3>Estimand contracts</h3>
+{% if s0.contracts %}
+<div class="scroll"><table>
+  <tr><th>analysis</th><th>model type</th><th>sample rule</th><th>outcome</th><th>claims</th>
+      <th class="n">ambiguities</th><th>state</th><th>readiness</th></tr>
+  {% for c in s0.contracts %}
+  <tr>
+    <td><code>{{ c.analysis_id }}</code></td>
+    <td>{{ c.model_type or '—' }}</td>
+    <td>{{ c.sample_rule or '—' }}</td>
+    <td>{{ c.outcome or '—' }}</td>
+    <td>{{ c.claim_ids|join(', ') }}</td>
+    <td class="n">{{ c.ambiguities|length }}</td>
+    <td><span class="pill {{ 'bad' if c.state == 'abstained' else '' }}">{{ c.state or '—' }}</span></td>
+    <td><span class="pill {{ 'bad' if c.readiness_state == 'abstained' else '' }}">{{ c.readiness_state or '—' }}</span></td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% for c in s0.contracts %}{% if c.ambiguities %}
+<details><summary>Ambiguities recorded for <code>{{ c.analysis_id }}</code> ({{ c.ambiguities|length }})</summary>
+<div class="body"><table>
+  <tr><th>field</th><th>options</th><th>note</th></tr>
+  {% for a in c.ambiguities %}
+  <tr><td>{{ a.field }}</td><td>{{ (a.options or [])|join(' · ') }}</td><td>{{ a.note or '' }}</td></tr>
+  {% endfor %}
+</table></div></details>
+{% endif %}{% endfor %}
+{% else %}
+<p class="muted">No contracts recorded.</p>
+{% endif %}
+
+<h3>Data readiness</h3>
+{% if s0.readiness %}
+<div class="panel">
+  <div class="kv">
+    <div><b>unit of observation</b> {{ s0.readiness.unit_of_observation or '—' }}</div>
+    <div><b>keys</b> {{ (s0.readiness['keys'] or [])|join(', ') or '—' }}</div>
+    <div><b>missing sentinels</b> {{ (s0.readiness.missing_sentinels or [])|join(', ') or 'none' }}</div>
+    <div><b>state</b> {{ s0.readiness.state or '—' }}</div>
+  </div>
+  {% if s0.readiness.files %}
+  <table>
+    <tr><th>file</th><th>format</th><th class="n">rows</th><th class="n">cols</th></tr>
+    {% for f in s0.readiness.files %}
+    <tr><td><code>{{ f.path }}</code></td><td>{{ f.format or '—' }}</td>
+        <td class="n">{{ f.rows if f.rows is not none else '—' }}</td>
+        <td class="n">{{ f.cols if f.cols is not none else '—' }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  <h4>Variable bindings</h4>
+  {% if s0.bindings %}
+  <table>
+    <tr><th>contract field</th><th>candidate columns</th><th>chosen</th><th>note</th></tr>
+    {% for b in s0.bindings %}
+    <tr{% if b.unbound %} class="fail"{% endif %}>
+      <td>{{ b.field }}</td><td>{{ b.candidates|join(', ') }}</td>
+      <td>{% if b.chosen %}<code>{{ b.chosen }}</code>{% else %}<b>unbound (null)</b>{% endif %}</td>
+      <td>{{ b.note or '' }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No variable bindings recorded. Nothing was left for a human to resolve, or the
+  readiness step did not enumerate bindings.</p>
+  {% endif %}
+</div>
+{% else %}
+<div class="notrun">No readiness record.</div>
+{% endif %}
+
+<h3>Blinding: redaction and leakage audit</h3>
+{% if s0.redaction %}
+<div class="panel">
+  <div class="kv">
+    <div><b>deterministic value scan</b>
+      <span class="pill {{ 'good' if s0.redaction.scan_clean else 'bad' }}">
+        {{ 'clean' if s0.redaction.scan_clean else 'HITS' }}</span></div>
+    <div><b>scan hits</b> {{ (s0.redaction.scan_hits or [])|length }}</div>
+    <div><b>spans removed</b> {{ (s0.redaction.removed_spans or [])|length }}</div>
+    <div><b>leakage audit</b>
+      <span class="pill {{ 'good' if s0.leak_verdict == 'clean' else 'warn' }}">{{ s0.leak_verdict or 'not run' }}</span></div>
+  </div>
+  {% if s0.leak_note %}<p class="small">{{ s0.leak_note }}</p>{% endif %}
+  {% if s0.redaction.scan_hits %}
+  <p class="small"><b>Hits (blocking):</b> {{ s0.redaction.scan_hits|join(', ') }}</p>
+  {% endif %}
+  {% if s0.redaction.removed_spans %}
+  <table>
+    <tr><th>kind</th><th>location</th><th>text</th></tr>
+    {% for r in s0.redaction.removed_spans %}
+    <tr><td>{{ r.kind }}</td><td>{{ r.location or '—' }}</td><td>{{ r.text or '—' }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+{% else %}
+<div class="notrun">No redaction report. The blinding step did not run or wrote no sidecar.</div>
+{% endif %}
+
+{% if s0.has_methods %}
+<details><summary>Redacted methods document given to the replicas</summary>
+<div class="body md">{{ s0.methods_html }}</div></details>
+{% endif %}
+{% endif %}
+
+{# ---------------- 5. stage 1 ---------------- #}
+<h2>Stage 1 — Computational reproduction</h2>
+{% if not s1 %}
+<div class="notrun"><b>Stage 1 not run.</b> No <code>stage1/</code> artifacts: no blind replicas, no
+match table, no targeted reconstruction and no diagnosis for this paper.</div>
+{% else %}
+
+<h3>Match table</h3>
+<p class="small muted">Rows are claims, headline first; columns are blind replicas. Each cell shows
+the value the replica computed, coloured by tolerance band. Hover a cell for the raw and
+standardised differences.</p>
+<div class="legend">
+  <span class="band-A">A — within 2%</span><span class="band-B">B — within 20%</span>
+  <span class="band-C">C — within 40%</span><span class="fail">fail / sign mismatch</span>
+  <span class="notfound">claim not found by this replica</span>
+  <span class="failed">replica failed to run</span>
+</div>
+<div class="scroll"><table>
+  <tr>
+    <th>claim</th><th>quantity</th><th class="n">reported</th>
+    {% for rid in s1.replica_ids %}<th class="n">{{ rid }}</th>{% endfor %}
+    <th class="n">fraction matched</th><th class="n">numeric CV</th><th class="n">decision agreement</th>
+  </tr>
+  {% for r in s1.table %}
+  <tr{% if r.importance == 'headline' %} class="headline"{% endif %}>
+    <td><code>{{ r.claim_id }}</code>
+      {% if r.importance %}<br><span class="small muted">{{ r.importance }}</span>{% endif %}
+      {% if r.description %}<br><span class="small">{{ r.description }}</span>{% endif %}</td>
+    <td>{{ r.quantity_kind or '—' }}</td>
+    <td class="n">{{ r.reported }}</td>
+    {% for c in r.cells %}
+    <td class="cell {{ c.state }}" title="{{ c.detail }}">{{ c.label }}{% if c.band %}<br><span class="small">{{ c.band }}</span>{% endif %}</td>
+    {% endfor %}
+    <td class="n">{{ r.fraction_matched|pct }}</td>
+    <td class="n">{{ r.numeric_cv|num }}</td>
+    <td class="n">{{ r.decision_agreement|num }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+
+<h3>Replicas</h3>
+<div class="scroll"><table>
+  <tr><th>replica</th><th>family</th><th>model</th><th>route</th><th>tier</th><th>ran</th>
+      <th class="n">fixes (min/maj/crit)</th><th>hardcoding audit</th><th class="n">turns</th>
+      <th class="n">tokens in/out</th><th class="n">cost $</th></tr>
+  {% for r in s1.replicas %}
+  <tr>
+    <td><code>{{ r.replica_id }}</code></td>
+    <td>{{ r.family or '—' }}</td><td>{{ r.model or '—' }}</td><td>{{ r.route or '—' }}</td>
+    <td>{{ r.tier }}</td>
+    <td>{% if r.ran %}<span class="pill good">yes</span>{% else %}<span class="pill bad">no</span>{% endif %}</td>
+    <td class="n">{{ r.fix_counts.minor }}/{{ r.fix_counts.major }}/{{ r.fix_counts.critical }}{% if r.fix_counts.unrated %} (+{{ r.fix_counts.unrated }} unrated){% endif %}</td>
+    <td>{% if r.hardcoding %}<span class="pill {{ 'good' if r.hardcoding == 'clean' else 'bad' }}">{{ r.hardcoding }}</span>{% else %}—{% endif %}</td>
+    <td class="n">{{ r.turns if r.turns is not none else '—' }}</td>
+    <td class="n">{% if r.usage %}{{ r.usage.tokens_in|int }} / {{ r.usage.tokens_out|int }}{% else %}—{% endif %}</td>
+    <td class="n">{% if r.usage %}{{ '%.4f'|format(r.usage.cost_usd) }}{% if r.usage.cost_usd_equiv %} <span class="muted">({{ '%.4f'|format(r.usage.cost_usd_equiv) }} equiv)</span>{% endif %}{% else %}—{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+<p class="small muted">Turns are the agent's repair loops recorded in <code>run_checks</code>.
+Token and cost figures are joined from the ledger on <code>replica_id</code>; a subscription route
+bills $0 and reports a list-price equivalent instead.</p>
+
+<h3>Cheap versus frontier replicas</h3>
+<table>
+  <tr><th>tier</th><th>replicas</th><th class="n">cells in band A or B</th><th class="n">comparable cells</th><th class="n">match rate</th></tr>
+  {% for s in s1.split %}
+  <tr><td>{{ s.tier }}{% if s.tier == 'frontier' %} <span class="small muted">(claude_p, codex)</span>{% else %} <span class="small muted">(openrouter, opencode)</span>{% endif %}</td>
+      <td>{{ s.replicas|join(', ') or '—' }}</td>
+      <td class="n">{{ s.matched }}</td><td class="n">{{ s.comparable }}</td><td class="n">{{ s.rate|pct }}</td></tr>
+  {% endfor %}
+</table>
+<p class="small muted">The split is by model route, which is the only tier signal recorded in the
+traces. Comparable cells exclude claims a replica did not find and replicas that did not run.</p>
+
+<h3>Targeted reconstruction</h3>
+{% if not s1.targeted %}
+<div class="notrun">No <code>targeted.json</code>: the targeted reconstruction arm did not run.</div>
+{% else %}
+<div class="panel">
+  <div class="kv">
+    <div><b>triggered</b> {{ 'yes' if s1.targeted.triggered else 'no' }}</div>
+    <div><b>outcome</b> <span class="pill {{ 'bad' if s1.targeted.outcome in ['not_reachable','reachable_indefensibly'] else '' }}">{{ s1.targeted.outcome }}</span></div>
+    <div><b>attempts</b> {{ s1.targeted.attempts }}</div>
+  </div>
+  {% if s1.targeted.notes %}<p>{{ s1.targeted.notes }}</p>{% endif %}
+  <h4>Choices the reconstruction had to add</h4>
+  {% if s1.targeted.added_choices %}
+  <ul>{% for c in s1.targeted.added_choices %}<li>{{ c }}</li>{% endfor %}</ul>
+  {% else %}<p class="muted">None. (When the arm is triggered and reaches the reported number, this
+  list is what the paper should have stated.)</p>{% endif %}
+</div>
+{% endif %}
+
+<h3>Re-run of the original code</h3>
+{% if not s1.rerun %}
+<div class="notrun">No <code>rerun.json</code>: the re-run arm did not run.</div>
+{% elif s1.rerun.state == 'abstained' %}
+<div class="abstained"><b>Abstained.</b> {{ s1.rerun.abstain_reason or 'no reason recorded' }}
+<p class="small">The reproduction therefore shows that the supplied data yields the reported
+numbers, not that the reported numbers came from that data.</p></div>
+{% else %}
+<div class="panel"><pre>{{ s1.rerun|tojson(indent=2) }}</pre></div>
+{% endif %}
+
+{% if s1.trace_equivalence %}
+<details><summary>Decision-trace equivalence across replicas (agreement {{ s1.trace_equivalence.agreement|num }})</summary>
+<div class="body">
+  <table><tr><th>field</th><th>groups</th><th>note</th></tr>
+  {% for f in s1.trace_equivalence.fields or [] %}
+  <tr><td>{{ f.field }}</td>
+      <td>{% for g in f.groups %}<code>{{ g|join(', ') }}</code>{% if not loop.last %} vs {% endif %}{% endfor %}</td>
+      <td>{{ f.note }}</td></tr>
+  {% endfor %}</table>
+  {% if s1.trace_equivalence.notable_divergences %}
+  <h4>Notable divergences</h4>
+  <ul>{% for d in s1.trace_equivalence.notable_divergences %}<li>{{ d }}</li>{% endfor %}</ul>
+  {% endif %}
+</div></details>
+{% endif %}
+
+<h3>Divergence diagnosis</h3>
+{% if not s1.has_diagnosis %}
+<div class="notrun">No <code>diagnosis.md</code>: the diagnosis pass did not run.</div>
+{% else %}
+<div class="conjecture">Conjecture — unblinded, not evidence</div>
+<div class="panel md">{{ s1.diagnosis_html }}</div>
+{% endif %}
+
+<h3>Open choices per replica</h3>
+{% for r in s1.replicas %}
+<details><summary><code>{{ r.replica_id }}</code> — {{ r.open_choices|length }} open choice(s){% if r.details %}, {{ r.details|length }} trace field(s){% endif %}</summary>
+<div class="body">
+  {% if r.open_choices %}
+  <ul>{% for c in r.open_choices %}
+  <li>{% if c is mapping %}
+    <b>{{ c.get('open') or c.get('choice') or 'choice' }}</b>
+    {% if c.get('options') %}<br><span class="small muted">options: {{ c.get('options')|join(' · ') }}</span>{% endif %}
+    {% if c.get('chosen') %}<br>chose: <b>{{ c.get('chosen') }}</b>{% endif %}
+    {% if c.get('why') %}<br><span class="small">{{ c.get('why') }}</span>{% endif %}
+  {% else %}{{ c }}{% endif %}</li>
+  {% endfor %}</ul>
+  {% else %}<p class="muted">No open choices recorded.</p>{% endif %}
+  {% if r.fixes %}
+  <h4>Fixes</h4>
+  <ul>{% for f in r.fixes %}<li>[{{ f.severity or 'unrated' }}] {{ f.description }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if r.hardcoding_hits %}
+  <h4>Hardcoding audit hits</h4><pre>{{ r.hardcoding_hits|tojson(indent=2) }}</pre>
+  {% endif %}
+  {% for k, v in r.details %}
+  <h4>{{ k }}</h4><pre>{{ v }}</pre>
+  {% endfor %}
+</div></details>
+{% endfor %}
+{% endif %}
+
+{# ---------------- 6. stage 2 ---------------- #}
+<h2>Stage 2 — Analysis review <span class="small muted">(context, not a verdict)</span></h2>
+{% if not s2 %}
+<div class="notrun"><b>Stage 2 not run.</b> No <code>stage2/</code> artifacts: no causal-language
+rating, no minimum-detectable-effect curve, no alignment check and no referee-style pass.</div>
+{% else %}
+<div class="panel">
+  <div class="kv">
+    {% if s2.claim_id %}<div><b>focal claim</b> <code>{{ s2.claim_id }}</code></div>{% endif %}
+    {% if s2.causal %}<div><b>causal language</b> <span class="pill warn">{{ s2.causal.verdict or s2.causal.rating }}</span></div>{% endif %}
+    {% if s2.mde %}<div><b>MDE at 80% power</b> {{ s2.mde.mde_standardised|num }} {{ s2.mde.mde_metric or '' }}</div>{% endif %}
+    {% if s2.alignment %}<div><b>claim–analysis alignment</b> <span class="pill">{{ s2.alignment.verdict }}</span></div>{% endif %}
+    <div><b>broad findings</b> {{ s2.findings|length }}</div>
+  </div>
+</div>
+{% if s2.has_md %}
+<div class="panel md">{{ s2.review_html }}</div>
+{% else %}
+<div class="notrun">No <code>review.md</code>; only the structured record exists.</div>
+{% endif %}
+{% endif %}
+
+{# ---------------- 7. stage 3 ---------------- #}
+<h2>Stage 3 — Multiverse robustness <span class="small muted">(context, not a verdict)</span></h2>
+{% if not s3 %}
+<div class="notrun"><b>Stage 3 not run.</b> No <code>stage3/</code> artifacts: no specification
+space, no multiverse runs and no specification curve.</div>
+{% else %}
+<div class="panel">
+  <div>
+    <span class="stat"><b>{{ s3.grid_size if s3.grid_size is not none else '—' }}</b><span>grid size</span></span>
+    <span class="stat"><b>{{ s3.n_specs }}</b><span>specifications run</span></span>
+    <span class="stat"><b>{{ s3.n_converged }}</b><span>converged</span></span>
+    <span class="stat"><b>{{ s3.reported_estimate|num }}</b><span>reported estimate</span></span>
+    <span class="stat"><b>{{ s3.median|num }}</b><span>multiverse median</span></span>
+    <span class="stat"><b>{{ s3.share_same_sign|pct }}</b><span>same sign</span></span>
+    <span class="stat"><b>{{ s3.share_p05|pct }}</b><span>p &lt; .05</span></span>
+    <span class="stat"><b>{{ s3.extremeness|num }}</b><span>extremeness</span></span>
+  </div>
+  <p><b>Rank of the reported estimate:</b>
+  {% if s3.rank is not none %}
+    {{ s3.rank }} of {{ s3.n_specs }}{% if s3.rank > s3.n_specs %} — the paper's value sits above
+    every specification in the multiverse{% endif %}.
+  {% else %}not computed.{% endif %}
+  {% if s3.range[0] is not none %}
+  Multiverse estimates run from {{ s3.range[0]|num }} to {{ s3.range[1]|num }}.{% endif %}
+  {% if s3.focal_quantity.kind %} The focal quantity is <b>{{ s3.focal_quantity.kind }}</b>
+  (claim <code>{{ s3.claim_id }}</code>).{% endif %}</p>
+</div>
+
+<h3>Specification curve</h3>
+{% if s3.svg %}
+{{ s3.svg }}
+<p class="small muted">Each point is one specification, sorted by estimate. The red line is the
+estimate reported in the paper. A ringed point is the paper-level specification (every factor at
+the level the paper used); no ring means the paper-level combination is not in the grid or the
+factors do not all record a paper level.</p>
+{% else %}
+<div class="notrun">No numeric estimates to plot.</div>
+{% endif %}
+
+<h3>Factors and levels</h3>
+<div class="scroll"><table>
+  <tr><th>factor</th><th>source</th><th>level</th><th>verdict</th><th>rationale / how</th></tr>
+  {% for f in s3.factors %}
+    {% for l in f.levels %}
+    <tr>
+      {% if loop.first %}<td rowspan="{{ f.levels|length }}"><b>{{ f.name }}</b>
+        {% if f.field %}<br><span class="small muted">{{ f.field }}</span>{% endif %}</td>
+      <td rowspan="{{ f.levels|length }}">{{ f.source or '—' }}</td>{% endif %}
+      <td>{{ l.value }}{% if f.paper_level == l.value %} <span class="pill">paper level</span>{% endif %}</td>
+      <td><span class="pill {{ 'good' if l.verdict == 'defensible' else 'bad' }}">{{ l.verdict or '—' }}</span></td>
+      <td>{{ l.rationale or l.how or '—' }}</td>
+    </tr>
+    {% endfor %}
+  {% endfor %}
+</table></div>
+{% if s3.incompatibilities %}
+<p class="small"><b>Incompatible combinations:</b>
+{% for i in s3.incompatibilities %}<code>{{ i|join(' + ') }}</code>{% if not loop.last %}; {% endif %}{% endfor %}</p>
+{% endif %}
+{% if s3.dropped_factors %}
+<p class="small"><b>Dropped factors:</b> {{ s3.dropped_factors|join(', ') }}</p>
+{% endif %}
+
+<details><summary>All {{ s3.runs|length }} specification runs</summary>
+<div class="body scroll"><table>
+  <tr>
+    {% for k in (s3.runs[0].spec.keys() if s3.runs else []) %}<th>{{ k }}</th>{% endfor %}
+    <th class="n">estimate</th><th class="n">se</th><th class="n">p</th><th>converged</th></tr>
+  {% for r in s3.runs %}
+  <tr>{% for v in r.spec.values() %}<td>{{ v }}</td>{% endfor %}
+    <td class="n">{{ r.estimate|num }}</td><td class="n">{{ r.se|num }}</td>
+    <td class="n">{{ r.p|num }}</td><td>{{ 'yes' if r.converged else 'no' }}</td></tr>
+  {% endfor %}
+</table></div></details>
+
+<h3>Interpretation</h3>
+{% if s3.interpretation_html %}
+<div class="panel md">{{ s3.interpretation_html }}</div>
+{% else %}
+<div class="notrun">No interpretation written.</div>
+{% endif %}
+{% endif %}
+
+{# ---------------- 8. appendix ---------------- #}
+<h2>Appendix</h2>
+
+<h3>Model-call ledger</h3>
+{% if ledger.table %}
+<div class="scroll"><table>
+  <tr><th>stage</th><th>model</th><th>route</th><th class="n">calls</th><th class="n">tokens in</th>
+      <th class="n">tokens out</th><th class="n">API $</th><th class="n">subscription-equivalent $</th></tr>
+  {% for r in ledger.table %}
+  <tr><td>{{ r.stage }}</td><td>{{ r.model }}</td><td>{{ r.route }}</td>
+      <td class="n">{{ r.calls }}</td><td class="n">{{ r.tokens_in|int }}</td>
+      <td class="n">{{ r.tokens_out|int }}</td><td class="n">{{ '%.4f'|format(r.cost_usd) }}</td>
+      <td class="n">{{ '%.4f'|format(r.cost_usd_equiv) }}</td></tr>
+  {% endfor %}
+  <tr><th>TOTAL</th><th></th><th></th><th class="n">{{ ledger.summary.total.calls }}</th>
+      <th class="n">{{ ledger.summary.total.tokens_in|int }}</th>
+      <th class="n">{{ ledger.summary.total.tokens_out|int }}</th>
+      <th class="n">{{ '%.4f'|format(cost_api) }}</th>
+      <th class="n">{{ '%.4f'|format(cost_equiv) }}</th></tr>
+</table></div>
+<p class="small muted">API $ excludes subscription routes (claude_p, codex), which bill nothing at
+the margin; their list-price equivalent is shown separately and is never added to the API total.</p>
+{% else %}
+<div class="notrun">No ledger rows for this paper.</div>
+{% endif %}
+
+<h3>Environment</h3>
+<div class="panel">
+  <p class="small">Replicas ran locally on the pilot machine's R and Python installations. No
+  container was used, so package versions are those present on the machine. Every replica trace
+  records <code>sessionInfo()</code> or <code>pip freeze</code> so version-sensitive defaults stay
+  visible. This is a recorded deviation from the pinned image in the scope document.</p>
+  {% if manifest.environment %}
+  <div class="kv"><div><b>language hint</b> {{ manifest.environment.get('language_hint') or '—' }}</div>
+  <div><b>versions named in the paper</b> {{ manifest.environment.get('versions_named') or 'none' }}</div></div>
+  {% endif %}
+  {% if session_info %}
+  <h4>sessionInfo excerpt (from a replica trace)</h4>
+  <pre>{{ session_info }}</pre>
+  {% else %}
+  <p class="muted small">No trace recorded a sessionInfo block.</p>
+  {% endif %}
+</div>
+
+<h3>Attached artifacts</h3>
+{% if attachments %}
+<p class="small muted">Paths are relative to <code>runs/{{ paper_id }}/</code>. The machine-readable
+chain is in <code>report/report.json</code> next to this file.</p>
+<div class="scroll"><table>
+  <tr><th>path</th><th class="n">KB</th></tr>
+  {% for a in attachments %}
+  <tr><td><code>{{ a.path }}</code></td><td class="n">{{ a.size_kb if a.size_kb is not none else '' }}</td></tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">No artifacts on disk for this paper.</p>
+{% endif %}
+
+<div class="foot">
+reproscope v0 pilot · report for <code>{{ paper_id }}</code> built {{ run_date }}.
+Stage 1 findings are worth acting on; Stages 2 and 3 are context for a human reviewer.
+</div>
+
+</div>
+</body>
+</html>

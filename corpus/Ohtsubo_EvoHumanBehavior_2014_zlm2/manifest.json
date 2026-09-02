@@ -7,10 +7,7 @@
   "licence": "unknown",
   "oa_status": "green",
   "data_files": [
-    "data/Ohtsubo_et_al2014Study2a_data.xls",
-    "data/author_notes_data.txt",
-    "data/author_notes_analysis.txt",
-    "data/author_notes_materials.txt"
+    "data/Ohtsubo_et_al2014Study2a_data.xls"
   ],
   "codebook": null,
   "original_code": [],
@@ -23,7 +20,7 @@
       "value": 5.91,
       "df": 27.0,
       "n": 29.0,
-      "page": "nan"
+      "page": null
     }
   },
   "multi100": {

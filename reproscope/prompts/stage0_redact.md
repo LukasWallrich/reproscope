@@ -6,6 +6,9 @@ Remove all outcome information, in any form: every result value, rounded or exac
 
 Write the output as Markdown with these sections: Research questions; Design and participants; Materials and measures; Procedure; Analysis plan (one subsection per analysis, named as in the contracts); Software and settings. Where a passage would leak a result, replace it with "[redacted: result]" rather than paraphrasing around it. Do not add analytical choices the paper does not state.
 
+Analyses to cover in the analysis plan, one subsection each, named exactly as given:
+{{analysis_labels}}
+
 Paper text:
 {{paper_text}}
 

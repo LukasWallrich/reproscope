@@ -13,4 +13,4 @@ Extractor A:
 Extractor B:
 {{list_b}}
 
-Return JSON: {"claims": [...same fields as the input entries plus agreed, arbiter_note, confidence...], "dropped": [{"from": "A"|"B", "description": "...", "reason": "..."}], "notes": "..."}. Output only JSON.
+Return JSON: {"claims": [...same fields as the input entries plus agreed, arbiter_note, confidence...], "dropped": [{"source": "A"|"B", "description": "...", "reason": "..."}], "notes": "..."}. Output only JSON.
