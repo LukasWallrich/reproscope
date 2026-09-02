@@ -84,13 +84,8 @@ opens a browser OAuth flow for:
 - **OpenAI ChatGPT Plus/Pro** — "ChatGPT Plus/Pro" option
 - **GitHub Copilot** — device-code flow
 
-Tokens refresh automatically; credentials land in
-`~/.local/share/opencode/auth.json`. Everything else is API-key entry.
-
-Currently configured on this machine (`opencode providers list`): DeepSeek, Kimi For
-Coding, Moonshot AI (China), OpenRouter — all API keys — plus `OPENAI_API_KEY` from
-the environment. **No subscription OAuth is set up yet**; running a subscription-backed
-model through opencode needs one `opencode providers login` first.
+Tokens refresh automatically. Everything else is API-key entry. Running a
+subscription-backed model through opencode needs one `opencode providers login` first.
 
 ---
 
@@ -130,9 +125,8 @@ verifiable within the session's search budget.
 ### Access routes
 
 1. **Z.ai native API** — `https://api.z.ai/api/paas/v4` (OpenAI-compatible).
-2. **Z.ai Anthropic-compatible endpoint** — for Claude Code:
-   `ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic`,
-   `ANTHROPIC_AUTH_TOKEN=<z.ai key>` in `~/.claude/settings.json`. Z.ai's own helper
+2. **Z.ai Anthropic-compatible endpoint** — `https://api.z.ai/api/anthropic`, usable
+   from Claude Code by pointing its base URL and auth token at Z.ai. Z.ai's own helper
    maps Opus/Sonnet/Haiku all to GLM-5.3-Flash by default.
 3. **OpenRouter** — `z-ai/glm-5.3-flash`, served by 21 providers. Works today through
    opencode as `-m openrouter/z-ai/glm-5.3-flash` (tested, $0.00128 for a trivial call).
@@ -163,14 +157,8 @@ both sources.
 
 ### Subscription access via Codex CLI
 
-**Yes.** Local state, `/opt/homebrew/bin/codex`, `codex-cli 0.149.0`:
-
-- `~/.codex/auth.json` → `auth_mode: "chatgpt"` (subscription, no API key stored;
-  `OPENAI_API_KEY` field is empty)
-- `~/.codex/config.toml` → `model = "gpt-5.6-sol"`, `model_reasoning_effort = "medium"`
-
-So **Sol is the current default model of the ChatGPT-subscription-backed Codex CLI**
-on this machine. Invocation:
+**Yes** (codex-cli 0.149.0). The Codex CLI can run in ChatGPT-subscription mode with no
+API key stored, and Sol works as its default model in that mode. Invocation:
 
 ```
 codex exec --skip-git-repo-check --sandbox read-only -m gpt-5.6-sol - < prompt.txt > out.txt 2>&1
@@ -181,9 +169,7 @@ by the CLI and prints a session banner (`model: gpt-5.6-luna, provider: openai`)
 that is local argument handling before any server call. Every attempt to complete the
 request failed because this agent environment cannot reach `chatgpt.com`
 (`curl https://chatgpt.com/` returns nothing; codex retries websockets then gives up),
-and the block persists with the Bash sandbox disabled. A grep of
-`~/.codex/.codex-global-state.json` finds only `gpt-5.5` and `gpt-5.6-sol` — a record
-of models actually used, not an entitlement list.
+and the block persists with the Bash sandbox disabled.
 
 **To settle it, run this yourself from a normal terminal:**
 
@@ -230,12 +216,9 @@ verified; unpriced ones are availability-only.
 
 **Other families worth knowing (available via OpenRouter / opencode; prices not fetched)**
 
-- **DeepSeek** — `deepseek-v4-flash`, `deepseek-v4-pro`. DeepSeek is directly
-  API-key-configured in this opencode install already, so it needs no new setup.
-- **Moonshot Kimi** — `kimi-k2.7-code`, `kimi-k2.7-code-highspeed`, `kimi-k3`. A
-  "Kimi For Coding" subscription provider is already authenticated on this machine
-  (`kimi-for-coding/k3`, `k3-256k`, `kimi-for-coding-highspeed`) — likely the cheapest
-  route available right now since it is already paid for.
+- **DeepSeek** — `deepseek-v4-flash`, `deepseek-v4-pro`.
+- **Moonshot Kimi** — `kimi-k2.7-code`, `kimi-k2.7-code-highspeed`, `kimi-k3`; also
+  reachable through a "Kimi For Coding" subscription provider in opencode.
 - **Qwen** — `qwen3-coder-flash`, `qwen3-coder-next`, `qwen3.5-flash-02-23`.
 - **MiniMax** — `minimax-m2.7`, `minimax-m3`.
 - **ByteDance Seed** — `seed-2.0-code`, `seed-2.0-mini`, `seed-2.0-lite`.
@@ -246,8 +229,7 @@ verified; unpriced ones are availability-only.
   `openrouter/z-ai/glm-5.2:free`, `cohere/north-mini-code:free`.
 
 **Practical recommendation for a batch pipeline:** glm-5.3-flash via OpenRouter through
-`opencode run --format json`, falling back to the already-authenticated Kimi For Coding
-subscription. Budget the ~17k-token opencode system-prompt floor per call, and use
+`opencode run --format json`, with a Kimi For Coding subscription as a fallback. Budget the ~17k-token opencode system-prompt floor per call, and use
 `opencode serve` + `--attach` to avoid cold starts.
 
 ---
@@ -256,19 +238,18 @@ subscription. Budget the ~17k-token opencode system-prompt floor per call, and u
 
 | Check | Method | Result |
 |---|---|---|
-| opencode installed | `which opencode`, `--version` | `/opt/homebrew/bin/opencode`, 1.18.21 |
+| opencode installed | `opencode --version` | 1.18.21 |
 | opencode headless works | `opencode run --format json -m openrouter/z-ai/glm-5.3 "Reply with exactly: OK"` | returned `OK`, cost $0.0238 |
 | glm-5.3-flash reachable | same, `-m openrouter/z-ai/glm-5.3-flash` | returned `OK`, cost $0.00128 |
 | glm-5.3-flash price | docs.z.ai pricing page | $0.075 / $0.25, 50% promo to 2026-09-09 |
 | glm-5.3-flash context | openrouter.ai/z-ai/glm-5.3-flash | 1,310,720 tokens |
 | Sol/Luna/Terra exist | developers.openai.com/api/docs/models + openrouter pages | all three confirmed |
-| Codex on subscription | `~/.codex/auth.json` | `auth_mode: "chatgpt"` |
-| Codex default model | `~/.codex/config.toml` | `model = "gpt-5.6-sol"` |
+| Codex on subscription | local Codex config | ChatGPT-subscription mode, Sol as default |
 | Luna on subscription | `codex exec -m gpt-5.6-luna` | INCONCLUSIVE — no network egress to chatgpt.com from this environment |
 | opencode subscription auth | opencode.ai/docs/providers | Claude Pro/Max, ChatGPT Plus/Pro, Copilot OAuth |
 
 **Not verified:** whether Luna and Terra are covered by the ChatGPT subscription (only
-Sol is proven, as the configured default under `auth_mode: chatgpt`);
+Sol is proven);
 GLM Coding Plan tier prices and quotas; independent benchmark scores
 for glm-5.3-flash; prices for the DeepSeek / Kimi / Qwen / MiniMax models listed in §4;
 what opencode's `-fast` / `-pro` GPT-5.6 suffixes actually map to.
