@@ -25,7 +25,7 @@ BAND_EDGES = ((0.02, "A"), (0.20, "B"), (0.40, "C"))
 SMALL = 0.001  # |reported| below this uses the absolute rule
 SMALL_TOL = 0.002
 LOG_KINDS = {"OR", "HR"}
-UNSIGNED_KINDS = {"sd", "n", "F", "chi2", "p_value"}
+UNSIGNED_KINDS = {"sd", "n", "F", "chi2", "p_value", "se", "eta2", "percent"}
 BLIND_CLAIM_FIELDS = {"value", "precision", "uncertainty"}
 
 

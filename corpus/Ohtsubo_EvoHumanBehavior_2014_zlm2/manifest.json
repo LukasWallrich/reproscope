@@ -15,7 +15,7 @@
     "text": "participants increased their intimacy with a partner when they received attention from the partner. (p. 237)",
     "source": "multi100",
     "reported": {
-      "statistic": "Consistent with the hypothesis, intimacy was higher in the attention condition (4.58 ± .82) than in the no attention condition (2.82 ± .79), t27 = 5.91, p < .001, d = 2.20",
+      "statistic": "Consistent with the hypothesis, intimacy was higher in the attention condition (4.58 \u00b1 .82) than in the no attention condition (2.82 \u00b1 .79), t27 = 5.91, p < .001, d = 2.20",
       "family": "t",
       "value": 5.91,
       "df": 27.0,
@@ -44,5 +44,11 @@
   "environment": {
     "language_hint": "R",
     "versions_named": {}
-  }
+  },
+  "design_numbers": [
+    0.2,
+    0.5,
+    0.8,
+    7
+  ]
 }

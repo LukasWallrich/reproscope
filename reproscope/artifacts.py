@@ -25,7 +25,7 @@ Severity = Literal["minor", "major", "critical"]
 Band = Literal["A", "B", "C", "fail"]
 QuantityKind = Literal[
     "coefficient", "p_value", "t", "F", "chi2", "d", "r", "OR", "HR",
-    "mean", "sd", "n", "ci_bound", "other",
+    "mean", "sd", "n", "ci_bound", "eta2", "z", "se", "percent", "other",
 ]
 
 

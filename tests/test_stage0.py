@@ -76,8 +76,10 @@ def test_schema_summary_free_text(tmp_path):
 
 def test_forbidden_strings_cover_rounding_and_leading_zero():
     forbidden, _ = leakcheck.forbidden_strings([claim(value=0.82, precision=2)])
-    assert {"0.82", ".82", "0.8", ".8", "0.820", ".820"} <= set(forbidden)
+    assert {"0.82", ".82", "0.820", ".820"} <= set(forbidden)
     assert forbidden["0.82"] == ["c001"]
+    # One significant digit recovers no result and collides with alpha levels.
+    assert "0.8" not in forbidden and ".8" not in forbidden
 
 
 def test_forbidden_strings_skip_rules():
@@ -140,8 +142,66 @@ def test_scan_respects_number_boundaries(tmp_path):
     assert leakcheck.scan([doc], [claim(value=5.91, precision=2)]) == []
 
 
+def test_scan_ignores_json_ids_and_metadata(tmp_path):
+    """Digits in claim ids, analysis ids and artifact metadata are not values."""
+    blind = tmp_path / "blind_contract.json"
+    blind.write_text(
+        json.dumps(
+            {
+                "meta": {"version": "0.1", "created": "2026-09-02T14:52:56"},
+                "contracts": [
+                    {
+                        "analysis_id": "a36",
+                        "claim_ids": ["c196", "c104"],
+                        "sample_rule": "All 196 recruited students completed the task.",
+                    }
+                ],
+            }
+        )
+    )
+    claims = [
+        claim(claim_id="c1", quantity_kind="p_value", value=0.104, precision=3),
+        claim(claim_id="c2", quantity_kind="n", value=196, importance="headline"),
+        claim(claim_id="c3", quantity_kind="F", value=36.0, precision=1),
+    ]
+    hits = leakcheck.scan([blind], claims)
+    # "c196"/"c104"/"a36"/"0.1" are scaffolding; only the prose sentence leaks.
+    assert [(h["value"], h["location"]) for h in hits] == [
+        ("196", "$.contracts[0].sample_rule")
+    ]
+
+
 def test_scan_matches_a_negative_value(tmp_path):
     doc = tmp_path / "m.md"
     doc.write_text("The coefficient was -0.47.\n")
     hits = leakcheck.scan([doc], [claim(quantity_kind="coefficient", value=0.47, precision=2)])
     assert [h["value"] for h in hits] == ["0.47"]
+
+
+def test_scan_ignores_dotted_section_labels(tmp_path):
+    doc = tmp_path / "blind_contract.json"
+    doc.write_text(json.dumps({"contracts": [{"sample_rule": "As set out in Section 2.2.1."}]}))
+    assert leakcheck.scan([doc], [claim(quantity_kind="d", value=2.20, precision=2)]) == []
+
+
+def test_design_numbers_exempt_a_colliding_value(tmp_path):
+    """A manipulation constant the methods must state is not a forbidden string."""
+    doc = tmp_path / "m.md"
+    doc.write_text("The signal turned blue with probability .50 per quiz.\n")
+    claims = [claim(claim_id="c1", quantity_kind="r", value=0.50, precision=2)]
+    assert len(leakcheck.scan([doc], claims)) == 1
+    hits = leakcheck.scan([doc], claims, design_numbers=[0.5])
+    assert hits == []
+
+
+def test_scan_takes_design_numbers_from_a_paper_id(monkeypatch):
+    """Stage 1 calls scan(files, claims, paper_id=...) and gets the paper's exemptions."""
+    from reproscope import paths
+    from reproscope.stage0 import leakcheck as lc
+
+    class FakeManifest:
+        design_numbers = [0.5]
+        focal_claim = None
+
+    monkeypatch.setattr(paths, "manifest", lambda pid: FakeManifest())
+    assert lc.design_numbers_from_manifest(FakeManifest()) == [0.5]

@@ -8,6 +8,7 @@ prose shipped with the data; a hit blocks the launch.
 from __future__ import annotations
 
 import re
+import json
 import shutil
 from pathlib import Path
 
@@ -61,12 +62,12 @@ def _local_scan(files: list[Path], claims: list[artifacts.ClaimRecord]) -> list[
     return hits
 
 
-def scan(files: list[Path], claims: list[artifacts.ClaimRecord]) -> list[str]:
+def scan(files: list[Path], claims: list[artifacts.ClaimRecord], paper_id: str | None = None) -> list[str]:
     try:
         from ..stage0 import leakcheck  # type: ignore
     except ImportError:
         return _local_scan(files, claims)
-    return list(leakcheck.scan(files, claims))
+    return list(leakcheck.scan(files, claims, paper_id=paper_id))
 
 
 # --- assembly -------------------------------------------------------------
@@ -123,6 +124,33 @@ def copy_data(paper_id: str, dest: Path) -> list[str]:
     return copied
 
 
+def bound_contract(paper_id: str, contract_src: Path) -> dict:
+    """Blind contract restricted to analyses the data-readiness check could bind.
+
+    Abstention propagates: analyses Stage 0 marked abstained (no data for that study) are
+    listed by id only, so replicas do not spend effort re-discovering that the data are absent.
+    """
+    doc = json.loads(contract_src.read_text())
+    readiness = stage0_dir(paper_id) / "readiness.json"
+    if not readiness.exists():
+        return doc
+    states = json.loads(readiness.read_text()).get("per_analysis_state") or {}
+    if not states:
+        return doc
+    keep = {a for a, st in states.items() if st == "complete"}
+    contracts = [c for c in doc.get("contracts", []) if c.get("analysis_id") in keep]
+    claim_ids = {cid for c in contracts for cid in c.get("claim_ids", [])}
+    claims_ = [c for c in doc.get("claims", []) if c.get("claim_id") in claim_ids]
+    dropped = sorted(a for a in states if a not in keep)
+    return {
+        "contracts": contracts,
+        "claims": claims_,
+        "analyses_without_data": dropped,
+        "note": "Analyses listed under analyses_without_data were abstained at intake because "
+                "no data file covers them; do not attempt them.",
+    }
+
+
 def assemble(paper_id: str, replica_id: str) -> Path:
     """Create runs/<paper_id>/stage1/replicas/<replica_id>/work/ and return it."""
     s0 = stage0_dir(paper_id)
@@ -132,7 +160,7 @@ def assemble(paper_id: str, replica_id: str) -> Path:
             raise FileNotFoundError(f"stage0 output missing: {p}")
 
     claim_records = claims(paper_id)
-    hits = scan([methods_src, contract_src], claim_records)
+    hits = scan([methods_src, contract_src], claim_records, paper_id)
     if hits:
         raise LeakDetected(
             f"{len(hits)} reported value(s) found in the blind material; launch blocked:\n  "
@@ -142,7 +170,7 @@ def assemble(paper_id: str, replica_id: str) -> Path:
     work = replica_dir(paper_id, replica_id) / "work"
     (work / "out").mkdir(parents=True, exist_ok=True)
     shutil.copy2(methods_src, work / "METHODS.md")
-    shutil.copy2(contract_src, work / "CONTRACT.json")
+    (work / "CONTRACT.json").write_text(json.dumps(bound_contract(paper_id, contract_src), indent=2, ensure_ascii=False))
     (work / "TASK.md").write_text(artifacts.load_prompt("stage1_replica_task"))
     copy_data(paper_id, work / "data")
 

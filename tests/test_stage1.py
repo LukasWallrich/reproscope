@@ -148,7 +148,7 @@ def test_assemble_gives_the_replica_only_the_blind_material(sandbox):
     ]
     assert sorted(p.name for p in (work / "data").iterdir()) == ["codebook.csv", "study1.csv"]
     contract = json.loads((work / "CONTRACT.json").read_text())
-    assert {"contracts", "claims"} == set(contract)
+    assert {"contracts", "claims"} <= set(contract)
     assert all("value" not in c for c in contract["claims"])
     assert "reproduce the analyses" in (work / "TASK.md").read_text()
 

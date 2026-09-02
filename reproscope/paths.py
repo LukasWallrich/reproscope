@@ -34,7 +34,7 @@ class ReportedValue(BaseModel):
     value: float | str | None = None
     df: float | str | None = None
     n: int | None = None
-    page: int | None = None
+    page: int | str | None = None
 
 
 class FocalClaim(BaseModel):
@@ -74,6 +74,7 @@ class Manifest(BaseModel):
     focal_claim: FocalClaim | None = None
     multi100: Multi100 | None = None
     environment: Environment = Environment()
+    design_numbers: list[float] = []  # reported values that are also design constants; exempt from the leak scan
 
     @property
     def dir(self) -> Path:
