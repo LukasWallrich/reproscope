@@ -37,3 +37,10 @@ Budget: USD 10 outside subscriptions. Metered spend goes only through OpenRouter
 | **Total** | **~$0.3–1.2 per paper**, so roughly $1.5–6 for five papers | |
 
 Actual spend is read from `runs/<paper_id>/ledger.jsonl` (`python -m reproscope ledger <paper_id>`) and reported in the evaluation writeup.
+
+## Findings log
+
+- **2026-09-02, Stage 0 on Ohtsubo.** 26 model calls: 8 OpenRouter calls at $0.078 (two vision extractors over 30 pages in 8-page chunks, plus contract scrubbing) and 18 strong-tier calls on subscriptions (15 Opus, 3 Codex) with a list-price equivalent of $16.58. At list price a single paper's intake already exceeds the scope's $2–10 envelope; the envelope holds only with subscription routing or a cheaper strong tier. The arbiter, contract writer, readiness check, redactor and description scrubber each read the full 55k-character paper text, so the cost scales with paper length rather than with the number of claims.
+- Extraction: 204 claims, 83% two-model agreement, focal claim (t = 5.91, p. 16) found by both extractors. Redaction: deterministic scan clean; the Codex leak audit still rated leakage "strong" for structural reasons (the claim inventory reveals which analyses carry p-values; one exclusion rule is itself an outlier value). This is a limit of results-redaction as a method, not of the redactor.
+- Only 6 of 40 analyses can be bound to data (Study 2a); the other 34 abstain at intake and are withheld from the replicas.
+- Expected Stage 1 outcome on Ohtsubo, written before the run: the file holds 30 rows and the excluded participant is unmarked, so replicas should reach t ≈ 6.2 (band B against 5.91) and d ≈ 2.26 (B against 2.20), means 4.58 (A) and 2.78 (B against 2.82). No replica should reach band A on the focal t; that triggers the targeted reconstruction, whose question is whether any defensible exclusion reaches the reported values.

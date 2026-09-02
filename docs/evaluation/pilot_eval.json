@@ -1,0 +1,1800 @@
+{
+  "generated": "2026-09-02T15:48:26.156411+00:00",
+  "papers": [
+    "Axt_JournExpSocPsych_2018_zK2",
+    "Hertel_ClinPsychSci_2018_YabW",
+    "Hurst_EvoHumanBehavior_2017_yypJ",
+    "Ohtsubo_EvoHumanBehavior_2014_zlm2",
+    "Petersen_Cognition_2017_yJwG"
+  ],
+  "families": [
+    {
+      "label": "deepseek",
+      "launched": 2,
+      "ran": 0,
+      "failed": 1,
+      "no_trace": 1,
+      "match": {
+        "all": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "headline": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "focal": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        }
+      },
+      "fixes": {
+        "total": 1,
+        "minor": 1,
+        "major": 0,
+        "critical": 0,
+        "unrated": 0
+      },
+      "hardcoding": {
+        "clean": 0,
+        "suspicious": 1,
+        "hardcoded": 0,
+        "not_run": 1
+      },
+      "blind_hits": {
+        "total": 4,
+        "reporting": 1,
+        "replicas": 2
+      },
+      "cost": {
+        "tokens_in": 132111.0,
+        "tokens_out": 10975.0,
+        "cost_usd": 0.039652734211999996,
+        "cost_usd_equiv": null,
+        "duration_s": 302.55,
+        "duration_mean_s": 302.55
+      }
+    },
+    {
+      "label": "fable",
+      "launched": 1,
+      "ran": 1,
+      "failed": 0,
+      "no_trace": 0,
+      "match": {
+        "all": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "headline": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "focal": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        }
+      },
+      "fixes": {
+        "total": 0,
+        "minor": 0,
+        "major": 0,
+        "critical": 0,
+        "unrated": 0
+      },
+      "hardcoding": {
+        "clean": 1,
+        "suspicious": 0,
+        "hardcoded": 0,
+        "not_run": 0
+      },
+      "blind_hits": {
+        "total": 0,
+        "reporting": 1,
+        "replicas": 1
+      },
+      "cost": {
+        "tokens_in": 397372.0,
+        "tokens_out": 11416.0,
+        "cost_usd": 0.0,
+        "cost_usd_equiv": 1.7435382499999998,
+        "duration_s": 147.16,
+        "duration_mean_s": 147.16
+      }
+    },
+    {
+      "label": "glm",
+      "launched": 2,
+      "ran": 0,
+      "failed": 0,
+      "no_trace": 2,
+      "match": {
+        "all": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "headline": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "focal": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        }
+      },
+      "fixes": {
+        "total": 0,
+        "minor": 0,
+        "major": 0,
+        "critical": 0,
+        "unrated": 0
+      },
+      "hardcoding": {
+        "clean": 0,
+        "suspicious": 0,
+        "hardcoded": 0,
+        "not_run": 2
+      },
+      "blind_hits": {
+        "total": null,
+        "reporting": 0,
+        "replicas": 2
+      },
+      "cost": {
+        "tokens_in": 224448.0,
+        "tokens_out": 16570.0,
+        "cost_usd": 0.051576640000000014,
+        "cost_usd_equiv": null,
+        "duration_s": 472.32,
+        "duration_mean_s": 472.32
+      }
+    },
+    {
+      "label": "opus",
+      "launched": 2,
+      "ran": 2,
+      "failed": 0,
+      "no_trace": 0,
+      "match": {
+        "all": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "headline": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "focal": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        }
+      },
+      "fixes": {
+        "total": 7,
+        "minor": 7,
+        "major": 0,
+        "critical": 0,
+        "unrated": 0
+      },
+      "hardcoding": {
+        "clean": 2,
+        "suspicious": 0,
+        "hardcoded": 0,
+        "not_run": 0
+      },
+      "blind_hits": {
+        "total": 0,
+        "reporting": 2,
+        "replicas": 2
+      },
+      "cost": {
+        "tokens_in": 1546192.0,
+        "tokens_out": 32317.0,
+        "cost_usd": 0.0,
+        "cost_usd_equiv": 2.64466,
+        "duration_s": 415.15999999999997,
+        "duration_mean_s": 207.57999999999998
+      }
+    },
+    {
+      "label": "sol",
+      "launched": 1,
+      "ran": 1,
+      "failed": 0,
+      "no_trace": 0,
+      "match": {
+        "all": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "headline": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "focal": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        }
+      },
+      "fixes": {
+        "total": 1,
+        "minor": 1,
+        "major": 0,
+        "critical": 0,
+        "unrated": 0
+      },
+      "hardcoding": {
+        "clean": 1,
+        "suspicious": 0,
+        "hardcoded": 0,
+        "not_run": 0
+      },
+      "blind_hits": {
+        "total": 0,
+        "reporting": 1,
+        "replicas": 1
+      },
+      "cost": {
+        "tokens_in": 59141.0,
+        "tokens_out": 0.0,
+        "cost_usd": 0.0,
+        "cost_usd_equiv": null,
+        "duration_s": 272.2,
+        "duration_mean_s": 272.2
+      }
+    }
+  ],
+  "tiers": [
+    {
+      "label": "frontier",
+      "launched": 4,
+      "ran": 4,
+      "failed": 0,
+      "no_trace": 0,
+      "match": {
+        "all": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "headline": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "focal": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        }
+      },
+      "fixes": {
+        "total": 8,
+        "minor": 8,
+        "major": 0,
+        "critical": 0,
+        "unrated": 0
+      },
+      "hardcoding": {
+        "clean": 4,
+        "suspicious": 0,
+        "hardcoded": 0,
+        "not_run": 0
+      },
+      "blind_hits": {
+        "total": 0,
+        "reporting": 4,
+        "replicas": 4
+      },
+      "cost": {
+        "tokens_in": 2002705.0,
+        "tokens_out": 43733.0,
+        "cost_usd": 0.0,
+        "cost_usd_equiv": 4.38819825,
+        "duration_s": 834.52,
+        "duration_mean_s": 208.63
+      }
+    },
+    {
+      "label": "cheap",
+      "launched": 4,
+      "ran": 0,
+      "failed": 1,
+      "no_trace": 3,
+      "match": {
+        "all": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "headline": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        },
+        "focal": {
+          "n": 0,
+          "n_found": null,
+          "share_found": null,
+          "bands": {
+            "A": 0,
+            "B": 0,
+            "C": 0,
+            "fail": 0,
+            "not_found": 0
+          },
+          "share_a": null,
+          "share_ab": null
+        }
+      },
+      "fixes": {
+        "total": 1,
+        "minor": 1,
+        "major": 0,
+        "critical": 0,
+        "unrated": 0
+      },
+      "hardcoding": {
+        "clean": 0,
+        "suspicious": 1,
+        "hardcoded": 0,
+        "not_run": 3
+      },
+      "blind_hits": {
+        "total": 4,
+        "reporting": 1,
+        "replicas": 4
+      },
+      "cost": {
+        "tokens_in": 356559.0,
+        "tokens_out": 27545.0,
+        "cost_usd": 0.091229374212,
+        "cost_usd_equiv": null,
+        "duration_s": 774.87,
+        "duration_mean_s": 387.435
+      }
+    }
+  ],
+  "per_paper": [
+    {
+      "paper_id": "Axt_JournExpSocPsych_2018_zK2",
+      "n_claims_scored": null,
+      "families": [],
+      "decision_agreement_mean": null,
+      "numeric_cv_median": null,
+      "focal": {
+        "source": null,
+        "quantity": null,
+        "claim_ids": [],
+        "values": {},
+        "scale": null,
+        "family_means": {},
+        "within_family": {},
+        "between_family_range": null
+      },
+      "focal_d": {
+        "source": null,
+        "note": null,
+        "reported": null,
+        "replicas": {}
+      },
+      "multi100": {
+        "paper_id": "Axt_JournExpSocPsych_2018_zK2",
+        "n_analysts": 5,
+        "analyst_d": {
+          "min": 0.297,
+          "median": 0.432,
+          "max": 1.335
+        },
+        "processed_stat": [
+          -5.7872
+        ],
+        "processed_df": [
+          855.0
+        ],
+        "processed_n": [
+          856.0
+        ]
+      },
+      "targeted": null,
+      "stage_costs": {
+        "0": {
+          "calls": 15,
+          "cost_usd": 0.20251415000000003,
+          "cost_usd_equiv": 0.0
+        }
+      },
+      "replicas": []
+    },
+    {
+      "paper_id": "Hertel_ClinPsychSci_2018_YabW",
+      "n_claims_scored": null,
+      "families": [],
+      "decision_agreement_mean": null,
+      "numeric_cv_median": null,
+      "focal": {
+        "source": "bound offline from the manifest focal claim",
+        "quantity": {
+          "claim_id": "c078",
+          "kind": "F",
+          "reported_value": 6.2,
+          "reported_precision": 2,
+          "derived_from": null,
+          "description": "The overall interaction is better explained by the interaction comparison between baseline and suppressed conditions, F(1, 48) = 6.20."
+        },
+        "claim_ids": [
+          "c005",
+          "c051",
+          "c054",
+          "c055",
+          "c056",
+          "c078",
+          "c079"
+        ],
+        "values": {},
+        "scale": null,
+        "family_means": {},
+        "within_family": {},
+        "between_family_range": null
+      },
+      "focal_d": {
+        "source": null,
+        "note": null,
+        "reported": null,
+        "replicas": {}
+      },
+      "multi100": {
+        "paper_id": "Hertel_ClinPsychSci_2018_YabW",
+        "n_analysts": 5,
+        "analyst_d": {
+          "min": 0.79,
+          "median": 1.188,
+          "max": 3.594
+        },
+        "processed_stat": [
+          6.2037
+        ],
+        "processed_df": [
+          1.0
+        ],
+        "processed_n": [
+          54.0
+        ]
+      },
+      "targeted": null,
+      "stage_costs": {
+        "0": {
+          "calls": 10,
+          "cost_usd": 0.05842965,
+          "cost_usd_equiv": 3.294636
+        }
+      },
+      "replicas": []
+    },
+    {
+      "paper_id": "Hurst_EvoHumanBehavior_2017_yypJ",
+      "n_claims_scored": null,
+      "families": [],
+      "decision_agreement_mean": null,
+      "numeric_cv_median": null,
+      "focal": {
+        "source": null,
+        "quantity": null,
+        "claim_ids": [],
+        "values": {},
+        "scale": null,
+        "family_means": {},
+        "within_family": {},
+        "between_family_range": null
+      },
+      "focal_d": {
+        "source": null,
+        "note": null,
+        "reported": null,
+        "replicas": {}
+      },
+      "multi100": {
+        "paper_id": "Hurst_EvoHumanBehavior_2017_yypJ",
+        "n_analysts": 5,
+        "analyst_d": {
+          "min": 0.929,
+          "median": 1.196,
+          "max": 1.607
+        },
+        "processed_stat": [
+          -6.9511
+        ],
+        "processed_df": [
+          135.0
+        ],
+        "processed_n": [
+          138.0
+        ]
+      },
+      "targeted": null,
+      "stage_costs": {
+        "0": {
+          "calls": 2,
+          "cost_usd": 0.059627700000000006,
+          "cost_usd_equiv": 0.0
+        }
+      },
+      "replicas": []
+    },
+    {
+      "paper_id": "Ohtsubo_EvoHumanBehavior_2014_zlm2",
+      "n_claims_scored": null,
+      "families": [
+        {
+          "label": "deepseek",
+          "launched": 2,
+          "ran": 0,
+          "failed": 1,
+          "no_trace": 1,
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "fixes": {
+            "total": 1,
+            "minor": 1,
+            "major": 0,
+            "critical": 0,
+            "unrated": 0
+          },
+          "hardcoding": {
+            "clean": 0,
+            "suspicious": 1,
+            "hardcoded": 0,
+            "not_run": 1
+          },
+          "blind_hits": {
+            "total": 4,
+            "reporting": 1,
+            "replicas": 2
+          },
+          "cost": {
+            "tokens_in": 132111.0,
+            "tokens_out": 10975.0,
+            "cost_usd": 0.039652734211999996,
+            "cost_usd_equiv": null,
+            "duration_s": 302.55,
+            "duration_mean_s": 302.55
+          }
+        },
+        {
+          "label": "fable",
+          "launched": 1,
+          "ran": 1,
+          "failed": 0,
+          "no_trace": 0,
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "fixes": {
+            "total": 0,
+            "minor": 0,
+            "major": 0,
+            "critical": 0,
+            "unrated": 0
+          },
+          "hardcoding": {
+            "clean": 1,
+            "suspicious": 0,
+            "hardcoded": 0,
+            "not_run": 0
+          },
+          "blind_hits": {
+            "total": 0,
+            "reporting": 1,
+            "replicas": 1
+          },
+          "cost": {
+            "tokens_in": 397372.0,
+            "tokens_out": 11416.0,
+            "cost_usd": 0.0,
+            "cost_usd_equiv": 1.7435382499999998,
+            "duration_s": 147.16,
+            "duration_mean_s": 147.16
+          }
+        },
+        {
+          "label": "glm",
+          "launched": 2,
+          "ran": 0,
+          "failed": 0,
+          "no_trace": 2,
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "fixes": {
+            "total": 0,
+            "minor": 0,
+            "major": 0,
+            "critical": 0,
+            "unrated": 0
+          },
+          "hardcoding": {
+            "clean": 0,
+            "suspicious": 0,
+            "hardcoded": 0,
+            "not_run": 2
+          },
+          "blind_hits": {
+            "total": null,
+            "reporting": 0,
+            "replicas": 2
+          },
+          "cost": {
+            "tokens_in": 224448.0,
+            "tokens_out": 16570.0,
+            "cost_usd": 0.051576640000000014,
+            "cost_usd_equiv": null,
+            "duration_s": 472.32,
+            "duration_mean_s": 472.32
+          }
+        },
+        {
+          "label": "opus",
+          "launched": 2,
+          "ran": 2,
+          "failed": 0,
+          "no_trace": 0,
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "fixes": {
+            "total": 7,
+            "minor": 7,
+            "major": 0,
+            "critical": 0,
+            "unrated": 0
+          },
+          "hardcoding": {
+            "clean": 2,
+            "suspicious": 0,
+            "hardcoded": 0,
+            "not_run": 0
+          },
+          "blind_hits": {
+            "total": 0,
+            "reporting": 2,
+            "replicas": 2
+          },
+          "cost": {
+            "tokens_in": 1546192.0,
+            "tokens_out": 32317.0,
+            "cost_usd": 0.0,
+            "cost_usd_equiv": 2.64466,
+            "duration_s": 415.15999999999997,
+            "duration_mean_s": 207.57999999999998
+          }
+        },
+        {
+          "label": "sol",
+          "launched": 1,
+          "ran": 1,
+          "failed": 0,
+          "no_trace": 0,
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "fixes": {
+            "total": 1,
+            "minor": 1,
+            "major": 0,
+            "critical": 0,
+            "unrated": 0
+          },
+          "hardcoding": {
+            "clean": 1,
+            "suspicious": 0,
+            "hardcoded": 0,
+            "not_run": 0
+          },
+          "blind_hits": {
+            "total": 0,
+            "reporting": 1,
+            "replicas": 1
+          },
+          "cost": {
+            "tokens_in": 59141.0,
+            "tokens_out": 0.0,
+            "cost_usd": 0.0,
+            "cost_usd_equiv": null,
+            "duration_s": 272.2,
+            "duration_mean_s": 272.2
+          }
+        }
+      ],
+      "decision_agreement_mean": null,
+      "numeric_cv_median": null,
+      "focal": {
+        "source": "bound offline from the manifest focal claim",
+        "quantity": {
+          "claim_id": "c093",
+          "kind": "d",
+          "reported_value": 2.2,
+          "reported_precision": 2,
+          "derived_from": null,
+          "description": "Cohen's d = 2.20 for the difference in intimacy between the attention and no attention conditions."
+        },
+        "claim_ids": [
+          "c087",
+          "c089",
+          "c091",
+          "c093",
+          "c110"
+        ],
+        "values": {},
+        "scale": null,
+        "family_means": {},
+        "within_family": {},
+        "between_family_range": null
+      },
+      "focal_d": {
+        "source": "focal quantity, no replica rows yet",
+        "note": null,
+        "reported": 2.2,
+        "replicas": {}
+      },
+      "multi100": {
+        "paper_id": "Ohtsubo_EvoHumanBehavior_2014_zlm2",
+        "n_analysts": 6,
+        "analyst_d": {
+          "min": 1.142,
+          "median": 2.007,
+          "max": 3.106
+        },
+        "processed_stat": [
+          5.91
+        ],
+        "processed_df": [
+          27.0
+        ],
+        "processed_n": [
+          29.0
+        ]
+      },
+      "targeted": null,
+      "stage_costs": {
+        "0": {
+          "calls": 26,
+          "cost_usd": 0.0781053,
+          "cost_usd_equiv": 16.584253999999998
+        },
+        "1": {
+          "calls": 16,
+          "cost_usd": 0.11756247421200001,
+          "cost_usd_equiv": 4.388198249999999
+        }
+      },
+      "replicas": [
+        {
+          "replica_id": "deepseek_1",
+          "family": "deepseek",
+          "route": "opencode",
+          "model": "deepseek/deepseek-v4-flash",
+          "has_trace": true,
+          "ran": false,
+          "exit_code": 1,
+          "fixes": [
+            {
+              "description": "Script ran without errors on first attempt",
+              "severity": "minor",
+              "issue": "None",
+              "fix": "Script ran without errors on first attempt",
+              "note": "",
+              "reason": "No change was made at all: the script ran without errors on the first attempt, so no code, data, or analytical choice was altered. Nothing was fixed, hence nothing about the analysis changed, which falls under the minor (non-changing) category."
+            }
+          ],
+          "hardcoding_verdict": "suspicious",
+          "blind_hits": 4,
+          "tokens_in": 132111.0,
+          "tokens_out": 10975.0,
+          "tokens_reasoning": 5654.0,
+          "cost_usd": 0.039652734211999996,
+          "cost_usd_equiv": null,
+          "duration_s": 302.55,
+          "calls": 1,
+          "tier": "cheap",
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "focal_value": null
+        },
+        {
+          "replica_id": "deepseek_2",
+          "family": "deepseek",
+          "route": null,
+          "model": null,
+          "has_trace": false,
+          "ran": null,
+          "exit_code": null,
+          "fixes": [],
+          "hardcoding_verdict": null,
+          "blind_hits": null,
+          "tier": "cheap",
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "focal_value": null
+        },
+        {
+          "replica_id": "fable_1",
+          "family": "fable",
+          "route": "claude_p",
+          "model": "claude-fable-5-1",
+          "has_trace": true,
+          "ran": true,
+          "exit_code": 0,
+          "fixes": [],
+          "hardcoding_verdict": "clean",
+          "blind_hits": 0,
+          "tokens_in": 397372.0,
+          "tokens_out": 11416.0,
+          "tokens_reasoning": 2939.0,
+          "cost_usd": 0.0,
+          "cost_usd_equiv": 1.7435382499999998,
+          "duration_s": 147.16,
+          "calls": 1,
+          "tier": "frontier",
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "focal_value": null
+        },
+        {
+          "replica_id": "glm_1",
+          "family": "glm",
+          "route": null,
+          "model": null,
+          "has_trace": false,
+          "ran": null,
+          "exit_code": null,
+          "fixes": [],
+          "hardcoding_verdict": null,
+          "blind_hits": null,
+          "tokens_in": 224448.0,
+          "tokens_out": 16570.0,
+          "tokens_reasoning": 26310.0,
+          "cost_usd": 0.051576640000000014,
+          "cost_usd_equiv": null,
+          "duration_s": 472.32,
+          "calls": 1,
+          "tier": "cheap",
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "focal_value": null
+        },
+        {
+          "replica_id": "glm_2",
+          "family": "glm",
+          "route": null,
+          "model": null,
+          "has_trace": false,
+          "ran": null,
+          "exit_code": null,
+          "fixes": [],
+          "hardcoding_verdict": null,
+          "blind_hits": null,
+          "tier": "cheap",
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "focal_value": null
+        },
+        {
+          "replica_id": "opus_1",
+          "family": "opus",
+          "route": "claude_p",
+          "model": "opus",
+          "has_trace": true,
+          "ran": true,
+          "exit_code": 0,
+          "fixes": [
+            {
+              "description": "Wrote the analysis in R and read the workbook with readxl::read_excel, which handles the legacy BIFF format.",
+              "severity": "minor",
+              "problem": "pandas/xlrd could not open the legacy .xls workbook in the Python environment",
+              "fix": "Wrote the analysis in R and read the workbook with readxl::read_excel, which handles the legacy BIFF format.",
+              "reason": "The methods name no software or file-reading procedure, so implementing in R and using readxl::read_excel for the legacy BIFF workbook is a tooling choice; it only enables reading the same data without altering any values or analytical choices."
+            },
+            {
+              "description": "Read with skip = 1 so that the variable-name row becomes the header.",
+              "severity": "minor",
+              "problem": "The workbook has two header rows (a block-label row above the variable-name row), so a naive read produced placeholder column names ...1, ...2, ...",
+              "fix": "Read with skip = 1 so that the variable-name row becomes the header.",
+              "reason": "skip = 1 is a parsing mechanics fix: it makes the existing variable-name row the header so the same data rows are loaded correctly. No data values, sample, or analytical choice is changed."
+            },
+            {
+              "description": "Recovered by exhaustive subset search (with optional reverse scoring) against the author-computed 'Intimacy' and 'impression' columns; the recovered mapping is asserted with stopifnot() in the script.",
+              "severity": "minor",
+              "problem": "The mapping of the 10 questionnaire items r1..r10 onto the 4 intimacy items and the 2 interest items is not documented anywhere in the file",
+              "fix": "Recovered by exhaustive subset search (with optional reverse scoring) against the author-computed 'Intimacy' and 'impression' columns; the recovered mapping is asserted with stopifnot() in the script.",
+              "reason": "The item-to-scale mapping and reverse-coding are unstated ambiguities (the contract notes reverse-coding is 'implied, not stated'). Recovering the mapping by subset search and verifying it exactly reproduces the authors' own computed 'Intimacy' and 'impression' columns (enforced with stopifnot) resolves this ambiguity within the stated options without changing any values \u2014 the downstream analyses use a composite identical to the author-computed one, and any mismatch would fail loudly rather than silently alter results. No data or results are fabricated or overridden."
+            }
+          ],
+          "hardcoding_verdict": "clean",
+          "blind_hits": 0,
+          "tokens_in": 558105.0,
+          "tokens_out": 14178.0,
+          "tokens_reasoning": 3676.0,
+          "cost_usd": 0.0,
+          "cost_usd_equiv": 1.140683,
+          "duration_s": 177.67,
+          "calls": 1,
+          "tier": "frontier",
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "focal_value": null
+        },
+        {
+          "replica_id": "opus_2",
+          "family": "opus",
+          "route": "claude_p",
+          "model": "opus",
+          "has_trace": true,
+          "ran": true,
+          "exit_code": 0,
+          "fixes": [
+            {
+              "description": "Wrote the analysis in R and read the workbook with readxl, which handles legacy .xls",
+              "severity": "minor",
+              "issue": "pandas/xlrd could not open the legacy .xls file in the available Python environment",
+              "fix": "Wrote the analysis in R and read the workbook with readxl, which handles legacy .xls",
+              "reason": "Choice of software is unconstrained (no software named in the methods); writing the analysis in R and using readxl for the legacy .xls format is tooling/package-load plumbing that does not alter any data or analytic choice."
+            },
+            {
+              "description": "Read with col_names = FALSE, took row 2 as the column names, dropped rows 1-2 and coerced all columns to numeric",
+              "severity": "minor",
+              "issue": "The sheets have a two-row header (row 1 = section banner such as 'Intimacy Questionnaire', row 2 = variable names), so a naive read produced placeholder column names and character columns",
+              "fix": "Read with col_names = FALSE, took row 2 as the column names, dropped rows 1-2 and coerced all columns to numeric",
+              "reason": "This is spreadsheet-ingestion plumbing: treating layout rows (title/header) as column names and dropping them removes no participant data, and coercing to numeric preserves the values since the variables are numerically coded (sex 0/1, condition 1/2 per the recovered codebook); no analytical choice is changed."
+            },
+            {
+              "description": "Dropped every row with a missing ID; Sheet2 is in any case not used for the reported analyses",
+              "severity": "minor",
+              "issue": "Sheet2 contains trailing scratch rows (column means/SDs) below the data",
+              "fix": "Dropped every row with a missing ID; Sheet2 is in any case not used for the reported analyses",
+              "reason": "The rows removed are those with missing IDs in Sheet2, which is not used for any reported analysis, so the analysis sample (N=29 after the stated suspicion exclusion) is unaffected; this is file-handling, not a changed exclusion rule for the analyses."
+            },
+            {
+              "description": "Recovered the labels from the UTF-16 cell comments stored in the workbook (sex: '0: Male / 1: Female'; cnd: '1: Attention / 2: No Attention')",
+              "severity": "minor",
+              "issue": "Value labels for sex and condition are not in the cells",
+              "fix": "Recovered the labels from the UTF-16 cell comments stored in the workbook (sex: '0: Male / 1: Female'; cnd: '1: Attention / 2: No Attention')",
+              "reason": "Recovering the codebook from cell comments reads genuine metadata already stored in the workbook rather than simulating or imputing values; it documents the existing 0/1 and 1/2 codings consistent with the paper's description and changes no data or estimate."
+            }
+          ],
+          "hardcoding_verdict": "clean",
+          "blind_hits": 0,
+          "tokens_in": 988087.0,
+          "tokens_out": 18139.0,
+          "tokens_reasoning": 4616.0,
+          "cost_usd": 0.0,
+          "cost_usd_equiv": 1.5039770000000001,
+          "duration_s": 237.49,
+          "calls": 1,
+          "tier": "frontier",
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "focal_value": null
+        },
+        {
+          "replica_id": "sol_1",
+          "family": "sol",
+          "route": "codex",
+          "model": "gpt-5.6-sol",
+          "has_trace": true,
+          "ran": true,
+          "exit_code": 0,
+          "fixes": [
+            {
+              "description": "Reran the unchanged analysis script with direct redirection and no reserved shell variable.",
+              "severity": "minor",
+              "issue": "The first execution wrapper assigned to zsh's read-only variable 'status' after Rscript returned.",
+              "fix": "Reran the unchanged analysis script with direct redirection and no reserved shell variable.",
+              "why": "This was a shell logging-wrapper error, not an analysis-script error; the clean rerun verifies top-to-bottom execution.",
+              "reason": "The analysis script was rerun unchanged; the fix only addressed execution/environment issues (shell redirection and a reserved shell variable), so no data, estimator, sample, or analytical choice was altered."
+            }
+          ],
+          "hardcoding_verdict": "clean",
+          "blind_hits": 0,
+          "tokens_in": 59141.0,
+          "tokens_out": 0.0,
+          "tokens_reasoning": 0.0,
+          "cost_usd": 0.0,
+          "cost_usd_equiv": null,
+          "duration_s": 272.2,
+          "calls": 1,
+          "tier": "frontier",
+          "match": {
+            "all": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "headline": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            },
+            "focal": {
+              "n": 0,
+              "n_found": null,
+              "share_found": null,
+              "bands": {
+                "A": 0,
+                "B": 0,
+                "C": 0,
+                "fail": 0,
+                "not_found": 0
+              },
+              "share_a": null,
+              "share_ab": null
+            }
+          },
+          "focal_value": null
+        }
+      ]
+    },
+    {
+      "paper_id": "Petersen_Cognition_2017_yJwG",
+      "n_claims_scored": null,
+      "families": [],
+      "decision_agreement_mean": null,
+      "numeric_cv_median": null,
+      "focal": {
+        "source": null,
+        "quantity": null,
+        "claim_ids": [],
+        "values": {},
+        "scale": null,
+        "family_means": {},
+        "within_family": {},
+        "between_family_range": null
+      },
+      "focal_d": {
+        "source": null,
+        "note": null,
+        "reported": null,
+        "replicas": {}
+      },
+      "multi100": {
+        "paper_id": "Petersen_Cognition_2017_yJwG",
+        "n_analysts": 5,
+        "analyst_d": {
+          "min": 1.812,
+          "median": 1.812,
+          "max": 2.279
+        },
+        "processed_stat": [
+          -4.7079
+        ],
+        "processed_df": [
+          27.0
+        ],
+        "processed_n": [
+          28.0
+        ]
+      },
+      "targeted": null,
+      "stage_costs": {
+        "0": {
+          "calls": 5,
+          "cost_usd": 0.03909169999999999,
+          "cost_usd_equiv": 2.5641584999999996
+        }
+      },
+      "replicas": []
+    }
+  ]
+}

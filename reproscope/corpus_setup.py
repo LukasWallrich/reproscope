@@ -74,6 +74,14 @@ def setup(sweep: Path, paper_id: str) -> Path:
         },
         "environment": {"language_hint": "R", "versions_named": {}},
     }
+    existing = dst / "manifest.json"
+    if existing.exists():  # keep hand-edited fields (design_numbers, pdf_source, page fixes)
+        old = json.load(open(existing))
+        for k in ("design_numbers", "pdf", "pdf_source", "licence"):
+            if k in old:
+                manifest[k] = old[k]
+        if old.get("focal_claim", {}).get("reported", {}).get("page") is None:
+            manifest["focal_claim"]["reported"]["page"] = None
     json.dump(manifest, open(dst / "manifest.json", "w"), indent=2, ensure_ascii=False)
     return dst
 
