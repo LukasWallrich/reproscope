@@ -836,6 +836,9 @@ def _load_contracts(paper_id: str, *, blind_first: bool = False) -> list[Estiman
     for name in names:
         p = stage0 / name
         if p.exists():
+            raw = json.loads(p.read_text())
+            if isinstance(raw, dict) and "contracts" in raw:  # blind_contract.json shape
+                return [EstimandContract.model_validate(c) for c in raw["contracts"]]
             got = artifacts.load(EstimandContract, p)
             return got if isinstance(got, list) else [got]
     raise FileNotFoundError(f"no contracts under {stage0}")
