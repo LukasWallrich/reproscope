@@ -15,7 +15,6 @@ is reviewed.
 
 - [`SCOPE.html`](https://lukaswallrich.github.io/reproscope/SCOPE.html): the design document
   (pipeline stages, model tiers, corpora, decision register, versions, risks, references).
-  Open the raw file locally if the rendered link does not work yet.
 - [`research/`](research/): AI-generated research reports and design reviews that ground the
   scope; see its README for the caveat that they are unreviewed.
 
