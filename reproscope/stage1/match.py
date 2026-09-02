@@ -292,6 +292,22 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
         call_ids.append(eq_call)
     analysis_of = {cid: c.analysis_id for c in contracts for cid in c.claim_ids}
 
+    # Only claims the replicas were asked about are linked; claims from analyses that
+    # abstained at intake (no data) get an abstained summary and no model call.
+    s0 = blind.stage0_dir(paper_id)
+    bound = blind.bound_contract(paper_id, s0 / "blind_contract.json")
+    bound_ids = {c.get("claim_id") for c in bound.get("claims", [])}
+    results_texts = {t.replica_id: _results_text(paper_id, t.replica_id) for t in traces}
+    trace_json = {t.replica_id: t.model_dump_json() for t in traces}
+
+    def _link(claim, trace):
+        return link(paper_id, claim, results_texts[trace.replica_id], trace_json[trace.replica_id])
+
+    from concurrent.futures import ThreadPoolExecutor
+    pool = ThreadPoolExecutor(max_workers=6)
+    linkable = [c for c in claims if c.claim_id in bound_ids]
+    futures = {(c.claim_id, t.replica_id): pool.submit(_link, c, t) for c in linkable for t in traces}
+
     rows: list[artifacts.ComparableRow] = []
     summaries: list[artifacts.MatchSummary] = []
     for claim in claims:
@@ -300,9 +316,18 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
         matched = 0
         matched_a = 0
         found = 0
+        if claim.claim_id not in bound_ids:
+            summaries.append(
+                artifacts.MatchSummary(
+                    claim_id=claim.claim_id, n_ran=len(traces), n_found=0, n_matched=0,
+                    importance=claim.importance, analysis_id=analysis_of.get(claim.claim_id),
+                    state="abstained",
+                    abstain_reason="analysis abstained at intake: no data file covers it",
+                )
+            )
+            continue
         for trace in traces:
-            results_text = _results_text(paper_id, trace.replica_id)
-            linked, call = link(paper_id, claim, results_text, trace.model_dump_json())
+            linked, call = futures[(claim.claim_id, trace.replica_id)].result()
             if call:
                 call_ids.append(call)
             if linked.found and linked.value is not None:
