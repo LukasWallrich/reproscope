@@ -46,5 +46,9 @@
   "environment": {
     "language_hint": "R",
     "versions_named": {}
-  }
+  },
+  "design_numbers": [
+    2.0,
+    2.5
+  ]
 }

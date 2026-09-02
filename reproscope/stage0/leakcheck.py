@@ -160,6 +160,7 @@ SKIP_KEYS = {
     "page",
     "quantity_kind",
     "quantity_kind_raw",
+    "location",  # table/figure/section labels such as "Section 4.2", never values
 }
 
 
