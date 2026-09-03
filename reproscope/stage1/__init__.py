@@ -74,7 +74,12 @@ def run(
 
     stage_dir = paths.run_dir(paper_id, 1)
     ins = inputs(paper_id)
-    if paths.is_done(stage_dir, ins) and not force and not force_steps:
+    # A replica counts as run once it has a trace; a script that failed its
+    # re-execution is recorded as abstained, not as work still owed. A lineup
+    # replica without a trace reopens the stage whatever the marker says.
+    on_disk = {t.replica_id for t in replicas.load_traces(paper_id)}
+    missing = [rid for rid in full_lineup() if rid not in on_disk]
+    if paths.is_done(stage_dir, ins) and not missing and not force and not force_steps:
         print(f"stage 1 already done for {paper_id} (use --force to rerun)", flush=True)
         return {"skipped": True}
 
@@ -82,8 +87,6 @@ def run(
     ran = [t for t in traces if t.ran]
     print(f"replicas: {len(ran)}/{len(traces)} produced runnable results", flush=True)
 
-    # A replica counts as run once it has a trace; a script that failed its
-    # re-execution is recorded as abstained, not as work still owed.
     on_disk = {t.replica_id for t in replicas.load_traces(paper_id)}
     missing = [rid for rid in full_lineup() if rid not in on_disk]
 
