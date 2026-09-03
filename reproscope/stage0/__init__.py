@@ -32,33 +32,41 @@ def input_hashes(manifest) -> dict[str, str]:
     return h
 
 
-def run(paper_id: str, force: bool = False) -> None:
+STEPS = ("extract", "arbitrate", "contracts", "readiness", "redact")
+
+
+def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None) -> None:
+    force_steps = force_steps or set()
+
+    def fstep(name: str) -> bool:
+        return force or name in force_steps
+
     manifest = paths.manifest(paper_id)
     stage_dir = paths.run_dir(paper_id, 0)
     inputs = input_hashes(manifest)
-    if paths.is_done(stage_dir, inputs) and not force:
+    if paths.is_done(stage_dir, inputs) and not force and not force_steps:
         print(f"stage 0 already done for {paper_id} (use --force to rerun)", flush=True)
         return
 
-    pages = extract.render_pages(manifest, force=force)
-    text_path = extract.extract_text(manifest, force=force)
+    pages = extract.render_pages(manifest, force=fstep("extract"))
+    text_path = extract.extract_text(manifest, force=fstep("extract"))
     paper_text = text_path.read_text(errors="replace")
     print(f"pages: {len(pages)}, text: {len(paper_text)} chars", flush=True)
 
     list_a, _ = extract.extract_one(
-        manifest, "vision_a", pages, stage_dir / "extract_a.json", force=force
+        manifest, "vision_a", pages, stage_dir / "extract_a.json", force=fstep("extract")
     )
     list_b, _ = extract.extract_one(
-        manifest, "vision_b", pages, stage_dir / "extract_b.json", force=force
+        manifest, "vision_b", pages, stage_dir / "extract_b.json", force=fstep("extract")
     )
     print(f"extracted: A={len(list_a.claims)} B={len(list_b.claims)}", flush=True)
 
-    claims, _ = arbitrate.run(manifest, list_a, list_b, pages, inputs, force=force)
+    claims, _ = arbitrate.run(manifest, list_a, list_b, pages, inputs, force=fstep("arbitrate"))
     print(f"claims: {len(claims)}", flush=True)
 
     # One reading of the paper produces both the contracts and the redacted methods.
     contract_records, contract_calls = contracts.run(
-        manifest, claims, paper_text, inputs, force=force
+        manifest, claims, paper_text, inputs, force=fstep("contracts")
     )
     print(f"contracts: {len(contract_records)}", flush=True)
 
@@ -66,10 +74,14 @@ def run(paper_id: str, force: bool = False) -> None:
     # them are rebuilt too rather than reused against the previous set.
     downstream = force or bool(contract_calls)
 
-    readiness_record, _ = readiness.run(manifest, contract_records, inputs, force=downstream)
+    readiness_record, _ = readiness.run(
+        manifest, contract_records, inputs, force=downstream or fstep("readiness")
+    )
     print(f"readiness: {len(readiness_record.variable_bindings)} bindings", flush=True)
 
-    report, _ = redact.run(manifest, claims, contract_records, inputs, force=downstream)
+    report, _ = redact.run(
+        manifest, claims, contract_records, inputs, force=downstream or fstep("redact")
+    )
     print(
         f"redaction: scan_clean={report.scan_clean} "
         f"audit={report.leakage_audit_verdict}",

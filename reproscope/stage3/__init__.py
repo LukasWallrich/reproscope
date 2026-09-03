@@ -154,11 +154,19 @@ def _traces_text(paper_id: str) -> str:
     return json.dumps(items, indent=2)
 
 
-def run(paper_id: str, force: bool = False) -> SpecificationSpace:
+STEPS = ("focal", "enumerate", "paper_level", "screen", "execute", "rank", "interpret")
+
+
+def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None) -> SpecificationSpace:
+    force_steps = force_steps or set()
+
+    def fstep(name: str) -> bool:
+        return force or name in force_steps
+
     stage3 = paths.run_dir(paper_id, 3)
     inputs = _stage_inputs(paper_id)
     space_path = stage3 / "space.json"
-    if not force and paths.is_done(stage3, inputs) and space_path.exists():
+    if not force and not force_steps and paths.is_done(stage3, inputs) and space_path.exists():
         print(f"stage 3: up to date ({space_path})", flush=True)
         return artifacts.load(SpecificationSpace, space_path)  # type: ignore[return-value]
 
@@ -170,7 +178,7 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     # --- 1. focal claim binding ------------------------------------------
     focal_path = stage3 / "focal.json"
     focal_keys = ("manifest", "claims", "contracts")
-    if _step_stale(focal_path, force, inputs, focal_keys):
+    if _step_stale(focal_path, fstep("focal"), inputs, focal_keys):
         focal = focal_mod.bind_focal_claim(manifest, claims, contracts, paper_id=paper_id)
         mv._write_json(focal_path, _stamp(focal, inputs, focal_keys))
     focal = mv._read_json(focal_path)
@@ -185,7 +193,7 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     # --- 2. enumerate -----------------------------------------------------
     proposed_path = stage3 / "factors_proposed.json"
     enumerate_keys = ("manifest", "claims", "contracts", "schema", "trace:")
-    if _step_stale(proposed_path, force, inputs, enumerate_keys, ("stage3_enumerate",)):
+    if _step_stale(proposed_path, fstep("enumerate"), inputs, enumerate_keys, ("stage3_enumerate",)):
         prompt = artifacts.load_prompt(
             "stage3_enumerate",
             contract=focal_contract.model_dump_json(indent=2),
@@ -207,7 +215,7 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     # --- 2b. what the paper itself did -----------------------------------
     paper_path = stage3 / "paper_level.json"
     paper_level_keys = ("manifest", "claims", "contracts", "schema", "trace:")
-    if _step_stale(paper_path, force, inputs, paper_level_keys, ("stage3_paper_level",)):
+    if _step_stale(paper_path, fstep("paper_level"), inputs, paper_level_keys, ("stage3_paper_level",)):
         mv._write_json(
             paper_path,
             _stamp(
@@ -224,7 +232,7 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     # --- 3. screen + grid -------------------------------------------------
     screen_path = stage3 / "screen.json"
     screen_keys = ("manifest", "claims", "contracts", "schema", "trace:")
-    if _step_stale(screen_path, force, inputs, screen_keys, ("stage3_screen",)):
+    if _step_stale(screen_path, fstep("screen"), inputs, screen_keys, ("stage3_screen",)):
         prompt = artifacts.load_prompt(
             "stage3_screen",
             contract=focal_contract.model_dump_json(indent=2),
@@ -274,7 +282,7 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
         report.update({"work": str(stage3 / "work"), "specs_csv": str(specs_existing),
                        "grid_sha": grid_sha, "executor": {"note": "re-verified existing output"}})
         mv._write_json(execute_path, report)
-    executed_now = executor_stale(stage3, grid_sha, force=force)
+    executed_now = executor_stale(stage3, grid_sha, force=fstep("execute"))
     if executed_now and execute_path.exists():
         print("stage 3: the last execution no longer matches the grid; rerunning the executor",
               flush=True)
@@ -309,7 +317,7 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     # --- 5. rank ----------------------------------------------------------
     # A rerun of the executor makes any earlier ranking and reading of the curve stale.
     rank_path = stage3 / "rank.json"
-    if _step(rank_path, force) or executed_now:
+    if _step(rank_path, force) or "rank" in force_steps or executed_now:
         mv._write_json(rank_path, mv.rank_reported(
             rows, fq.get("reported_value"), grid,
             precision=fq.get("reported_precision")))
@@ -325,7 +333,8 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     interp_stale = json.loads(interp_json.read_text()).get("_prompt_versions", {}).get(
         "stage3_interpret"
     ) != artifacts.prompt_version("stage3_interpret") if interp_json.exists() else True
-    if _step(interp_md, force) or _step(interp_json, force) or executed_now or interp_stale:
+    if (_step(interp_md, force) or _step(interp_json, force) or executed_now or interp_stale
+            or "interpret" in force_steps):
         prompt = artifacts.load_prompt(
             "stage3_interpret",
             specs=specs_path.read_text()[:60000],

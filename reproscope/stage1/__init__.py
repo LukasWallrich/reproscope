@@ -56,30 +56,39 @@ def full_lineup() -> list[str]:
     ]
 
 
+STEPS = ("replicas", "match", "targeted", "rerun", "diagnose")
+
+
 def run(
     paper_id: str,
     force: bool = False,
     families: list[str] | None = None,
     only: list[str] | None = None,
+    force_steps: set[str] | None = None,
 ) -> dict[str, Any]:
     """Run Stage 1 end to end. Individual steps resume from what is already on disk."""
+    force_steps = force_steps or set()
+
+    def fstep(name: str) -> bool:
+        return force or name in force_steps
+
     stage_dir = paths.run_dir(paper_id, 1)
     ins = inputs(paper_id)
-    if paths.is_done(stage_dir, ins) and not force:
+    if paths.is_done(stage_dir, ins) and not force and not force_steps:
         print(f"stage 1 already done for {paper_id} (use --force to rerun)", flush=True)
         return {"skipped": True}
 
-    traces = replicas.run(paper_id, force=force, families=families, only=only)
+    traces = replicas.run(paper_id, force=fstep("replicas"), families=families, only=only)
     ran = [t for t in traces if t.ran]
     print(f"replicas: {len(ran)}/{len(traces)} produced runnable results", flush=True)
 
     on_disk = {t.replica_id: t.ran for t in replicas.load_traces(paper_id)}
     missing = [rid for rid in full_lineup() if not on_disk.get(rid)]
 
-    comparison = match.run(paper_id, force=force)
-    reconstruction = targeted.run(paper_id, comparison, force=force)
-    original = rerun.run(paper_id, force=force)
-    diagnosis = diagnose.run(paper_id, force=force)
+    comparison = match.run(paper_id, force=fstep("match"))
+    reconstruction = targeted.run(paper_id, comparison, force=fstep("targeted"))
+    original = rerun.run(paper_id, force=fstep("rerun"))
+    diagnosis = diagnose.run(paper_id, force=fstep("diagnose"))
 
     complete = not missing
     if complete:
