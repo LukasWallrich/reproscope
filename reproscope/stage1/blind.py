@@ -7,12 +7,13 @@ prose shipped with the data; a hit blocks the launch.
 
 from __future__ import annotations
 
-import re
 import json
+import re
 import shutil
 from pathlib import Path
 
 from .. import artifacts, paths
+from ..stage0.leakcheck import scan
 
 
 PROSE_SUFFIXES = {".txt", ".md", ".rtf", ".do", ".log"}
@@ -20,54 +21,6 @@ PROSE_SUFFIXES = {".txt", ".md", ".rtf", ".do", ".log"}
 
 class LeakDetected(RuntimeError):
     pass
-
-
-# --- leak scan ------------------------------------------------------------
-
-
-def _local_scan(files: list[Path], claims: list[artifacts.ClaimRecord]) -> list[str]:
-    """Fallback for stage0.leakcheck.scan: reported values as bounded tokens.
-
-    Every numeric claim value is searched at its own precision, rounded to 1-3
-    decimals, and as its absolute value. A digit or decimal point either side of
-    the match disqualifies it, so 4.09 does not fire on 14.091.
-    """
-    tokens: set[str] = set()
-    for c in claims:
-        v = c.value
-        if isinstance(v, str):
-            m = re.search(r"-?(?:\d+\.?\d*|\.\d+)", v)
-            v = float(m.group()) if m else None
-        if not isinstance(v, (int, float)):
-            continue
-        for x in {float(v), abs(float(v))}:
-            tokens.add(f"{x:g}")
-            for dp in (1, 2, 3):
-                s = f"{x:.{dp}f}"
-                tokens.add(s)
-                if s.startswith("0."):
-                    tokens.add(s[1:])  # APA style: .42
-                elif s.startswith("-0."):
-                    tokens.add("-" + s[2:])
-    hits: list[str] = []
-    for path in files:
-        text = Path(path).read_text()
-        for tok in sorted(tokens):
-            for m in re.finditer(re.escape(tok), text):
-                before = text[m.start() - 1] if m.start() else ""
-                after = text[m.end()] if m.end() < len(text) else ""
-                if before.isdigit() or before == "." or after.isdigit() or after == ".":
-                    continue
-                hits.append(f"{Path(path).name}: {tok!r} at offset {m.start()}")
-    return hits
-
-
-def scan(files: list[Path], claims: list[artifacts.ClaimRecord], paper_id: str | None = None) -> list[str]:
-    try:
-        from ..stage0 import leakcheck  # type: ignore
-    except ImportError:
-        return _local_scan(files, claims)
-    return list(leakcheck.scan(files, claims, paper_id=paper_id))
 
 
 # --- assembly -------------------------------------------------------------
@@ -194,7 +147,7 @@ def assemble(paper_id: str, replica_id: str) -> Path:
     )
 
     # The scan runs over the files the replica receives, not their stage 0 sources.
-    hits = scan([work / "METHODS.md", work / "CONTRACT.json"], claim_records, paper_id)
+    hits = scan([work / "METHODS.md", work / "CONTRACT.json"], claim_records, paper_id=paper_id)
     if hits:
         shutil.rmtree(work)
         raise LeakDetected(

@@ -161,10 +161,10 @@ def test_grouped_contract_carries_no_reported_value_past_the_scan(sandbox):
     claims = blind.claims("_fixture")
     leaky = sandbox / "scratch_leaky_contract.json"
     leaky.write_text(json.dumps({"analyses": [{"quantities": [{"note": "t was 4.69"}]}]}))
-    assert blind.scan([leaky], claims, "_fixture")
+    assert blind.scan([leaky], claims, paper_id="_fixture")
 
     work = blind.assemble("_fixture", "glm_1")
-    assert blind.scan([work / "CONTRACT.json"], claims, "_fixture") == []
+    assert blind.scan([work / "CONTRACT.json"], claims, paper_id="_fixture") == []
 
 
 def test_claims_no_contract_claims_go_to_unassigned(sandbox):
@@ -204,13 +204,6 @@ def test_data_tables_are_not_scanned_for_reported_values(sandbox):
     csv = corpus / "data" / "study1.csv"
     csv.write_text(csv.read_text().replace("3.51", "4.69", 1))
     assert blind.assemble("_fixture", "glm_1").exists()
-
-
-def test_local_scan_ignores_digits_inside_longer_numbers(sandbox):
-    claims = blind.claims("_fixture")
-    p = sandbox / "scratch_scan.md"
-    p.write_text("The identifier 14.0912 and the code 34690 are not results.")
-    assert blind._local_scan([p], claims) == []
 
 
 # --- replica bookkeeping --------------------------------------------------
