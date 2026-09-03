@@ -11,10 +11,12 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from .. import artifacts, llm, paths
+from . import leakcheck
 
 MAX_IMAGE_BYTES = 1_500_000
 DPI_LADDER = (110, 90, 72)
 CHUNK_PAGES = 8
+PAGE_CHECK_WINDOW = 3  # a mispaged claim is reassigned only within this many pages
 
 
 # --- slim schemas ---------------------------------------------------------
@@ -47,6 +49,9 @@ class SlimClaim(BaseModel):
     location: SlimLocation | None = None
     description: str | None = None
     analysis_label: str | None = None
+    # Set by `verify_claim_pages` when the assigned page carries no printed form of the
+    # value but exactly one nearby page does; never emitted by the model itself.
+    page_corrected: dict[str, int] | None = None
 
 
 class ClaimList(BaseModel):
@@ -99,6 +104,64 @@ def extract_text(manifest, force: bool = False) -> Path:
         ["pdftotext", "-layout", str(manifest.path(manifest.pdf)), str(out)], check=True
     )
     return out
+
+
+def page_texts(manifest, n_pages: int) -> list[str]:
+    """Per-page text of the PDF, 1-indexed (`page_texts(...)[0]` is unused).
+
+    `extract_text` runs `pdftotext` without `-nopgbrk`, so the layer it writes is
+    already form-feed-separated by page; that split is used when it produces one
+    chunk per page. Otherwise each page is pulled individually with `pdftotext -f N
+    -l N`, e.g. when a model's chunk was numbered from something other than 1.
+    """
+    text_path = manifest.dir / "paper.txt"
+    if text_path.exists():
+        chunks = text_path.read_text(errors="replace").split("\x0c")
+        # A trailing form feed leaves one empty chunk after the last page.
+        if chunks and not chunks[-1].strip():
+            chunks = chunks[:-1]
+        if len(chunks) == n_pages:
+            return [""] + chunks
+    out = [""]
+    pdf = str(manifest.path(manifest.pdf))
+    for i in range(1, n_pages + 1):
+        result = subprocess.run(
+            ["pdftotext", "-f", str(i), "-l", str(i), "-layout", pdf, "-"],
+            capture_output=True, text=True,
+        )
+        out.append(result.stdout if result.returncode == 0 else "")
+    return out
+
+
+def verify_claim_pages(
+    claims: list[SlimClaim], texts: list[str], window: int = PAGE_CHECK_WINDOW
+) -> list[SlimClaim]:
+    """Reassign a claim's page when its value is printed on exactly one nearby page.
+
+    `texts` is 1-indexed per `page_texts`. A claim whose assigned page carries no
+    printed form of its value (`leakcheck.variants`) but exactly one page within
+    `window` does is reassigned to that page, with the correction recorded on the
+    claim; a claim found on no nearby page, or on more than one, is left alone —
+    there is nothing to disambiguate it with here.
+    """
+    n_pages = len(texts) - 1
+    for c in claims:
+        if c.value is None or c.location is None or c.location.page is None:
+            continue
+        page = c.location.page
+        if not (1 <= page <= n_pages):
+            continue
+        forms = leakcheck.variants(c.value, c.precision)
+        if not forms or any(f in texts[page] for f in forms):
+            continue
+        nearby = [
+            p for p in range(max(1, page - window), min(n_pages, page + window) + 1)
+            if p != page and any(f in texts[p] for f in forms)
+        ]
+        if len(nearby) == 1:
+            c.page_corrected = {"from": page, "to": nearby[0]}
+            c.location.page = nearby[0]
+    return claims
 
 
 # --- the vision extractions ----------------------------------------------
@@ -170,6 +233,10 @@ def extract_one(
         merged += _renumber(part.claims, start, len(merged) + 1)
         if part.notes:
             notes.append(f"pages {start + 1}+: {part.notes}")
+    # One extractor's chunk may have been numbered from something other than 1 (the
+    # prompt asks for 1, but not every model follows it), which throws off every page
+    # `_renumber` assigned from that chunk on; catch it against the PDF text layer.
+    merged = verify_claim_pages(merged, page_texts(manifest, len(pages)))
     result = ClaimList(claims=merged, notes=" | ".join(notes) or None)
     mode = f"chunked/{CHUNK_PAGES}"
 

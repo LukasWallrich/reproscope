@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from reproscope import artifacts, llm, paths
-from reproscope.stage0 import contracts, leakcheck, readiness, redact
+from reproscope.stage0 import contracts, extract, leakcheck, readiness, redact
 
 
 def claim(**kw):
@@ -448,6 +448,48 @@ def test_contracts_rebuilds_when_an_input_changes(stage0_root, monkeypatch):
     calls.clear()
     contracts.run(Manifest(), [record()], PAPER, {"pdf": "h2"})
     assert len(calls) == 1  # rebuilt, not reused
+
+
+# --- extraction page check -------------------------------------------------
+
+
+def _slim_claim(page, value, precision=2):
+    return extract.SlimClaim(
+        claim_id="c1", value=value, precision=precision,
+        location=extract.SlimLocation(page=page),
+    )
+
+
+def test_verify_claim_pages_reassigns_to_the_one_nearby_page_that_prints_the_value():
+    texts = ["", "nothing here", "still nothing", "the effect was t(27) = 5.91", "", "", ""]
+    claims = [_slim_claim(page=1, value=5.91, precision=2)]
+    out = extract.verify_claim_pages(claims, texts)
+    assert out[0].location.page == 3
+    assert out[0].page_corrected == {"from": 1, "to": 3}
+
+
+def test_verify_claim_pages_leaves_a_claim_that_matches_its_own_page():
+    texts = ["", "t(27) = 5.91"]
+    claims = [_slim_claim(page=1, value=5.91, precision=2)]
+    out = extract.verify_claim_pages(claims, texts)
+    assert out[0].location.page == 1
+    assert out[0].page_corrected is None
+
+
+def test_verify_claim_pages_leaves_a_claim_found_on_no_nearby_page():
+    texts = ["", "nothing here", "nor here", "nor here either"]
+    claims = [_slim_claim(page=1, value=5.91, precision=2)]
+    out = extract.verify_claim_pages(claims, texts)
+    assert out[0].location.page == 1
+    assert out[0].page_corrected is None
+
+
+def test_verify_claim_pages_leaves_a_claim_ambiguous_between_two_nearby_pages():
+    texts = ["", "nothing", "t = 5.91", "5.91 again", ""]
+    claims = [_slim_claim(page=1, value=5.91, precision=2)]
+    out = extract.verify_claim_pages(claims, texts)
+    assert out[0].location.page == 1  # two candidates: too ambiguous to reassign
+    assert out[0].page_corrected is None
 
 
 # --- readiness ------------------------------------------------------------
