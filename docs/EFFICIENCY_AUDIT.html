@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>reproscope pilot — efficiency audit</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+<style>
+  :root { --ink:#1b1b1b; --muted:#5a5a5a; --line:#ddd; --accent:#8a2b1a; --bg:#fbfaf7; }
+  body { font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); background: var(--bg); margin: 0; }
+  main { max-width: 900px; margin: 0 auto; padding: 2rem 1.2rem 4rem; }
+  h1 { font-size: 1.6rem; margin: 0 0 .2rem; } h2 { font-size: 1.2rem; margin: 2rem 0 .6rem; border-bottom: 1px solid var(--line); padding-bottom: .2rem; }
+  .lede { color: var(--muted); margin-bottom: 1.2rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0 1rem; font-size: .92rem; }
+  th, td { border: 1px solid var(--line); padding: .35rem .5rem; text-align: left; vertical-align: top; }
+  th { background: #f0ede6; } td.n, th.n { text-align: right; white-space: nowrap; }
+  .box { border-left: 4px solid var(--accent); background: #fff; padding: .6rem .9rem; margin: 1rem 0; }
+  .decide { border-left-color: #1f5fa8; }
+  code { background: #f0ede6; padding: 0 .25em; border-radius: 3px; font-size: .9em; }
+  ol li, ul li { margin: .3rem 0; }
+  .wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+<h1>reproscope pilot — efficiency audit</h1>
+<p class="lede">Five Multi100 papers, 2026-09-02 to 2026-09-03. Two independent reviews (Opus subagent, GPT-5.6 Sol via Codex) over the same call ledger; both full reports are in <code>docs/evaluation/audits/</code>. All pipeline processes are stopped.</p>
+
+<div class="box">
+<strong>Verdict.</strong> A clean single run costs USD 18–38 per paper at list price, 2–4× the top of the scope's USD 2–10 envelope. Cash spend was USD 5.08 (OpenRouter); the rest, about USD 171 list-equivalent, ran on the Claude subscription, plus unpriced Codex calls. 97% of the cost sits in 114 Opus calls (about 23 per paper) that each re-read the whole paper, every page image, or every replica's output. Nothing in the design forces this: the same pipeline fits the envelope with deterministic joins, page-local arbitration, cheaper tiers for matching-type tasks, and one strong call per stage.
+</div>
+
+<h2>Where it went</h2>
+<div class="wrap"><table>
+<tr><th>stage</th><th class="n">calls</th><th class="n">Mtok</th><th class="n">cash $</th><th class="n">list-equiv $</th><th class="n">share</th><th class="n">$/paper</th></tr>
+<tr><td>0 intake (extraction, arbitration, contracts, readiness, redaction, scrub)</td><td class="n">96</td><td class="n">14.8</td><td class="n">0.45</td><td class="n">69.41</td><td class="n">40%</td><td class="n">13.97</td></tr>
+<tr><td>1 replication (10 replicas, audits, matching, targeted arm, diagnosis)</td><td class="n">1,669</td><td class="n">53.4</td><td class="n">4.07</td><td class="n">74.62</td><td class="n">45%</td><td class="n">15.74</td></tr>
+<tr><td>2 analysis review (four strong calls)</td><td class="n">16</td><td class="n">4.2</td><td class="n">0.00</td><td class="n">26.07</td><td class="n">15%</td><td class="n">5.21</td></tr>
+<tr><td>3 multiverse (enumerate, screen, execute, rank, interpret)</td><td class="n">30</td><td class="n">2.2</td><td class="n">0.41</td><td class="n">1.35</td><td class="n">1%</td><td class="n">0.35</td></tr>
+<tr><th>total</th><th class="n">1,811</th><th class="n">74.5</th><th class="n">4.93</th><th class="n">171.45</th><th></th><th class="n">35.28</th></tr>
+</table></div>
+<p>Of the total, 20% (USD 35) is retries, reruns and a bug-fix cascade: the contract and redaction steps retried on every paper (USD 13), the Ohtsubo development iterations (USD 10), and the repair rerun (USD 12). Stage 3, the part that does the novel work, is 1% of the bill.</p>
+
+<h2>Ranked causes and fixes</h2>
+<div class="wrap"><table>
+<tr><th>#</th><th>cause</th><th class="n">$ (share)</th><th>fix</th><th class="n">expected after</th></tr>
+<tr><td>1</td><td><strong>Ten replicas per paper</strong>, two of them Opus and one Fable at USD 1.6–2.2 each; cheap replicas cost 1/25 of that for the same task. Every replica also receives the full claim inventory (Hurst: 258 claims, 148 KB) on every turn.</td><td class="n">32.9 (19%)</td><td>Three cheap families once each by default (GLM, DeepSeek, Luna); frontier runs only in a calibration subset. Contract capped to the focal analysis plus at most 8 claims per analysis.</td><td class="n">≈0.15 per paper</td></tr>
+<tr><td>2</td><td><strong>Arbitration</strong> has Opus read every page image through the Read tool (34 turns and USD 12.9 on the 60-page Axt preprint) to reconcile lists that already agree on 83% of entries.</td><td class="n">25.8 (15%)</td><td>Merge agreements deterministically on (page, kind, value); one cheap-vision call over the disagreements with cropped page regions.</td><td class="n">≈0.4</td></tr>
+<tr><td>3</td><td><strong>Targeted reconstruction</strong> gets the whole paper, all claims with values and all ten replica trees; "12 attempts" caps nothing (one run took 41 turns, 4.8 M tokens). It fires on any headline claim, and it reran three times on Ohtsubo.</td><td class="n">19.5 (11%)</td><td>Trigger on the focal claim only; give it the closest replica's script, the focal contract and the reported focal values; cap turns; fold the diagnosis into its output.</td><td class="n">≈1.2, conditional</td></tr>
+<tr><td>4</td><td><strong>Stage 2 broad review</strong> re-reads the whole paper plus all ten near-identical scripts; the MDE fallback is a 400k-token agentic call for a power calculation.</td><td class="n">26.1 (15%)</td><td>One strong call scoped to the focal analysis and match summary; causal-language and alignment on the cheap tier; MDE computed in R.</td><td class="n">≈1.4</td></tr>
+<tr><td>5</td><td><strong>Contracts and redaction retry on every paper</strong> because the leak scan forbids every printed form of every extracted number, including mean age, alpha coefficients and exclusion rates. Nine of ten first drafts leaked no result. Each retry resends the full paper.</td><td class="n">12.9 (7%)</td><td>Forbid inferential quantities only (plus headline values); drop two-significant-digit forms for supporting claims; repair the offending sentences locally with a cheap call instead of regenerating the document.</td><td class="n">0</td></tr>
+<tr><td>6</td><td><strong>Diagnosis</strong> receives 287k tokens per call to write 200 tokens, ten times.</td><td class="n">17.0 (10%)</td><td>Fold into the targeted call; otherwise match summaries plus the two closest traces.</td><td class="n">≈0.4</td></tr>
+<tr><td>7</td><td><strong>Other Stage 0 strong calls</strong> (contracts, redaction, readiness, description scrub) each carry the full paper or schema through Opus; the scrub rewrites short fragments in 120-item chunks.</td><td class="n">25.6 (15%)</td><td>One Opus call emitting contracts and redacted methods together; readiness on Sonnet with schema plus contracts only; scrub on the cheap tier.</td><td class="n">≈2.5</td></tr>
+<tr><td>8</td><td><strong>Per-claim linking</strong>: one cheap call per claim × replica, 4,691 calls, 9 model-hours, and the step that emptied the OpenRouter balance mid-run. 83% of its output tokens were reasoning for a 50-token JSON answer.</td><td class="n">2.1 (1%), 29% of time</td><td>Done: deterministic join on the replica's claim ids (36 of 4,060 pairs now need a model). Remaining: cap reasoning on cheap structured calls.</td><td class="n">≈0.05</td></tr>
+<tr><td>9</td><td><strong>Rerun cascade</strong>: cache keys hash whole files including timestamps and call ids, so touching one trace invalidates match → targeted → diagnosis → Stage 2 → Stage 3.</td><td class="n">≈22 (12%)</td><td>Hash analytical payloads only; freeze the replica lineup before any downstream step; step-level force.</td><td class="n">0</td></tr>
+</table></div>
+
+<h2>What v0.1 would cost</h2>
+<p>With the fixes above: about 3 strong calls per paper (contracts + redaction, broad review, interpretation), a conditional targeted arm, and cheap or deterministic everything else. Both reviews land at <strong>USD 5.5–8 per paper at list price</strong>, inside the envelope, with these stated trade-offs: no within-family dispersion by default, weaker recall on obscure supporting table cells, referee comments limited to the focal analysis, and a smaller targeted search that reports "search exhausted under budget" rather than "not reachable".</p>
+
+<h2>Correctness problems the audits found</h2>
+<ol>
+<li><strong>Stage 2 reviewed the wrong claim on Axt and Hurst.</strong> Its focal-claim lookup matches the manifest value by string equality and falls back to the first claim. Stage 3 has a manifest override now; Stage 2 must use the same binding.</li>
+<li><strong>A failed model call was graded as a failed replication</strong> in the match table (band "fail" instead of abstained). No live artifact is affected after the rebuild, but the path is still open.</li>
+<li><strong>Stale artifacts get blessed</strong>: a prompt edit clears the stage marker, the stage reuses every old step output, then writes a fresh marker.</li>
+<li><strong>A crashed targeted agent is recorded as "not reachable"</strong>, the strongest verdict against a paper.</li>
+<li><strong>Token accounting is a lower bound</strong>: retries are not ledgered, the opencode route drops cache-read tokens (10–18× understated), Codex calls carry no price.</li>
+<li><strong>The leak scan's exemptions are load-bearing</strong> (integers ≤ 30, non-headline n, threshold p-values), and the semantic audit rated every paper "strong" for structural reasons, so it cannot discriminate.</li>
+</ol>
+
+<div class="box decide">
+<strong>Decisions needed.</strong>
+<ol>
+<li><strong>Replica lineup for the rest of the pilot.</strong> Recommended: finish the five papers with the existing replica outputs (no new agentic runs), and treat the frontier-versus-cheap comparison as done for Ohtsubo, Hertel, Hurst and Axt, where all families ran.</li>
+<li><strong>Finish or stop.</strong> Outstanding work: Petersen matching and Stage 3, the repair pass that rechecks seven replicas marked failed, and the reports. With the fixes for items 3, 6 and 9 applied first, that costs roughly USD 1 cash and USD 10–15 list-equivalent. Without them it would repeat the cascade.</li>
+<li><strong>Apply the efficiency fixes before or after the evaluation writeup.</strong> Recommended: fix items 1–3, 5, 6, 8, 9 and the six correctness problems now (a day of work, no model calls except tests), then finish the pilot on the reduced settings, then write up.</li>
+</ol>
+</div>
+
+<h2>Sources</h2>
+<ul>
+<li><code>docs/evaluation/audits/audit_opus_2026-09-03.md</code> — ledger reconstruction, first-run versus rerun split, leak-scan hit classification, per-step fixes with line numbers.</li>
+<li><code>docs/evaluation/audits/audit_codex_sol_2026-09-03.md</code> — ranked waste sources, v0.1 budget table, scaling analysis.</li>
+<li><code>docs/evaluation/audits/ledger_breakdown_2026-09-03.txt</code> — the per-step spend both reviews worked from; raw rows in <code>runs/&lt;paper_id&gt;/ledger.jsonl</code>.</li>
+</ul>
+</main>
+</body>
+</html>
