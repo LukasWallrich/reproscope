@@ -1,16 +1,19 @@
-Two extractors read the same paper independently and produced lists of reported results. You have the page images and both lists. Produce the reconciled list.
+Two extractors read the same paper independently. Entries they agree on are already merged. Your job is the entries below, which are of two sorts: an entry only one extractor reported, and an entry both reported at the same place with different values.
 
-Rules:
-- Match entries across the two lists by location and description. Where both agree on value, location and quantity kind, keep the entry and set `agreed: true`.
-- Where they disagree, look at the page image and decide field by field. Record what you decided and why in `arbiter_note`, and set `agreed: false`. If the image does not settle it, keep the value that is printed and set `confidence: "low"`.
-- Where one extractor has an entry the other lacks, check the page: keep it if the value is printed there, otherwise drop it and note the drop in `dropped`.
-- Assign fresh sequential `claim_id`s ("c001", ...) in reading order, and make `analysis_label` consistent across all cells of the same model.
-- Keep `importance: "headline"` only for quantities the abstract or main hypothesis tests rest on.
+Each item names the image that shows it (`image`), numbered in the list below. An image is either a crop of the page band around the value or the whole page; its file name starts with the page number. `image: 0` means no image is available — then answer `uncertain: true`.
 
-Extractor A:
-{{list_a}}
+Decide each item from the image alone:
 
-Extractor B:
-{{list_b}}
+- `keep` — the printed page shows this value, at this location, as a reported result. Use this only for an item one extractor reported.
+- `drop` — the value is not printed on the page, or it is not a reported quantity (a citation, a year, a page number, a scale label).
+- `correct` — return in `value` the number printed on the page. For an item with `candidate_values`, always answer `correct` with the printed value, even when it equals one of the candidates.
 
-Return JSON: {"claims": [...same fields as the input entries plus agreed, arbiter_note, confidence...], "dropped": [{"source": "A"|"B", "description": "...", "reason": "..."}], "notes": "..."}. Output only JSON.
+Set `uncertain: true` when the image does not settle the item, and say why in `note`. Keep `note` under 20 words. Answer every `item_id` exactly once and invent no new ones.
+
+Images:
+{{images}}
+
+Items:
+{{items}}
+
+Return JSON: `{"items": [{"item_id": "i001", "decision": "keep"|"drop"|"correct", "value": <number or null>, "uncertain": true|false, "note": "..."}]}`. Output only JSON.
