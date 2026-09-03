@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from reproscope import artifacts, paths
-from reproscope.stage1 import blind, match, replicas, rerun, targeted
+from reproscope.stage1 import blind, diagnose, match, replicas, rerun, targeted
 
 FIXTURE = Path(__file__).parent / "fixtures" / "stage1"
 sys.path.insert(0, str(FIXTURE))
@@ -443,3 +443,30 @@ def test_targeted_abstains_when_the_agent_writes_no_outcome(sandbox, monkeypatch
     assert json.loads((work / "CONTRACT.json").read_text())["analysis_id"] == "a1"
     reported = json.loads((work / "REPORTED.json").read_text())["claims"]
     assert [c["claim_id"] for c in reported] == ["c1", "c2", "c3", "c4", "c5"]
+
+
+def test_the_agents_diagnosis_section_is_taken_verbatim():
+    answer = (
+        "Attempt 3 reached the reported t.\n\n"
+        "## Diagnosis (unblinded conjecture)\n\n"
+        "The analysts kept the two excluded participants.\n"
+    )
+    assert targeted._split_diagnosis(answer) == "The analysts kept the two excluded participants."
+    assert targeted._split_diagnosis("No section here.") is None
+
+
+def test_diagnosis_reuses_the_targeted_section_without_a_call(sandbox, monkeypatch):
+    artifacts.save(
+        artifacts.TargetedReconstruction(
+            triggered=True, outcome="reachable",
+            diagnosis="The analysts kept the two excluded participants.",
+            meta=artifacts.ArtifactMeta(artifact="TargetedReconstruction", stage="1"),
+        ),
+        sandbox / "runs" / "_fixture" / "stage1" / "targeted.json",
+    )
+    calls = _fake_llm(monkeypatch)
+
+    text = diagnose.run("_fixture").read_text()
+    assert "kept the two excluded participants" in text
+    assert "unblinded conjecture" in text.lower()
+    assert calls == []

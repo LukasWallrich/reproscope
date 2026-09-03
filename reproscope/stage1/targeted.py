@@ -144,7 +144,7 @@ def _record(out_path: Path, key: dict[str, str], **fields) -> artifacts.Targeted
 
 def _split_diagnosis(text: str) -> str | None:
     """The agent's `## Diagnosis` section, when it wrote one."""
-    m = re.search(r"^#{1,4}\s*Diagnosis\s*$(.*)", text or "", re.M | re.S)
+    m = re.search(r"^#{1,4}\s*Diagnosis\b[^\n]*\n(.*)", text or "", re.M | re.S)
     body = m.group(1).strip() if m else ""
     return body or None
 
