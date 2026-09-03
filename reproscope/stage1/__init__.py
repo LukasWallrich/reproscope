@@ -82,8 +82,10 @@ def run(
     ran = [t for t in traces if t.ran]
     print(f"replicas: {len(ran)}/{len(traces)} produced runnable results", flush=True)
 
-    on_disk = {t.replica_id: t.ran for t in replicas.load_traces(paper_id)}
-    missing = [rid for rid in full_lineup() if not on_disk.get(rid)]
+    # A replica counts as run once it has a trace; a script that failed its
+    # re-execution is recorded as abstained, not as work still owed.
+    on_disk = {t.replica_id for t in replicas.load_traces(paper_id)}
+    missing = [rid for rid in full_lineup() if rid not in on_disk]
 
     comparison = match.run(paper_id, force=fstep("match"))
     reconstruction = targeted.run(paper_id, comparison, force=fstep("targeted"))

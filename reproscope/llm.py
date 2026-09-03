@@ -30,6 +30,7 @@ ROUTES = ("openrouter", "claude_p", "codex", "opencode")
 
 #: Estimated input tokens above which a non-agentic call is refused.
 MAX_INPUT_TOKENS = 60_000
+EARLY_FAILURE_S = 300  # an agentic call that fails within this is retried once
 
 
 class LLMError(RuntimeError):
@@ -606,8 +607,11 @@ def call(
             stats = getattr(e, "stats", None) or {}
             if getattr(e, "log", ""):
                 logs.append(e.log)
-            # CLI routes fail transiently (rate limits, concurrent sessions); retry once.
-            transient = route != "openrouter" and not agentic
+            # CLI routes fail transiently (rate limits, overload, concurrent sessions);
+            # retry once. An agentic call retries only when it died early, so a
+            # session that did real work before failing is not repeated blindly.
+            early = time.monotonic() - attempt_started < EARLY_FAILURE_S
+            transient = route != "openrouter" and (not agentic or early)
         else:
             if schema is not None:
                 try:
