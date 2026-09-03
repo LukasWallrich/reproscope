@@ -549,6 +549,15 @@ def replica_diffs(canonical: Replica, others: list[Replica], cap: int = DIFF_LIN
     return out
 
 
+def _lines_json(block: dict[str, Any]) -> str:
+    """Render {"summaries": [...], "rows": [...]} as one compact JSON object per line."""
+    out = []
+    for key, items in block.items():
+        out.append(f"{key}:")
+        out += [json.dumps(item, default=str) for item in items]
+    return "\n".join(out)
+
+
 def focal_match_summary(inp: Stage2Inputs) -> dict[str, Any]:
     """The match rows and per-claim summaries belonging to the focal analysis."""
     if not inp.match:
@@ -558,7 +567,7 @@ def focal_match_summary(inp: Stage2Inputs) -> dict[str, Any]:
     summary_keys = ("claim_id", "n_ran", "n_abstained", "fraction_matched", "fraction_a",
                     "importance", "state", "dispersion")
     row_keys = ("claim_id", "replica_id", "quantity_kind", "reported", "replicated", "band",
-                "direction_flipped", "state", "abstain_reason", "link_note")
+                "direction_flipped", "state", "abstain_reason")
     return {
         "summaries": [{k: s.get(k) for k in summary_keys if s.get(k) is not None}
                       for s in (inp.match.get("summaries") or [])
@@ -924,8 +933,8 @@ def broad_material(inp: Stage2Inputs, diff_cap: int = DIFF_LINE_CAP) -> tuple[st
     else:
         blocks.append(f"## Replica scripts\n\n({why})")
     blocks.append(
-        "## Match summary for the focal analysis\n\n"
-        + json.dumps(focal_match_summary(inp), indent=2, default=str)
+        "## Match summary for the focal analysis (one JSON object per line)\n\n"
+        + _lines_json(focal_match_summary(inp))
     )
     return "\n\n".join(blocks), provenance
 
