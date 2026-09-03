@@ -1,8 +1,9 @@
 """Stage 3 — robustness: the specification curve on the focal claim.
 
-`run(paper_id, force=False)` walks the seven steps in multiverse.py. Every step reads
-its own output file first and re-does the work only when that file is missing or `force`
-is set, so an interrupted stage resumes at the step that failed.
+`run(paper_id, force=False)` walks the seven steps in multiverse.py. Each step that
+costs a model call or an agent run reads its own output file first and re-does the work
+only when that file is missing or `force` is set, so an interrupted stage resumes at the
+step that failed. The grid build is free and deterministic, so it runs every time.
 """
 
 from __future__ import annotations
@@ -179,10 +180,12 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     screen = mv._read_json(screen_path)
     calls.append(screen.get("_ledger_id", ""))
 
+    # The grid is a pure function of the enumerator, the screen and the paper levels, and
+    # costs nothing to build, so it is rebuilt every run rather than reused from disk.
+    # Identical inputs give identical bytes, hence the same grid_sha and no executor churn.
     grid_path = stage3 / "grid.json"
-    if _step(grid_path, force):
-        mv._write_json(grid_path, mv.build_grid(proposed, screen, paper_id=paper_id,
-                                                paper_levels=paper.get("levels")))
+    mv._write_json(grid_path, mv.build_grid(proposed, screen, paper_id=paper_id,
+                                            paper_levels=paper.get("levels")))
     grid = mv._read_json(grid_path)
     n_rejected = len(grid.get("rejected_levels", []))
     n_flagged = len(grid.get("paper_level_flagged", []))

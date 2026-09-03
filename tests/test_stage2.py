@@ -313,6 +313,17 @@ def test_run_calls_each_check_once_on_the_tier_it_belongs_on(fixture_root, monke
         "exact numeric match against the manifest's reported statistic"
     )
 
+    # a second run reuses everything
+    seen.clear()
+    assert stage2.run("_fixture2")["skipped"] is True
+    assert seen == []
+
+    # an edited prompt clears the stage marker and rebuilds the check that used it
+    broad_prompt = fixture_root / "reproscope" / "prompts" / "stage2_broad.md"
+    broad_prompt.write_text(broad_prompt.read_text() + "\nOne more instruction.\n")
+    stage2.run("_fixture2")
+    assert [s[0] for s in seen] == ["broad"]
+
 
 # --- assembly and markdown ------------------------------------------------
 

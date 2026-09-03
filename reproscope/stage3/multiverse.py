@@ -8,7 +8,8 @@ when its output is already there and `force` is off:
 2. `factors_proposed.json`   cheap enumerator over contract, schema and replica traces
 3. `screen.json` + `grid.json`   adversarial screen (different model family), then a
                      deterministic grid build with incompatible pruning, a size cap and
-                     a stratified fractional sample above the execution cap
+                     a stratified fractional sample above the execution cap. The grid
+                     is rebuilt every run: it is a pure function of the two steps above.
 4. `execute.json`    agentic executor writes and runs out/multiverse.R -> out/specs.csv,
                      then deterministic verification plus a hardcoding audit
 5. `rank.json`       where the paper's reported estimate sits in the curve

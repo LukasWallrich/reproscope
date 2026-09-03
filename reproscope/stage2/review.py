@@ -43,6 +43,7 @@ from . import mde as mde_mod
 
 STAGE = "2"
 CHECKS = ("causal_language", "mde", "alignment", "broad")
+PROMPTS = ("stage2_causal_language", "stage2_alignment", "stage2_broad")
 DIFF_LINE_CAP = 150  # lines of unified diff carried per non-canonical replica
 CHEAP_REASONING_CAP = 512  # hidden-reasoning cap on the two cheap-tier checks
 
@@ -316,7 +317,9 @@ def gather(paper_id: str) -> Stage2Inputs:
     s0 = paths.run_dir(paper_id, 0)
     s1 = paths.run_dir(paper_id, 1)
 
-    hashes: dict[str, str] = {}
+    # The stage marker covers the prompts as well as the files: an edited prompt must
+    # clear it, otherwise the stage is skipped before any check can see the change.
+    hashes: dict[str, str] = {f"prompt:{n}": artifacts.prompt_version(n) for n in PROMPTS}
 
     def note(name: str, path: Path) -> None:
         if path.exists():
@@ -1085,7 +1088,8 @@ def _md_quote(text: str | None) -> str:
 
 def render_md(inp: Stage2Inputs, review: AnalysisReview, records: dict[str, CheckRecord]) -> str:
     L: list[str] = [f"# Stage 2 — analysis review: {inp.paper_id}", ""]
-    L.append(f"Focal claim bound by: {inp.focal_rule}.")
+    L.append(f"Focal claim could not be bound: {inp.focal_error}." if inp.focal_error
+             else f"Focal claim bound by: {inp.focal_rule}.")
     if inp.focal_claim:
         L.append(f"Focal claim id: `{inp.focal_claim.claim_id}`.")
     if inp.focal_contract:
