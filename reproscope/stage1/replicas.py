@@ -174,20 +174,29 @@ def rerun_script(work: Path, script: Path, rdir: Path) -> dict[str, Any]:
         results.unlink()
 
     started = time.monotonic()
-    try:
-        proc = subprocess.run(
-            script_command(script, work),
-            cwd=str(work),
-            capture_output=True,
-            text=True,
-            timeout=RERUN_TIMEOUT_S,
-        )
-        exit_code, log = proc.returncode, (proc.stdout or "") + (proc.stderr or "")
-    except subprocess.TimeoutExpired as e:
-        exit_code = 124
-        log = f"[re-execution timed out after {RERUN_TIMEOUT_S}s]\n{e.stdout or ''}{e.stderr or ''}"
-    except FileNotFoundError as e:
-        exit_code, log = 127, f"[interpreter not found] {e}"
+    # The task does not fix a working directory, so a script may address the data
+    # relative to the work root (`data/...`) or to its own directory (`../data/...`).
+    # It is run from the work root first and, when that fails, from out/.
+    log, exit_code, ran_from = "", 1, work
+    for cwd in (work, out_dir):
+        ran_from = cwd
+        try:
+            proc = subprocess.run(
+                script_command(script, cwd),
+                cwd=str(cwd),
+                capture_output=True,
+                text=True,
+                timeout=RERUN_TIMEOUT_S,
+            )
+            exit_code, attempt_log = proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+        except subprocess.TimeoutExpired as e:
+            exit_code = 124
+            attempt_log = f"[re-execution timed out after {RERUN_TIMEOUT_S}s]\n{e.stdout or ''}{e.stderr or ''}"
+        except FileNotFoundError as e:
+            exit_code, attempt_log = 127, f"[interpreter not found] {e}"
+        log += f"[run from {cwd.name or cwd}]\n{attempt_log}\n"
+        if exit_code == 0 or exit_code == 124:
+            break
     wall = time.monotonic() - started
     (rdir / "check.log").write_text(log)
 
@@ -204,6 +213,7 @@ def rerun_script(work: Path, script: Path, rdir: Path) -> dict[str, Any]:
         "exit_code": exit_code,
         "wall_s": round(wall, 2),
         "script": script.name,
+        "ran_from": ran_from.name,
         "regenerated_results": regenerated,
         "results_match_agent": _same_values(agent_vals, new_vals) if regenerated else None,
         "results_from_script": regenerated,

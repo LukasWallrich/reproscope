@@ -557,9 +557,10 @@ def render_md(result: dict[str, Any]) -> str:
                f"Papers: {', '.join(result['papers']) if result['papers'] else 'none'}.")
     out.append("")
     out.append("Match shares are over every claim × replica pair that Stage 1 scored in "
-               "`match.json`, restricted to replicas that ran. A pair whose replica could "
-               "not bind the claim to the data counts as *not found*, not as a failed "
-               "match. `n/a` means the metric could not be computed from the files present.")
+               "`match.json`, restricted to replicas that ran. A pair whose replica produced "
+               "no value for the claim, or whose link step failed, is *abstained* and left out "
+               "of the denominators. `n/a` means the metric could not be computed from the "
+               "files present.")
     out.append("")
 
     out.append("## Runs and reproduction, by family")
