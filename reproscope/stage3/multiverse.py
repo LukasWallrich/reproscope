@@ -184,7 +184,11 @@ def bind_focal_claim(
     notes: list[str] = []
 
     matched: list[ClaimRecord] = []
-    for c in claims:
+    override = getattr(manifest.focal_claim, "claim_id", None) if manifest.focal_claim else None
+    if override:
+        matched = [c for c in claims if c.claim_id == override]
+        notes.append(f"focal claim fixed by the manifest: {override}")
+    for c in ([] if matched else claims):
         v = _as_float(c.value)
         if v is None:
             continue

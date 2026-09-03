@@ -27,7 +27,9 @@
       "df": null,
       "n": null,
       "page": "page 279\n\ncorrected: 280\n\n"
-    }
+    },
+    "claim_id": "c221",
+    "note": "Multi100 coded the claim as a one-sample t of the good-focal BIAT D score among Black participants against zero (t = -5.79, df = 855); the paper prints the mean (-0.12, SD 0.60, N = 856) but not that t. The focal quantity is the mean D score (claim c221)."
   },
   "multi100": {
     "paper_id": "Axt_JournExpSocPsych_2018_zK2",
