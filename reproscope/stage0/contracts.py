@@ -1,4 +1,9 @@
-"""Step 4: estimand contracts from the paper text and the value-free claim list."""
+"""Step 4: the estimand contracts and the redacted methods, from one reading of the paper.
+
+This is the only step that sees the paper text, and it sees it once. A leak found
+afterwards is repaired sentence by sentence (`redact.repair`), never by re-sending
+the paper.
+"""
 
 from __future__ import annotations
 
@@ -8,10 +13,14 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from .. import artifacts, llm, paths
-from . import leakcheck
+from . import leakcheck, redact
 
 # Fields a contract must never see, so the writer cannot copy a result across.
 BLIND_DROP = ("value", "precision", "uncertainty", "comparator")
+
+# Only the prompt that writes the artifacts decides whether they are stale. The
+# repair prompt's version is recorded on the redaction report, which owns the scan.
+PROMPTS = ("stage0_contracts",)
 
 
 class SlimAmbiguity(BaseModel):
@@ -44,10 +53,11 @@ class SlimContract(BaseModel):
     ambiguities: list[SlimAmbiguity] = []
 
 
-class ContractList(BaseModel):
+class ContractsAndMethods(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     contracts: list[SlimContract] = []
+    redacted_methods: str = ""
 
 
 def claims_without_values(claims: list[artifacts.ClaimRecord]) -> list[dict[str, Any]]:
@@ -62,9 +72,11 @@ def claims_without_values(claims: list[artifacts.ClaimRecord]) -> list[dict[str,
     return out
 
 
-def to_records(out: ContractList, meta: artifacts.ArtifactMeta) -> list[artifacts.EstimandContract]:
+def to_records(
+    contracts: list[SlimContract], meta: artifacts.ArtifactMeta
+) -> list[artifacts.EstimandContract]:
     records = []
-    for c in out.contracts:
+    for c in contracts:
         payload = c.model_dump()
         payload["versions_named"] = {
             v.split()[0]: " ".join(v.split()[1:]) or "stated" for v in c.versions_named if v.strip()
@@ -81,54 +93,61 @@ def run(
     inputs: dict[str, str] | None = None,
     force: bool = False,
 ) -> tuple[list[artifacts.EstimandContract], list[str]]:
+    """Write contracts.json and redacted_methods.md, then repair any leak locally."""
     stage_dir = paths.run_dir(manifest.paper_id, 0)
     out_path = stage_dir / "contracts.json"
-    if out_path.exists() and not force:
-        return artifacts.load(artifacts.EstimandContract, out_path), []  # type: ignore[return-value]
+    methods_path = stage_dir / "redacted_methods.md"
 
-    prompt = artifacts.load_prompt(
-        "stage0_contracts",
-        paper_text=paper_text,
-        claims_no_values=json.dumps(claims_without_values(claims), indent=1),
+    if out_path.exists() and methods_path.exists() and not force:
+        existing = artifacts.load(artifacts.EstimandContract, out_path)
+        records = existing if isinstance(existing, list) else [existing]
+        if records and not artifacts.prompt_stale(records[0], PROMPTS):
+            return records, []
+
+    r = llm.call(
+        "contracts",
+        artifacts.load_prompt(
+            "stage0_contracts",
+            paper_text=paper_text,
+            claims_no_values=json.dumps(claims_without_values(claims), indent=1),
+        ),
+        paper_id=manifest.paper_id,
+        stage="0",
+        tier="strong",
+        schema=ContractsAndMethods,
+        large_context=True,
+        cwd=manifest.dir,
+        timeout_s=3600,
+        log_path=stage_dir / "logs" / "contracts.log",
     )
-    calls: list[str] = []
-    attempt_prompt = prompt
-    records: list[artifacts.EstimandContract] = []
-    hits: list[dict[str, Any]] = []
+    if r.parsed is None:
+        raise llm.LLMError(f"contracts failed: {r.error}")
+    out: ContractsAndMethods = r.parsed  # type: ignore[assignment]
+    if not out.redacted_methods.strip():
+        raise llm.LLMError("contracts call returned no redacted methods document")
+    calls = [r.ledger_id or ""]
+
+    meta = artifacts.ArtifactMeta(
+        artifact="EstimandContract",
+        stage="0",
+        inputs=inputs or {},
+        prompt_versions={n: artifacts.prompt_version(n) for n in PROMPTS},
+        model_calls=calls,
+    )
+    records = to_records(out.contracts, meta)
+    artifacts.save(records, out_path)
+    methods_path.write_text(out.redacted_methods.strip() + "\n")
+
     design = leakcheck.design_numbers_from_manifest(manifest)
-
-    for attempt in (1, 2):
-        r = llm.call(
-            "contracts" if attempt == 1 else "contracts:retry",
-            attempt_prompt,
-            paper_id=manifest.paper_id,
-            stage="0",
-            tier="strong",
-            schema=ContractList,
-            cwd=manifest.dir,
-            timeout_s=3600,
-            log_path=stage_dir / "logs" / f"contracts{attempt}.log",
-        )
-        calls.append(r.ledger_id or "")
-        if r.parsed is None:
-            raise llm.LLMError(f"contracts failed: {r.error}")
-        meta = artifacts.ArtifactMeta(
-            artifact="EstimandContract",
-            stage="0",
-            inputs=inputs or {},
-            prompt_versions={"stage0_contracts": artifacts.prompt_version("stage0_contracts")},
-            model_calls=list(calls),
-        )
-        records = to_records(r.parsed, meta)  # type: ignore[arg-type]
+    hits, repair_calls = redact.repair(manifest, [out_path, methods_path], claims, design)
+    if repair_calls:
+        calls += repair_calls
+        meta.model_calls = calls
+        records = artifacts.load(artifacts.EstimandContract, out_path)  # type: ignore[assignment]
+        records = records if isinstance(records, list) else [records]
+        for rec in records:
+            rec.meta = meta
         artifacts.save(records, out_path)
-        hits = leakcheck.scan([out_path], claims, design)
-        if not hits:
-            return records, calls
-        attempt_prompt = prompt + (
-            "\n\nYour previous contracts contained reported result values, which is "
-            "forbidden. Rewrite them without these numbers (describe the quantity "
-            "instead):\n" + json.dumps(hits, indent=1)[:4000]
-        )
-
-    out_path.unlink(missing_ok=True)  # never leave a leaking artifact behind
-    raise RuntimeError(f"contracts leak reported values after a retry: {hits}")
+    if hits:
+        print(f"contracts: {len(hits)} leak(s) survive repair; stage 1 will refuse", flush=True)
+    return records, calls

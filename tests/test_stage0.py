@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import json
+import shutil
+from pathlib import Path
 
-from reproscope.stage0 import leakcheck, readiness
+import pytest
+
+from reproscope import artifacts, llm, paths
+from reproscope.stage0 import contracts, leakcheck, readiness, redact
 
 
 def claim(**kw):
@@ -76,26 +81,80 @@ def test_schema_summary_free_text(tmp_path):
 
 def test_forbidden_strings_cover_rounding_and_leading_zero():
     forbidden, _ = leakcheck.forbidden_strings([claim(value=0.82, precision=2)])
-    assert {"0.82", ".82", "0.820", ".820"} <= set(forbidden)
+    assert {"0.82", ".82"} <= set(forbidden)
     assert forbidden["0.82"] == ["c001"]
     # One significant digit recovers no result and collides with alpha levels.
     assert "0.8" not in forbidden and ".8" not in forbidden
 
 
-def test_forbidden_strings_skip_rules():
+def test_forbidden_strings_cover_inferential_and_headline_claims_only():
     claims = [
-        claim(claim_id="c1", value=5.91),
-        claim(claim_id="c2", quantity_kind="p_value", value=0.001, comparator="<"),
-        claim(claim_id="c3", quantity_kind="n", value=29, importance="supporting"),
-        claim(claim_id="c4", quantity_kind="n", value=29, importance="headline"),
+        claim(claim_id="c1", value=5.91),  # headline t
+        claim(claim_id="c2", quantity_kind="r", value=0.314, importance="supporting"),
+        claim(claim_id="c3", quantity_kind="mean", value=36.67, importance="supporting"),
+        claim(claim_id="c4", quantity_kind="percent", value=42.0, importance="headline"),
+        claim(claim_id="c5", quantity_kind="sd", value=15.73, importance="supporting"),
     ]
-    forbidden, skipped = leakcheck.forbidden_strings(claims, design_numbers=[29])
+    forbidden, skipped = leakcheck.forbidden_strings(claims)
     reasons = {s["claim_id"]: s["reason"] for s in skipped}
-    assert "c2" in reasons and "threshold" in reasons["c2"]
-    assert "c3" in reasons  # small integer
-    assert "c4" not in reasons  # a headline sample size is a result
-    assert "29" in forbidden and forbidden["29"] == ["c4"]
-    assert "5.91" in forbidden
+
+    assert "5.91" in forbidden  # headline t
+    assert "0.314" in forbidden  # supporting correlation: an inferential kind
+    assert "42" in forbidden  # headline percentage
+    # Sample description the redacted methods must be able to state.
+    assert "c3" in reasons and "c5" in reasons
+    assert "36.67" not in forbidden and "15.73" not in forbidden
+
+
+def test_supporting_claims_need_three_significant_digits():
+    def forms(**kw):
+        return set(leakcheck.forbidden_strings([claim(quantity_kind="d", **kw)])[0])
+
+    # Two significant digits from a supporting claim collide with ordinary prose.
+    assert forms(value=0.85, importance="supporting") == set()
+    assert forms(value=12.0, precision=0, importance="supporting") == set()
+    assert {"0.812", ".812"} <= forms(value=0.812, precision=3, importance="supporting")
+    # A headline claim keeps its two-digit forms.
+    assert {"0.85", ".85"} <= forms(value=0.85, importance="headline")
+
+
+def test_a_rounding_onto_an_alpha_level_is_not_searched():
+    """Methods sections name their significance convention ("p between .05 and .10")."""
+    forbidden, _ = leakcheck.forbidden_strings(
+        [claim(quantity_kind="eta2", value=0.099, precision=3)]
+    )
+    assert "0.099" in forbidden and ".099" in forbidden
+    assert "0.10" not in forbidden and ".10" not in forbidden
+    # A value the paper itself printed at that precision is searched.
+    at_precision, _ = leakcheck.forbidden_strings(
+        [claim(quantity_kind="p_value", value=0.1, precision=2)]
+    )
+    assert "0.10" in at_precision and ".10" in at_precision
+
+
+def test_the_extractors_own_kind_label_still_counts_as_inferential():
+    """The arbiter records `ci_upper` alongside the validated kind `ci_bound`."""
+    forbidden, _ = leakcheck.forbidden_strings(
+        [
+            claim(
+                quantity_kind="ci_bound",
+                quantity_kind_raw="ci_upper",
+                value=16.8,
+                precision=1,
+                importance="supporting",
+            )
+        ]
+    )
+    assert "16.8" in forbidden
+
+
+def test_scan_does_not_read_a_percentage_as_a_test_statistic(tmp_path):
+    doc = tmp_path / "m.md"
+    doc.write_text("We excluded 8.4% of the participants for failing the attention check.\n")
+    assert leakcheck.scan([doc], [claim(quantity_kind="t", value=8.4, precision=1)]) == []
+    # The same digits without the percent sign are the statistic.
+    doc.write_text("The test gave 8.4 on this comparison.\n")
+    assert len(leakcheck.scan([doc], [claim(quantity_kind="t", value=8.4, precision=1)])) == 1
 
 
 def test_forbidden_strings_include_uncertainty_numbers():
@@ -205,3 +264,181 @@ def test_scan_takes_design_numbers_from_a_paper_id(monkeypatch):
 
     monkeypatch.setattr(paths, "manifest", lambda pid: FakeManifest())
     assert lc.design_numbers_from_manifest(FakeManifest()) == [0.5]
+
+
+# --- the combined contracts + redaction call ------------------------------
+
+
+@pytest.fixture
+def stage0_root(tmp_path, monkeypatch):
+    """A run tree under tmp_path, with the real prompt files copied in."""
+    monkeypatch.setattr(paths, "ROOT", tmp_path)
+    real = Path(__file__).resolve().parent.parent
+    shutil.copytree(real / "reproscope" / "prompts", tmp_path / "reproscope" / "prompts")
+    (tmp_path / "corpus" / "_p").mkdir(parents=True)
+    return tmp_path
+
+
+class Manifest:
+    paper_id = "_p"
+    design_numbers: list[float] = []
+    focal_claim = None
+
+    @property
+    def dir(self):
+        return paths.corpus_dir("_p")
+
+
+def record(**kw):
+    return artifacts.ClaimRecord.model_validate(claim(**kw))
+
+
+PAPER = "Participants were 40 students. Intimacy differed by condition, t(27) = 5.91, p < .001."
+
+
+def test_combined_call_writes_contracts_and_methods(stage0_root, monkeypatch):
+    calls = []
+
+    def fake_call(step, prompt, **kw):
+        calls.append((step, prompt, kw))
+        return llm.LLMResult(
+            text="",
+            parsed=contracts.ContractsAndMethods(
+                contracts=[
+                    contracts.SlimContract(
+                        analysis_id="a01",
+                        analysis_label="intimacy by condition",
+                        model_type="paired t test",
+                        versions_named=["R 4.1.0"],
+                    )
+                ],
+                redacted_methods="# Methods\n\nParticipants were 40 students.\n",
+            ),
+            ledger_id="L1",
+        )
+
+    monkeypatch.setattr(llm, "call", fake_call)
+    records, ledger = contracts.run(Manifest(), [record()], PAPER, {"pdf": "h"})
+
+    assert [c.analysis_id for c in records] == ["a01"]
+    assert records[0].versions_named == {"R": "4.1.0"}
+    assert ledger == ["L1"]
+    stage_dir = paths.run_dir("_p", 0)
+    assert "Participants were 40 students" in (stage_dir / "redacted_methods.md").read_text()
+
+    step, prompt, kw = calls[0]
+    assert (step, kw["tier"], kw["large_context"]) == ("contracts", "strong", True)
+    assert PAPER in prompt  # the paper is read exactly once
+    assert len(calls) == 1  # a clean scan means no repair call
+
+    # A second run reuses what is on disk instead of paying for the paper again.
+    calls.clear()
+    again, ledger = contracts.run(Manifest(), [record()], PAPER, {"pdf": "h"})
+    assert calls == [] and ledger == [] and [c.analysis_id for c in again] == ["a01"]
+
+
+def test_leak_repair_sends_only_the_offending_sentences(stage0_root, monkeypatch):
+    prompts = []
+
+    def fake_call(step, prompt, **kw):
+        prompts.append((step, prompt, kw))
+        if step == "contracts":
+            return llm.LLMResult(
+                text="",
+                parsed=contracts.ContractsAndMethods(
+                    contracts=[contracts.SlimContract(analysis_id="a01")],
+                    redacted_methods=(
+                        "# Methods\n\nParticipants were 40 students recruited on campus.\n"
+                        "Intimacy differed between conditions, t(27) = 5.91.\n"
+                        "The scale had seven points.\n"
+                    ),
+                ),
+                ledger_id="L1",
+            )
+        sent = json.loads(prompt.split("Items:\n")[1].split("\nReturn JSON")[0])
+        return llm.LLMResult(
+            text="",
+            parsed=redact.ScrubOut(
+                items=[
+                    redact.ScrubbedText(id=i["id"], text="The t statistic compared the conditions.")
+                    for i in sent
+                ]
+            ),
+            ledger_id="L2",
+        )
+
+    monkeypatch.setattr(llm, "call", fake_call)
+    contracts.run(Manifest(), [record()], PAPER, {})
+
+    repair_step, repair_prompt, kw = prompts[1]
+    assert repair_step == "leak_repair:1" and kw["tier"] == "cheap"
+    assert PAPER not in repair_prompt  # the paper never reaches the repair call
+    assert "recruited on campus" not in repair_prompt  # only the leaking sentence goes
+    assert "5.91" in repair_prompt
+    assert len(prompts) == 2  # one repair round clears it
+
+    methods = (paths.run_dir("_p", 0) / "redacted_methods.md").read_text()
+    assert "5.91" not in methods
+    assert "recruited on campus" in methods and "seven points" in methods
+
+
+def test_repair_stops_after_two_rounds_and_leaves_the_hits(stage0_root, monkeypatch):
+    methods = paths.run_dir("_p", 0) / "redacted_methods.md"
+    methods.write_text("Intimacy differed between conditions, t(27) = 5.91.\n")
+    rounds = []
+
+    def fake_call(step, prompt, **kw):
+        rounds.append(step)
+        sent = json.loads(prompt.split("Items:\n")[1].split("\nReturn JSON")[0])
+        # A rewrite that keeps the number: the repair does not converge.
+        return llm.LLMResult(
+            text="",
+            parsed=redact.ScrubOut(
+                items=[redact.ScrubbedText(id=i["id"], text=i["text"]) for i in sent]
+            ),
+            ledger_id="L",
+        )
+
+    monkeypatch.setattr(llm, "call", fake_call)
+    hits, calls = redact.repair(Manifest(), [methods], [record()], [])
+
+    assert rounds == ["leak_repair:1", "leak_repair:2"]
+    assert len(calls) == 2
+    assert [h["value"] for h in hits] == ["5.91"]  # the caller abstains on these
+
+
+# --- readiness ------------------------------------------------------------
+
+
+def test_readiness_prompt_carries_the_schema_and_no_paper_text(stage0_root, monkeypatch):
+    data = stage0_root / "corpus" / "_p" / "data"
+    data.mkdir()
+    (data / "d.csv").write_text("pid,intimacy\n1,4.5\n2,3.5\n")
+
+    class M(Manifest):
+        data_files = ["data/d.csv"]
+        codebook = None
+
+        def path(self, rel):
+            return paths.corpus_dir("_p") / rel
+
+    seen = {}
+
+    def fake_call(step, prompt, **kw):
+        seen.update({"step": step, "prompt": prompt, **kw})
+        return llm.LLMResult(
+            text="", parsed=readiness.ReadinessOut(confidence="high"), ledger_id="L"
+        )
+
+    monkeypatch.setattr(llm, "call", fake_call)
+    contract = artifacts.EstimandContract(
+        analysis_id="a01",
+        outcome="intimacy",
+        meta=artifacts.ArtifactMeta(artifact="EstimandContract"),
+    )
+    readiness.run(M(), [contract], {})
+
+    assert seen["tier"] == "mid"
+    assert "intimacy" in seen["prompt"]  # schema column and contract field
+    assert PAPER not in seen["prompt"] and "t(27)" not in seen["prompt"]
+    assert "EstimandContract" not in seen["prompt"]  # contract meta is stripped
