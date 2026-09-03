@@ -164,6 +164,7 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
         prompt = artifacts.load_prompt(
             "stage3_screen",
             contract=focal_contract.model_dump_json(indent=2),
+            schema=_schema_text(paper_id),
             factors=json.dumps(proposed.get("factors", []), indent=2),
         )
         r = llm.call("screen", prompt, paper_id=paper_id, stage="3",

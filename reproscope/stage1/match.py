@@ -228,6 +228,9 @@ def blind_claim(claim: artifacts.ClaimRecord) -> str:
 def link(
     paper_id: str, claim: artifacts.ClaimRecord, results_text: str, trace_text: str
 ) -> tuple[LinkResult, str | None]:
+    direct = direct_link(claim.claim_id, results_text)
+    if direct is not None:
+        return direct, None
     prompt = fill(
         "stage1_link_results",
         claim=blind_claim(claim),
@@ -239,6 +242,36 @@ def link(
     if r.parsed is None:
         return LinkResult(found=False, note=f"link call failed: {r.error}"), r.ledger_id
     return r.parsed, r.ledger_id  # type: ignore[return-value]
+
+
+def direct_link(claim_id: str, results_text: str) -> LinkResult | None:
+    """The replica's own results entry for this claim_id, when it wrote one with a value.
+
+    Replicas are asked to key results by claim_id, so the entry is the link; the model
+    call is reserved for claims the replica did not key (or keyed without a value).
+    """
+    try:
+        entries = json.loads(results_text).get("results", [])
+    except (json.JSONDecodeError, AttributeError):
+        return None
+    for e in entries:
+        if isinstance(e, dict) and e.get("claim_id") == claim_id and e.get("value") is not None:
+            try:
+                value = float(e["value"])
+            except (TypeError, ValueError):
+                return None
+            def _f(k):
+                try:
+                    return float(e[k]) if e.get(k) is not None else None
+                except (TypeError, ValueError):
+                    return None
+            n = e.get("n")
+            return LinkResult(
+                found=True, value=value, se=_f("se"), ci_lower=_f("ci_lower"),
+                ci_upper=_f("ci_upper"), n=int(n) if isinstance(n, (int, float)) else None,
+                unit_note="none", note="direct: replica keyed this claim_id in results.json",
+            )
+    return None
 
 
 def trace_equivalence(paper_id: str, traces: list[artifacts.ReplicaDecisionTrace]):
