@@ -7,9 +7,15 @@ import json
 
 import pytest
 
+import importlib
+
 from reproscope import paths
 from reproscope.report import build
 from reproscope.report.build import spec_curve_svg
+
+# `reproscope.report/__init__.py` does `from .build import build`, which shadows the
+# submodule attribute with the function; import the module directly to reach `_stage1`.
+build_mod = importlib.import_module("reproscope.report.build")
 
 FIXTURES = ["_fixture", "_fixture2", "_fixture3"]
 STAGE_MARKER = {
@@ -91,6 +97,30 @@ def test_match_table_shows_bands_and_claim_ids() -> None:
     assert 'class="cell band-A"' in html
     assert "c1" in html and "glm_1" in html and "opus_1" in html
     assert "Conjecture" in html  # diagnosis.md is labelled as conjecture
+
+
+def test_abstained_match_row_renders_as_abstained_not_notfound(tmp_path) -> None:
+    stage1 = tmp_path / "stage1"
+    replica_dir = stage1 / "replicas" / "glm_1"
+    replica_dir.mkdir(parents=True)
+    (replica_dir / "trace.json").write_text(json.dumps({"replica_id": "glm_1", "ran": True}))
+    (stage1 / "match.json").write_text(json.dumps({
+        "rows": [
+            {
+                "claim_id": "c1", "replica_id": "glm_1", "state": "abstained",
+                "abstain_reason": "replica produced no value for this claim",
+                "band": None, "replicated": None,
+            },
+        ],
+        "summaries": [{"claim_id": "c1", "n_ran": 0, "n_abstained": 1}],
+    }))
+    claims = [{"claim_id": "c1", "importance": "headline", "quantity_kind": "mean", "value": 4.09}]
+    ctx = build_mod._stage1(tmp_path, claims, [])
+    assert ctx is not None
+    cell = ctx["table"][0]["cells"][0]
+    assert cell["state"] == "abstained"
+    assert cell["label"] == "abstained"
+    assert "not found" not in cell["label"]
 
 
 def test_spec_curve_svg_handles_edge_cases() -> None:

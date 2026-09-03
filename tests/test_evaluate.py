@@ -122,7 +122,7 @@ def test_bands_count_only_replicas_that_ran(synthetic):
     r = evaluate.evaluate([synthetic])
     opus = _group(r, "opus")["match"]["all"]
     assert opus["n"] == 8  # 4 claims x 2 replicas; glm_1's rows excluded
-    assert opus["bands"] == {"A": 3, "B": 1, "C": 1, "fail": 1, "not_found": 2}
+    assert opus["bands"] == {"A": 3, "B": 1, "C": 1, "fail": 1, "not_found": 2, "abstained": 0}
     assert opus["n_found"] == 6
     assert opus["share_a"] == pytest.approx(3 / 8)
     assert opus["share_ab"] == pytest.approx(4 / 8)
@@ -132,6 +132,26 @@ def test_a_row_without_a_replicated_value_is_not_found_not_a_failed_match(synthe
     r = evaluate.evaluate([synthetic])
     # c4/opus_2 carries band "fail" with replicated None; it must land in not_found
     assert _group(r, "opus")["match"]["all"]["bands"]["not_found"] == 2
+
+
+def test_abstained_rows_are_excluded_from_the_denominators():
+    rows = [
+        {"band": "A", "replicated": 1.0, "state": "complete"},
+        {"band": "B", "replicated": 1.1, "state": "complete"},
+        {"band": None, "replicated": None, "state": "abstained",
+         "abstain_reason": "replica produced no value for this claim"},
+        {"band": None, "replicated": None, "state": "abstained",
+         "abstain_reason": "replica produced no value for this claim"},
+    ]
+    stats = evaluate._subset_stats(rows)
+    assert stats["n"] == 4
+    assert stats["n_abstained"] == 2
+    assert stats["bands"]["abstained"] == 2
+    # Only the two usable (non-abstained) rows count towards found/A/AB shares.
+    assert stats["n_found"] == 2
+    assert stats["share_found"] == 1.0
+    assert stats["share_a"] == pytest.approx(0.5)
+    assert stats["share_ab"] == pytest.approx(1.0)
 
 
 def test_headline_and_focal_subsets(synthetic):

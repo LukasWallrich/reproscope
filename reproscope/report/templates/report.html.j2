@@ -44,6 +44,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .cell{text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap}
 .band-A{background:var(--a)} .band-B{background:var(--b)} .band-C{background:var(--c)}
 .fail{background:var(--f)} .notfound{background:var(--nf);color:var(--muted)}
+.cell.abstained{background:#fdf6e6;color:var(--warn)}
 .failed{background:repeating-linear-gradient(45deg,#e6e8ec,#e6e8ec 5px,#cdd2da 5px,#cdd2da 10px);
   color:var(--muted)}
 .headline td:first-child{border-left:4px solid var(--accent)}
@@ -308,6 +309,7 @@ standardised differences.</p>
   <span class="band-A">A — within 2%</span><span class="band-B">B — within 20%</span>
   <span class="band-C">C — within 40%</span><span class="fail">fail / sign mismatch</span>
   <span class="notfound">claim not found by this replica</span>
+  <span class="cell abstained">abstained — no evidence either way</span>
   <span class="failed">replica failed to run</span>
 </div>
 <div class="scroll"><table>
@@ -375,7 +377,7 @@ traces. Comparable cells exclude claims a replica did not find and replicas that
 <div class="panel">
   <div class="kv">
     <div><b>triggered</b> {{ 'yes' if s1.targeted.triggered else 'no' }}</div>
-    <div><b>outcome</b> <span class="pill {{ 'bad' if s1.targeted.outcome in ['not_reachable','reachable_indefensibly'] else '' }}">{{ s1.targeted.outcome }}</span></div>
+    <div><b>outcome</b> <span class="pill {{ 'bad' if s1.targeted.outcome in ['not_reachable','reachable_indefensibly'] else ('warn' if s1.targeted.outcome == 'abstained' else '') }}">{{ s1.targeted.outcome }}</span></div>
     <div><b>attempts</b> {{ s1.targeted.attempts }}</div>
   </div>
   {% if s1.targeted.notes %}<p>{{ s1.targeted.notes }}</p>{% endif %}
@@ -480,8 +482,8 @@ space, no multiverse runs and no specification curve.</div>
 {% else %}
 <div class="panel">
   <div>
-    <span class="stat"><b>{{ s3.grid_size if s3.grid_size is not none else '—' }}</b><span>grid size</span></span>
-    <span class="stat"><b>{{ s3.n_specs }}</b><span>specifications run</span></span>
+    <span class="stat"><b>{{ s3.grid_size if s3.grid_size is not none else '—' }}</b><span>full grid size</span></span>
+    <span class="stat"><b>{{ s3.n_specs }}</b><span>specifications executed</span></span>
     <span class="stat"><b>{{ s3.n_converged }}</b><span>converged</span></span>
     <span class="stat"><b>{{ s3.reported_estimate|num }}</b><span>reported estimate</span></span>
     <span class="stat"><b>{{ s3.median|num }}</b><span>multiverse median</span></span>
@@ -496,6 +498,11 @@ space, no multiverse runs and no specification curve.</div>
   {% else %}not computed.{% endif %}
   {% if s3.range[0] is not none %}
   Multiverse estimates run from {{ s3.range[0]|num }} to {{ s3.range[1]|num }}.{% endif %}
+  {% if s3.sampled %}
+  <br><b>Sampled.</b> The {{ s3.n_specs }} specifications executed are a
+  {{ s3.sample_fraction|pct }} stratified sample of the full grid of
+  {{ s3.grid_size }}; the figures above describe that sample, not the whole multiverse.
+  {% endif %}
   {% if s3.focal_quantity.kind %} The focal quantity is <b>{{ s3.focal_quantity.kind }}</b>
   (claim <code>{{ s3.claim_id }}</code>).{% endif %}</p>
 </div>

@@ -292,8 +292,18 @@ def _stage1(base: Path, claims: list[dict[str, Any]], ledger_rows: list[dict]) -
             if not ran_by_rid.get(rid, True):
                 cells.append({"state": "failed", "label": "did not run", "row": None})
                 continue
-            if row is None or row.get("replicated") is None:
+            if row is None:
                 cells.append({"state": "notfound", "label": "not found", "row": None})
+                continue
+            if row.get("state") == "abstained" or row.get("replicated") is None:
+                cells.append(
+                    {
+                        "state": "abstained",
+                        "label": "abstained",
+                        "row": row,
+                        "detail": row.get("abstain_reason") or "",
+                    }
+                )
                 continue
             band = row.get("band")
             state = "fail" if (row.get("sign_match") is False or band == "fail") else f"band-{band}" if band else "notfound"
@@ -504,6 +514,8 @@ def _stage3(base: Path) -> dict[str, Any] | None:
         "grid_size": space.get("grid_size"),
         "n_specs": space.get("n_specs") or len(runs),
         "n_converged": ranking.get("n_converged", n_converged),
+        "sampled": bool(space.get("sampled")),
+        "sample_fraction": space.get("sample_fraction"),
         "incompatibilities": space.get("incompatibilities") or [],
         "reported_estimate": space.get("reported_estimate") or ranking.get("reported_estimate"),
         "rank": space.get("rank") if space.get("rank") is not None else ranking.get("rank"),

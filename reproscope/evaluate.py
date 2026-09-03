@@ -31,7 +31,7 @@ from typing import Any
 from . import config, paths
 from . import focal as focal_mod
 
-BANDS = ("A", "B", "C", "fail", "not_found")
+BANDS = ("A", "B", "C", "fail", "not_found", "abstained")
 SEVERITIES = ("minor", "major", "critical", "unrated")
 VERDICTS = ("clean", "suspicious", "hardcoded", "not_run")
 TIER_ORDER = ("frontier", "cheap", "unknown")
@@ -232,7 +232,12 @@ def load_paper(paper_id: str) -> dict[str, Any]:
 
 
 def _band_of(row: dict) -> str:
-    """A row whose replica could not bind the claim is 'not found', not a failed match."""
+    """A row whose link call abstained carries no evidence either way and is never a
+    'not found' either: that reads as the replica having looked and missed, which a
+    failed link call did not do.
+    """
+    if row.get("state") == "abstained":
+        return "abstained"
     if row.get("replicated") is None:
         return "not_found"
     band = row.get("band")
@@ -241,18 +246,21 @@ def _band_of(row: dict) -> str:
 
 def _subset_stats(rows: list[dict]) -> dict[str, Any]:
     if not rows:
-        return {"n": 0, "n_found": None, "share_found": None, "bands": dict.fromkeys(BANDS, 0),
-                "share_a": None, "share_ab": None}
+        return {"n": 0, "n_abstained": 0, "n_found": None, "share_found": None,
+                "bands": dict.fromkeys(BANDS, 0), "share_a": None, "share_ab": None}
     counts = Counter(_band_of(r) for r in rows)
     n = len(rows)
-    found = n - counts["not_found"]
+    n_abstained = counts["abstained"]
+    usable = n - n_abstained
+    found = usable - counts["not_found"]
     return {
         "n": n,
-        "n_found": found,
-        "share_found": found / n,
+        "n_abstained": n_abstained,
+        "n_found": found if usable else None,
+        "share_found": (found / usable) if usable else None,
         "bands": {b: counts[b] for b in BANDS},
-        "share_a": counts["A"] / n,
-        "share_ab": (counts["A"] + counts["B"]) / n,
+        "share_a": (counts["A"] / usable) if usable else None,
+        "share_ab": ((counts["A"] + counts["B"]) / usable) if usable else None,
     }
 
 
@@ -519,7 +527,7 @@ def _bands_cells(g: dict) -> list[str]:
     b = g["match"]["all"]["bands"]
     n = g["match"]["all"]["n"]
     if not n:
-        return [g["label"]] + [NA] * 5
+        return [g["label"]] + [NA] * len(BANDS)
     return [g["label"]] + [str(b[k]) for k in BANDS]
 
 
@@ -573,7 +581,7 @@ def render_md(result: dict[str, Any]) -> str:
     out.append("")
     rows = [_bands_cells(g) for g in result["families"]] + \
            [_bands_cells(g) for g in result["tiers"]]
-    out.append(_table(["family", "A", "B", "C", "fail", "not found"], rows))
+    out.append(_table(["family", "A", "B", "C", "fail", "not found", "abstained"], rows))
     out.append("")
 
     out.append("## Fixes, hardcoding audit, blinding")
