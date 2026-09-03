@@ -196,6 +196,7 @@ def repair(
     files: list[Path],
     claims: list[artifacts.ClaimRecord],
     design: list[float],
+    result_ids: set[str] | None = None,
     rounds: int = REPAIR_ROUNDS,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Rewrite the leaking passages in place, at most `rounds` times.
@@ -205,7 +206,8 @@ def repair(
     """
     stage_dir = paths.run_dir(manifest.paper_id, 0)
     calls: list[str] = []
-    hits = leakcheck.scan(files, claims, design)
+    result_ids = result_ids or set()
+    hits = leakcheck.scan(files, claims, design, result_claim_ids=result_ids)
     for round_no in range(1, rounds + 1):
         if not hits:
             break
@@ -231,7 +233,7 @@ def repair(
         if r.parsed is None:
             break
         apply_repairs(files, items, {t.id: t.text for t in r.parsed.items})  # type: ignore[attr-defined]
-        hits = leakcheck.scan(files, claims, design)
+        hits = leakcheck.scan(files, claims, design, result_claim_ids=result_ids)
     return hits, calls
 
 
@@ -448,10 +450,11 @@ def run(
         + "\n"
     )
 
-    hits, repair_calls = repair(manifest, [methods_path, blind_path], claims, design)
+    result_ids = leakcheck.result_claim_ids(claims, contract_records)
+    hits, repair_calls = repair(manifest, [methods_path, blind_path], claims, design, result_ids)
     calls += repair_calls
 
-    forbidden, skipped = leakcheck.forbidden_strings(claims, design)
+    forbidden, skipped = leakcheck.forbidden_strings(claims, design, result_ids)
     blind_dir = build_blind_dir(stage_dir)
     audit: dict[str, Any] = {}
     if not hits:

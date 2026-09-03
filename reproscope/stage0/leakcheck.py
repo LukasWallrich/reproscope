@@ -4,9 +4,17 @@ Pure Python, no model call. Stage 1 imports `scan()` and must refuse to launch a
 replica while it returns hits.
 
 What counts as a result: the quantities a reader would use to judge the study's
-findings. Sample description (mean age, sex percentages, exclusion rates, scale
-reliability) is design material the redacted methods are meant to state, so it is
-forbidden only when the paper reports it as a headline claim.
+findings. A claim is forbidden material when its quantity kind is inferential
+(t, F, chi2, z, d, r, OR, HR, eta2, coefficient, p_value, se, ci_bound), when the
+paper reports it as a headline claim, or when it is any numeric claim of an analysis
+that carries one of those two — the descriptive quantities printed alongside a test
+recover the test. A supporting claim of an analysis that carries neither is sample
+description (mean age, sex percentages, exclusion rates, scale reliability), which
+the redacted methods are meant to state, and is skipped.
+
+Thresholds and the design-number exemption apply to every forbidden claim alike:
+2 significant digits from a headline claim or a p-value, 3 from any other, roundings
+onto an alpha level dropped, and values the manifest names as design constants exempt.
 """
 
 from __future__ import annotations
@@ -109,11 +117,47 @@ def _uncertainty_numbers(unc: Any) -> list[float]:
     return [float(t) for t in re.findall(r"-?\d*\.?\d+", text) if t not in {".", "-"}]
 
 
+def _contract_field(contract: Any, name: str) -> Any:
+    if isinstance(contract, dict):
+        return contract.get(name)
+    return getattr(contract, name, None)
+
+
+def result_claim_ids(claims: Iterable[Any], contracts: Iterable[Any]) -> set[str]:
+    """Claim ids of every analysis that carries a result.
+
+    An analysis carries a result when at least one of its claims is of an inferential
+    kind or is a headline claim. Every claim of such an analysis is then treated as a
+    result, because the means and counts printed beside a test recover the test.
+    Claims no contract lists are not included.
+    """
+    carries: dict[str, bool] = {}
+    for claim in claims:
+        cid = str(_claim_field(claim, "claim_id") or "")
+        carries[cid] = bool(
+            (_kinds(claim) & INFERENTIAL_KINDS)
+            or _claim_field(claim, "importance") == "headline"
+        )
+    out: set[str] = set()
+    for contract in contracts:
+        ids = [str(c) for c in (_contract_field(contract, "claim_ids") or [])]
+        if any(carries.get(cid) for cid in ids):
+            out.update(ids)
+    return out
+
+
 def forbidden_strings(
-    claims: Iterable[Any], design_numbers: Iterable[float] = ()
+    claims: Iterable[Any],
+    design_numbers: Iterable[float] = (),
+    result_claim_ids: Iterable[str] = (),
 ) -> tuple[dict[str, list[str]], list[dict[str, Any]]]:
-    """Map printed-form -> claim_ids it came from, plus the values deliberately skipped."""
+    """Map printed-form -> claim_ids it came from, plus the values deliberately skipped.
+
+    `result_claim_ids` names the claims of result-carrying analyses; each is forbidden
+    whatever its own quantity kind.
+    """
     design = {round(float(d), 6) for d in design_numbers if _as_float(d) is not None}
+    result_ids = {str(c) for c in result_claim_ids}
     forbidden: dict[str, list[str]] = {}
     skipped: list[dict[str, Any]] = []
 
@@ -126,13 +170,13 @@ def forbidden_strings(
         if value is None:
             continue
 
-        if not headline and not (kinds & INFERENTIAL_KINDS):
+        if not headline and not (kinds & INFERENTIAL_KINDS) and cid not in result_ids:
             skipped.append(
                 {
                     "claim_id": cid,
                     "value": value,
-                    "reason": f"supporting {'/'.join(sorted(kinds)) or 'claim'}: "
-                    "sample description, not an inferential result",
+                    "reason": f"supporting {'/'.join(sorted(kinds)) or 'claim'} of an "
+                    "analysis that reports no result: sample description",
                 }
             )
             continue
@@ -220,6 +264,7 @@ def scan(
     claims: Iterable[Any],
     design_numbers: Iterable[float] = (),
     paper_id: str | None = None,
+    result_claim_ids: Iterable[str] = (),
 ) -> list[dict[str, Any]]:
     """Every occurrence of a reported value in the given blind files.
 
@@ -229,6 +274,9 @@ def scan(
     Pass `paper_id` (or `design_numbers`) so the paper's own design constants are
     exempt; without them a manipulation probability the methods must state reads as
     a leak of any result that rounds to the same digits.
+
+    Pass `result_claim_ids` (from `result_claim_ids(claims, contracts)`) so every claim
+    of an analysis that reports a result is searched, not only the inferential ones.
     """
     if paper_id is not None and not design_numbers:
         from .. import paths as _paths
@@ -236,7 +284,7 @@ def scan(
         design_numbers = design_numbers_from_manifest(_paths.manifest(paper_id))
     claims = list(claims)
     kinds = {str(_claim_field(c, "claim_id")): _kinds(c) for c in claims}
-    forbidden, _ = forbidden_strings(claims, design_numbers)
+    forbidden, _ = forbidden_strings(claims, design_numbers, result_claim_ids)
     patterns = [
         (
             form,

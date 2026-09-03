@@ -253,6 +253,38 @@ def test_design_numbers_exempt_a_colliding_value(tmp_path):
     assert hits == []
 
 
+def test_result_claim_ids_widen_the_scan_to_a_whole_analysis():
+    """A mean printed beside a test recovers the test; a mean in a descriptives-only
+    analysis is sample description the redacted methods must be able to state."""
+    claims = [
+        claim(claim_id="c1", quantity_kind="t", value=5.91, importance="supporting"),
+        claim(claim_id="c2", quantity_kind="mean", value=4.581, precision=3,
+              importance="supporting"),
+        claim(claim_id="c3", quantity_kind="mean", value=36.674, precision=3,
+              importance="supporting"),
+    ]
+    contracts = [
+        {"analysis_id": "a1", "claim_ids": ["c1", "c2"]},
+        {"analysis_id": "a2", "claim_ids": ["c3"]},
+    ]
+    result_ids = leakcheck.result_claim_ids(claims, contracts)
+    assert result_ids == {"c1", "c2"}
+
+    forbidden, skipped = leakcheck.forbidden_strings(claims, result_claim_ids=result_ids)
+    assert "4.581" in forbidden
+    assert "36.674" not in forbidden
+    assert [s["claim_id"] for s in skipped] == ["c3"]
+
+
+def test_result_claim_ids_skip_claims_no_contract_lists():
+    claims = [
+        claim(claim_id="c1", quantity_kind="t", value=5.91),
+        claim(claim_id="c9", quantity_kind="mean", value=4.58, importance="supporting"),
+    ]
+    contracts = [{"analysis_id": "a1", "claim_ids": ["c1"]}]
+    assert leakcheck.result_claim_ids(claims, contracts) == {"c1"}
+
+
 def test_scan_takes_design_numbers_from_a_paper_id(monkeypatch):
     """Stage 1 calls scan(files, claims, paper_id=...) and gets the paper's exemptions."""
     from reproscope import paths

@@ -13,7 +13,7 @@ import shutil
 from pathlib import Path
 
 from .. import artifacts, paths
-from ..stage0.leakcheck import scan
+from ..stage0.leakcheck import result_claim_ids, scan
 
 
 PROSE_SUFFIXES = {".txt", ".md", ".rtf", ".do", ".log"}
@@ -139,6 +139,9 @@ def assemble(paper_id: str, replica_id: str) -> Path:
             raise FileNotFoundError(f"stage0 output missing: {p}")
 
     claim_records = claims(paper_id)
+    # Every claim of an analysis that reports a result is forbidden, not only the
+    # inferential ones: a mean printed beside a test recovers the test.
+    result_ids = result_claim_ids(claim_records, contracts(paper_id))
     work = replica_dir(paper_id, replica_id) / "work"
     (work / "out").mkdir(parents=True, exist_ok=True)
     shutil.copy2(methods_src, work / "METHODS.md")
@@ -147,7 +150,12 @@ def assemble(paper_id: str, replica_id: str) -> Path:
     )
 
     # The scan runs over the files the replica receives, not their stage 0 sources.
-    hits = scan([work / "METHODS.md", work / "CONTRACT.json"], claim_records, paper_id=paper_id)
+    hits = scan(
+        [work / "METHODS.md", work / "CONTRACT.json"],
+        claim_records,
+        paper_id=paper_id,
+        result_claim_ids=result_ids,
+    )
     if hits:
         shutil.rmtree(work)
         raise LeakDetected(
@@ -161,7 +169,7 @@ def assemble(paper_id: str, replica_id: str) -> Path:
     # Prose shipped with the data (author notes, READMEs) can state the results.
     # Data tables are not scanned: a reported value also occurring as a cell is not leakage.
     notes = [p for p in sorted((work / "data").iterdir()) if p.suffix.lower() in PROSE_SUFFIXES]
-    note_hits = scan(notes, claim_records) if notes else []
+    note_hits = scan(notes, claim_records, result_claim_ids=result_ids) if notes else []
     if note_hits:
         shutil.rmtree(work)
         raise LeakDetected(

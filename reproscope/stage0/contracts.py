@@ -145,7 +145,10 @@ def run(
     methods_path.write_text(out.redacted_methods.strip() + "\n")
 
     design = leakcheck.design_numbers_from_manifest(manifest)
-    hits, repair_calls = redact.repair(manifest, [out_path, methods_path], claims, design)
+    result_ids = leakcheck.result_claim_ids(claims, records)
+    hits, repair_calls = redact.repair(
+        manifest, [out_path, methods_path], claims, design, result_ids
+    )
     if repair_calls:
         calls += repair_calls
         meta.model_calls = calls
