@@ -1,8 +1,10 @@
 """The only place reproscope talks to models.
 
-`call()` dispatches on a route from models.toml and always writes one ledger row.
-Structured calls validate against a pydantic model and retry once with the
-validation error appended.
+`call()` dispatches on a route from models.toml and writes one ledger row per
+attempt, so retries are visible in cost audits. Structured calls validate against
+a pydantic model and retry once with the validation error appended. Non-agentic
+calls whose estimated input exceeds `MAX_INPUT_TOKENS` are refused before any
+network or subprocess work.
 """
 
 from __future__ import annotations
@@ -24,9 +26,19 @@ from . import config, ledger
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 API_KEYS_ENV = Path.home() / ".claude" / "api_keys.env"
 
+ROUTES = ("openrouter", "claude_p", "codex", "opencode")
+
+#: Estimated input tokens above which a non-agentic call is refused.
+MAX_INPUT_TOKENS = 60_000
+
 
 class LLMError(RuntimeError):
-    pass
+    """A route failure. `stats` and `log` carry whatever the route got before failing."""
+
+    def __init__(self, message: str, *, stats: dict[str, Any] | None = None, log: str = ""):
+        super().__init__(message)
+        self.stats = stats or {}
+        self.log = log
 
 
 @dataclass
@@ -175,6 +187,7 @@ def _openrouter(
     images: list[Path] | None,
     system: str | None,
     timeout_s: int,
+    reasoning_max_tokens: int | None,
 ) -> tuple[str, dict[str, Any]]:
     import httpx
 
@@ -195,6 +208,10 @@ def _openrouter(
         },
     }
     if schema is not None:
+        # A structured reply is a small JSON object; without a cap the cheap
+        # reasoning models spend most of their output budget thinking about it.
+        if reasoning_max_tokens is not None:
+            body["reasoning"] = {"max_tokens": reasoning_max_tokens}
         payload, strict = schema_payload(schema)
         body["response_format"] = {
             "type": "json_schema",
@@ -258,10 +275,13 @@ def _claude_p(
     cwd: Path | None,
     agentic: bool,
     timeout_s: int,
+    max_turns: int | None,
 ) -> tuple[str, dict[str, Any], str]:
     # Project settings only: the user's global CLAUDE.md would otherwise steer every call
     # (orchestration, advisor, deviation flagging), which contaminates blind replicas.
     cmd = ["claude", "-p", "--model", model, "--setting-sources", "project"]
+    if agentic and max_turns is not None:
+        cmd += ["--max-turns", str(max_turns)]
     if agentic:
         # stream-json + verbose logs every tool call, so the blinding audit can grep the
         # transcript for reads outside the work directory.
@@ -285,22 +305,41 @@ def _claude_p(
         prompt = f"{prompt}\n\nRead these image files with the Read tool before answering:\n{listing}"
     proc = _run(cmd, prompt, cwd, timeout_s, _subprocess_env())
     log = (proc.stdout or "") + ("\n[stderr]\n" + proc.stderr if proc.stderr else "")
+    # The result event is parsed before any failure is raised, so a crashed or
+    # error-reporting session still ledgers the tokens it burned.
+    data = _claude_result(proc.stdout or "", agentic)
+    stats = _claude_stats(data)
     if proc.returncode != 0:
-        raise LLMError(f"claude exited {proc.returncode}: {proc.stderr[-800:]}")
-    try:
-        if agentic:
-            events = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
-            data = next(e for e in reversed(events) if e.get("type") == "result")
-        else:
-            data = json.loads(proc.stdout)
-    except (json.JSONDecodeError, StopIteration) as e:
-        raise LLMError(f"claude gave non-JSON output: {proc.stdout[:500]}") from e
+        raise LLMError(
+            f"claude exited {proc.returncode}: {proc.stderr[-800:]}", stats=stats, log=log
+        )
+    if data is None:
+        raise LLMError(f"claude gave non-JSON output: {proc.stdout[:500]}", stats=stats, log=log)
     if data.get("is_error"):
-        raise LLMError(f"claude reported an error: {str(data.get('result'))[:500]}")
+        raise LLMError(
+            f"claude reported an error: {str(data.get('result'))[:500]}", stats=stats, log=log
+        )
     structured = data.get("structured_output")
     text = json.dumps(structured) if structured is not None else (data.get("result") or "")
+    return text, stats, log
+
+
+def _claude_result(stdout: str, agentic: bool) -> dict[str, Any] | None:
+    """The final `result` object from a claude -p run, or None if stdout has none."""
+    try:
+        if agentic:
+            events = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+            return next((e for e in reversed(events) if e.get("type") == "result"), None)
+        return json.loads(stdout) if stdout.strip() else None
+    except json.JSONDecodeError:
+        return None
+
+
+def _claude_stats(data: dict[str, Any] | None) -> dict[str, Any]:
+    if data is None:
+        return {"tokens_in": 0, "tokens_out": 0, "tokens_reasoning": 0, "cost_usd": 0.0, "raw": None}
     usage = data.get("usage") or {}
-    stats = {
+    return {
         "tokens_in": (usage.get("input_tokens", 0) or 0)
         + (usage.get("cache_read_input_tokens", 0) or 0)
         + (usage.get("cache_creation_input_tokens", 0) or 0),
@@ -310,7 +349,6 @@ def _claude_p(
         "cost_usd": float(data.get("total_cost_usd") or 0.0),
         "raw": data,
     }
-    return text, stats, log
 
 
 _TOKENS_USED = re.compile(r"tokens used\s*[:\n]?\s*([\d,]+)", re.IGNORECASE)
@@ -350,14 +388,20 @@ def _codex(
         # Run non-interactively, codex puts the answer on stdout and the banner,
         # transcript and token count on stderr.
         log = (proc.stdout or "") + ("\n[stderr]\n" + proc.stderr if proc.stderr else "")
+        stats = _codex_stats(log)
         if proc.returncode != 0:
-            raise LLMError(f"codex exited {proc.returncode}: {proc.stderr[-800:]}")
+            raise LLMError(
+                f"codex exited {proc.returncode}: {proc.stderr[-800:]}", stats=stats, log=log
+            )
         text = last.read_text().strip() if last.exists() else _codex_tail(log)
+    return text, stats, log
+
+
+def _codex_stats(log: str) -> dict[str, Any]:
     m = _TOKENS_USED.search(log)
     total = int(m.group(1).replace(",", "")) if m else 0
     # codex reports one total only; it is booked as input so totals stay honest.
-    stats = {"tokens_in": total, "tokens_out": 0, "tokens_reasoning": 0, "cost_usd": 0.0, "raw": None}
-    return text, stats, log
+    return {"tokens_in": total, "tokens_out": 0, "tokens_reasoning": 0, "cost_usd": 0.0, "raw": None}
 
 
 def _codex_tail(stdout: str) -> str:
@@ -391,11 +435,25 @@ def _opencode(
     env["OPENROUTER_API_KEY"] = openrouter_key()
     proc = _run(cmd, "", workdir, timeout_s, env)  # prompt is the positional arg; stdin stays empty
     log = (proc.stdout or "") + ("\n[stderr]\n" + proc.stderr if proc.stderr else "")
+    texts, stats = _opencode_stream(proc.stdout or "")
     if proc.returncode != 0:
-        raise LLMError(f"opencode exited {proc.returncode}: {proc.stderr[-800:]}")
+        raise LLMError(
+            f"opencode exited {proc.returncode}: {proc.stderr[-800:]}", stats=stats, log=log
+        )
+    if not texts:
+        raise LLMError(
+            f"opencode produced no text parts: {(proc.stdout or '')[:500]}", stats=stats, log=log
+        )
+    return "\n".join(texts).strip(), stats, log
+
+
+def _opencode_stream(stdout: str) -> tuple[list[str], dict[str, Any]]:
+    """Text parts and usage from the NDJSON stream, parsed however the run ended."""
     texts: list[str] = []
-    stats = {"tokens_in": 0, "tokens_out": 0, "tokens_reasoning": 0, "cost_usd": 0.0, "raw": None}
-    for line in (proc.stdout or "").splitlines():
+    stats: dict[str, Any] = {
+        "tokens_in": 0, "tokens_out": 0, "tokens_reasoning": 0, "cost_usd": 0.0, "raw": None,
+    }
+    for line in stdout.splitlines():
         line = line.strip()
         if not line.startswith("{"):
             continue
@@ -408,13 +466,17 @@ def _opencode(
             texts.append(part["text"])
         elif ev.get("type") == "step_finish":
             tok = part.get("tokens") or {}
-            stats["tokens_in"] += int(tok.get("input") or 0)
+            cache = tok.get("cache") or {}
+            # Cached input is billed and prompted with, so it belongs in tokens_in.
+            stats["tokens_in"] += (
+                int(tok.get("input") or 0)
+                + int(cache.get("read") or 0)
+                + int(cache.get("write") or 0)
+            )
             stats["tokens_out"] += int(tok.get("output") or 0)
             stats["tokens_reasoning"] += int(tok.get("reasoning") or 0)
             stats["cost_usd"] += float(part.get("cost") or 0.0)
-    if not texts:
-        raise LLMError(f"opencode produced no text parts: {(proc.stdout or '')[:500]}")
-    return "\n".join(texts).strip(), stats, log
+    return texts, stats
 
 
 # --- the public entry point ----------------------------------------------
@@ -441,9 +503,19 @@ def call(
     large_context: bool = False,
     reasoning_max_tokens: int | None = 512,
 ) -> LLMResult:
-    """Route one call. `max_turns` caps agentic claude_p sessions; `large_context`
-    opts a non-agentic call out of the input-size refusal; `reasoning_max_tokens`
-    caps hidden reasoning on OpenRouter structured calls (None = provider default)."""
+    """Route one call and ledger every attempt.
+
+    `max_turns` caps agentic claude_p sessions. `large_context` opts a non-agentic
+    call out of the `MAX_INPUT_TOKENS` refusal. `reasoning_max_tokens` caps hidden
+    reasoning on OpenRouter structured calls; it applies to calls that pass a
+    `schema` only, and `None` leaves the provider default in place.
+
+    Token and cost figures on the returned result sum across attempts;
+    `ledger_id` is the id of the last attempt's row.
+
+    Raises `LLMError` for an unknown route and for an oversize non-agentic input,
+    after writing one ledger row so the refusal shows up in cost audits.
+    """
     if tier is not None:
         spec = config.tier(tier)
         route, model = route or spec.route, model or spec.model
@@ -451,25 +523,68 @@ def call(
         raise ValueError("call() needs either tier= or both route= and model=")
 
     started = time.monotonic()
+    totals = {"tokens_in": 0, "tokens_out": 0, "tokens_reasoning": 0, "cost_usd": 0.0}
+    logs: list[str] = []
+    ledger_id: str | None = None
+
+    def book(attempt: int, stats: dict[str, Any], error: str | None, seconds: float) -> str:
+        for key in totals:
+            totals[key] += stats.get(key, 0) or 0
+        return ledger.record(
+            paper_id,
+            {
+                "stage": stage,
+                "step": step,
+                "route": route,
+                "model": model,
+                "attempt": attempt,
+                "tokens_in": stats.get("tokens_in", 0),
+                "tokens_out": stats.get("tokens_out", 0),
+                "tokens_reasoning": stats.get("tokens_reasoning", 0),
+                "cost_usd": stats.get("cost_usd", 0.0),
+                "duration_s": round(seconds, 2),
+                "ok": error is None,
+                "error": error,
+                **(extra or {}),
+            },
+        )
+
+    if route not in ROUTES:
+        message = f"unknown route {route!r}; have {list(ROUTES)}"
+        book(1, {}, message, time.monotonic() - started)
+        raise LLMError(message)
+
+    if not agentic and not large_context:
+        estimate = (len(prompt) + len(system or "")) // 4
+        if estimate > MAX_INPUT_TOKENS:
+            message = (
+                f"input of about {estimate} tokens exceeds the {MAX_INPUT_TOKENS} limit for a "
+                f"non-agentic call; shrink the prompt or pass large_context=True"
+            )
+            book(1, {}, message, time.monotonic() - started)
+            raise LLMError(message)
+
     text = ""
     stats: dict[str, Any] = {}
     parsed: BaseModel | None = None
     error: str | None = None
-    logs: list[str] = []
     attempt_prompt = prompt
 
     for attempt in (1, 2):
+        attempt_started = time.monotonic()
+        stats, error, retry_prompt, transient = {}, None, None, False
         try:
             if route == "openrouter":
                 text, stats = _openrouter(
                     attempt_prompt, model,
                     schema=schema, images=images, system=system, timeout_s=timeout_s,
+                    reasoning_max_tokens=reasoning_max_tokens,
                 )
             elif route == "claude_p":
                 text, stats, log = _claude_p(
                     attempt_prompt, model,
                     schema=schema, images=images, system=system,
-                    cwd=cwd, agentic=agentic, timeout_s=timeout_s,
+                    cwd=cwd, agentic=agentic, timeout_s=timeout_s, max_turns=max_turns,
                 )
                 logs.append(log)
             elif route == "codex":
@@ -478,40 +593,42 @@ def call(
                     schema=schema, cwd=cwd, agentic=agentic, timeout_s=timeout_s,
                 )
                 logs.append(log)
-            elif route == "opencode":
+            else:
                 text, stats, log = _opencode(
                     attempt_prompt, model, cwd=cwd, agentic=agentic, timeout_s=timeout_s
                 )
                 logs.append(log)
-            else:
-                raise LLMError(f"unknown route {route!r}")
-            error = None
         except subprocess.TimeoutExpired as e:
             error = f"timeout after {timeout_s}s"
-            logs.append((e.stdout or "") + (e.stderr or "") if isinstance(e.stdout, str) else "")
-            break
+            logs.append(_decode(e.stdout) + _decode(e.stderr))
         except Exception as e:  # noqa: BLE001 - every failure must still be ledgered
             error = f"{type(e).__name__}: {e}"
+            stats = getattr(e, "stats", None) or {}
+            if getattr(e, "log", ""):
+                logs.append(e.log)
             # CLI routes fail transiently (rate limits, concurrent sessions); retry once.
-            if attempt == 1 and route != "openrouter" and not agentic:
-                time.sleep(20)
-                continue
-            break
+            transient = route != "openrouter" and not agentic
+        else:
+            if schema is not None:
+                try:
+                    parsed = validate(schema, text)
+                except ValidationError as e:
+                    error = f"schema validation failed: {e}"
+                    retry_prompt = (
+                        f"{prompt}\n\nYour previous reply did not validate against the required "
+                        f"schema. Fix it and reply with the JSON object only.\n"
+                        f"Previous reply:\n{text[:4000]}\n\nValidation error:\n{e}"
+                    )
 
-        if schema is None:
+        ledger_id = book(attempt, stats, error, time.monotonic() - attempt_started)
+        if error is None or attempt == 2:
             break
-        try:
-            parsed = validate(schema, text)
+        if retry_prompt is not None:
+            attempt_prompt = retry_prompt
+            continue
+        if not transient:
             break
-        except ValidationError as e:
-            error = f"schema validation failed: {e}"
-            if attempt == 2:
-                break
-            attempt_prompt = (
-                f"{prompt}\n\nYour previous reply did not validate against the required "
-                f"schema. Fix it and reply with the JSON object only.\n"
-                f"Previous reply:\n{text[:4000]}\n\nValidation error:\n{e}"
-            )
+        time.sleep(20)
 
     duration = time.monotonic() - started
     if log_path is not None and logs:
@@ -519,36 +636,24 @@ def call(
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text("\n\n---- next attempt ----\n\n".join(logs))
 
-    ok = error is None
-    ledger_id = ledger.record(
-        paper_id,
-        {
-            "stage": stage,
-            "step": step,
-            "route": route,
-            "model": model,
-            "tokens_in": stats.get("tokens_in", 0),
-            "tokens_out": stats.get("tokens_out", 0),
-            "tokens_reasoning": stats.get("tokens_reasoning", 0),
-            "cost_usd": stats.get("cost_usd", 0.0),
-            "duration_s": round(duration, 2),
-            "ok": ok,
-            "error": error,
-            **(extra or {}),
-        },
-    )
     return LLMResult(
         text=text,
         parsed=parsed,
-        tokens_in=stats.get("tokens_in", 0),
-        tokens_out=stats.get("tokens_out", 0),
-        tokens_reasoning=stats.get("tokens_reasoning", 0),
-        cost_usd=0.0 if route in config.SUBSCRIPTION_ROUTES else stats.get("cost_usd", 0.0),
+        tokens_in=totals["tokens_in"],
+        tokens_out=totals["tokens_out"],
+        tokens_reasoning=totals["tokens_reasoning"],
+        cost_usd=0.0 if route in config.SUBSCRIPTION_ROUTES else totals["cost_usd"],
         duration_s=duration,
         route=route,
         model=model,
-        ok=ok,
+        ok=error is None,
         error=error,
         ledger_id=ledger_id,
         raw=stats.get("raw"),
     )
+
+
+def _decode(stream: Any) -> str:
+    if isinstance(stream, bytes):
+        return stream.decode(errors="replace")
+    return stream or ""

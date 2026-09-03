@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import paths
-from .config import SUBSCRIPTION_ROUTES
+from .config import SUBSCRIPTION_ROUTES, shadow_price
 
 NUMERIC_FIELDS = ("tokens_in", "tokens_out", "tokens_reasoning", "cost_usd", "cost_usd_equiv", "duration_s")
 
@@ -31,8 +31,18 @@ def record(paper_id: str, row: dict[str, Any]) -> str:
         # Subscription seats are prepaid: the marginal spend of a call is zero.
         # For claude_p the CLI still reports a list-price equivalent, kept as
         # cost_usd_equiv for sizing, never summed into cost_usd.
+        # Routes that report nothing (codex) get the list-equivalent from the
+        # shadow price in models.toml, applied to every token the route reported.
         if out.get("cost_usd"):
             out.setdefault("cost_usd_equiv", out["cost_usd"])
+        else:
+            price = shadow_price(str(out.get("model") or ""))
+            if price:
+                tokens = sum(
+                    float(out.get(f) or 0)
+                    for f in ("tokens_in", "tokens_out", "tokens_reasoning")
+                )
+                out.setdefault("cost_usd_equiv", tokens * price / 1e6)
         out["cost_usd"] = 0.0
         out["cost_source"] = "subscription"
     else:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import BaseModel
@@ -62,10 +63,14 @@ def test_ledger_summary_empty(sandbox):
 def test_config_reads_models_toml():
     spec = config.tier("strong")
     assert (spec.route, spec.model) == ("claude_p", "opus")
+    assert config.tier("mid").model == "sonnet"
     assert config.replicas()["glm"].runs == 2
+    assert "sol" not in config.replicas()
     assert config.executor().route == "opencode"
     labels = dict((s.route + "/" + s.model, label) for label, s in config.all_specs())
     assert "opencode/z-ai/glm-5.3-flash" in labels
+    assert config.shadow_price("gpt-5.6-luna") == 2.5
+    assert config.shadow_price("opus") is None
     with pytest.raises(KeyError):
         config.tier("no_such_tier")
 
@@ -200,11 +205,133 @@ def test_open_maps_disable_strict_mode():
     assert "JSON object matching this schema" in llm.schema_instruction(Probe)
 
 
-def test_call_records_a_ledger_row_on_failure(sandbox):
-    r = llm.call("boom", "hi", paper_id="p1", stage="0", route="nonexistent", model="m")
-    assert not r.ok and "unknown route" in r.error
+def test_unknown_route_raises_and_records_a_ledger_row(sandbox):
+    with pytest.raises(llm.LLMError, match="unknown route"):
+        llm.call("boom", "hi", paper_id="p1", stage="0", route="nonexistent", model="m")
     row = json.loads(ledger.ledger_path("p1").read_text().strip())
-    assert row["ok"] is False and row["id"] == r.ledger_id
+    assert row["ok"] is False and row["attempt"] == 1
+
+
+# --- llm routing, with the network and the CLIs mocked ---------------------
+
+
+def _or_reply(content: str) -> dict:
+    return {
+        "choices": [{"message": {"content": content}}],
+        "usage": {
+            "prompt_tokens": 10, "completion_tokens": 5, "cost": 0.001,
+            "completion_tokens_details": {"reasoning_tokens": 3},
+        },
+    }
+
+
+def openrouter_stub(monkeypatch, replies: list[dict]) -> list[dict]:
+    """Serve `replies` in order to `_openrouter`; returns the list of posted bodies."""
+    import httpx
+
+    posted: list[dict] = []
+    queue = list(replies)
+
+    class FakeResponse:
+        status_code = 200
+
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self._payload
+
+    class FakeClient:
+        def __init__(self, **_):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def post(self, _url, headers=None, json=None):
+            posted.append(json)
+            return FakeResponse(queue.pop(0))
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(httpx, "Client", FakeClient)
+    return posted
+
+
+def cli_stub(monkeypatch, stdout: str, returncode: int = 0):
+    # opencode reads the OpenRouter key before it spawns; keep the real one out.
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(
+        llm, "_run",
+        lambda *a, **k: SimpleNamespace(returncode=returncode, stdout=stdout, stderr=""),
+    )
+
+
+def test_reasoning_cap_applies_to_structured_openrouter_calls_only(sandbox, monkeypatch):
+    posted = openrouter_stub(monkeypatch, [_or_reply('{"answer": "OK"}'), _or_reply("plain")])
+    r = llm.call("s", "hi", paper_id="p", stage="0", route="openrouter", model="m", schema=Probe)
+    assert r.ok, r.error
+    assert posted[0]["reasoning"] == {"max_tokens": 512}
+    llm.call("s", "hi", paper_id="p", stage="0", route="openrouter", model="m")
+    assert "reasoning" not in posted[1]
+
+
+def test_oversize_non_agentic_input_is_refused_and_ledgered(sandbox, monkeypatch):
+    big = "x" * (4 * llm.MAX_INPUT_TOKENS + 400)
+    with pytest.raises(llm.LLMError, match="exceeds"):
+        llm.call("big", big, paper_id="p", stage="0", route="openrouter", model="m")
+    rows = ledger.rows("p")
+    assert len(rows) == 1
+    assert rows[0]["ok"] is False and "large_context=True" in rows[0]["error"]
+
+    openrouter_stub(monkeypatch, [_or_reply("fine")])
+    r = llm.call("big", big, paper_id="p", stage="0", route="openrouter", model="m",
+                 large_context=True)
+    assert r.ok and len(ledger.rows("p")) == 2
+
+
+def test_every_attempt_is_ledgered_and_tokens_sum(sandbox, monkeypatch):
+    posted = openrouter_stub(monkeypatch, [_or_reply("not json"), _or_reply('{"answer": "OK"}')])
+    r = llm.call("s", "hi", paper_id="p", stage="0", route="openrouter", model="m", schema=Probe)
+    assert r.ok and r.parsed.answer == "OK"
+    assert "did not validate" in posted[1]["messages"][0]["content"]
+
+    rows = ledger.rows("p")
+    assert [row["attempt"] for row in rows] == [1, 2]
+    assert [row["ok"] for row in rows] == [False, True]
+    assert r.ledger_id == rows[1]["id"]
+    assert (r.tokens_in, r.tokens_out, r.tokens_reasoning) == (20, 10, 6)
+    assert r.cost_usd == pytest.approx(0.002)
+
+
+def test_opencode_counts_cached_input_tokens(sandbox, monkeypatch):
+    stdout = "\n".join([
+        json.dumps({"type": "text", "part": {"text": "OK"}}),
+        json.dumps({"type": "step_finish", "part": {
+            "tokens": {"input": 100, "output": 10, "reasoning": 5,
+                       "cache": {"read": 900, "write": 50}},
+            "cost": 0.01,
+        }}),
+    ])
+    cli_stub(monkeypatch, stdout)
+    r = llm.call("s", "hi", paper_id="p", stage="0", route="opencode", model="m")
+    assert r.ok and r.text == "OK"
+    assert (r.tokens_in, r.tokens_out, r.tokens_reasoning) == (1050, 10, 5)
+
+
+def test_codex_tokens_are_priced_at_the_shadow_rate(sandbox, monkeypatch):
+    cli_stub(monkeypatch, "codex\nOK\ntokens used: 1,000\n")
+    r = llm.call("s", "hi", paper_id="p", stage="0", route="codex", model="gpt-5.6-luna")
+    assert r.ok and r.tokens_in == 1000
+    assert r.cost_usd == 0.0  # subscription seat: no marginal cash
+    row = ledger.rows("p")[0]
+    assert row["cost_source"] == "subscription"
+    assert row["cost_usd_equiv"] == pytest.approx(1000 * 2.5 / 1e6)
 
 
 # --- live route probes ----------------------------------------------------

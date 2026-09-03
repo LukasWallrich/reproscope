@@ -26,6 +26,8 @@ class Config(BaseModel):
     tiers: dict[str, ModelSpec]
     replicas: dict[str, ReplicaSpec] = {}
     executor: ModelSpec | None = None
+    # USD per million tokens for routes that report no price, keyed by model name.
+    shadow_prices: dict[str, float] = {}
 
 
 @lru_cache(maxsize=None)
@@ -46,6 +48,11 @@ def tier(name: str) -> ModelSpec:
 
 def replicas() -> dict[str, ReplicaSpec]:
     return config().replicas
+
+
+def shadow_price(model: str) -> float | None:
+    """USD per million tokens assumed for a model whose route reports no price."""
+    return config().shadow_prices.get(model)
 
 
 def executor() -> ModelSpec:

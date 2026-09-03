@@ -13,6 +13,10 @@ model = "openai/gpt-5.6-luna"
 route = "openrouter"
 model = "z-ai/glm-5.3-flash"
 
+[tiers.mid]                 # readiness and other short judgement calls
+route = "claude_p"
+model = "sonnet"
+
 [tiers.strong]
 route = "claude_p"
 model = "opus"
@@ -25,16 +29,11 @@ model = "gpt-5.6-sol"
 [replicas.opus]
 route = "claude_p"
 model = "opus"
-runs = 2
+runs = 1
 
 [replicas.fable]
 route = "claude_p"
 model = "claude-fable-5-1"
-runs = 1
-
-[replicas.sol]
-route = "codex"
-model = "gpt-5.6-sol"
 runs = 1
 
 [replicas.luna]
@@ -55,3 +54,10 @@ runs = 2
 [executor]                  # Stage 3 multiverse execution
 route = "opencode"
 model = "z-ai/glm-5.3-flash"
+
+# USD per million tokens for routes that report no price (codex). Used only for
+# list-equivalent totals in the ledger, never for cash spend.
+# ASSUMPTION: both values are placeholders — edit them to the published list prices.
+[shadow_prices]
+"gpt-5.6-sol" = 2.5
+"gpt-5.6-luna" = 2.5
