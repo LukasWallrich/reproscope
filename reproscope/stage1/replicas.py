@@ -155,6 +155,15 @@ def rerun_script(work: Path, script: Path, rdir: Path) -> dict[str, Any]:
     The agent's own results.json is kept as results.agent.json and the file is
     removed before the run, so its presence afterwards proves the script wrote it.
     """
+    # Scripts often hard-code the absolute path of the directory the agent ran in, so
+    # the re-execution happens in that same isolation copy (recreated from work/ if it
+    # is gone) and the outputs are copied back afterwards.
+    repo_work = work
+    iso = blind.ISOLATION_ROOT / rdir.parents[2].name / rdir.name
+    if not iso.exists():
+        iso = blind.isolate(work, rdir.parents[2].name, rdir.name)
+    work = iso
+    script = iso / "out" / script.name
     out_dir = work / "out"
     results = out_dir / "results.json"
     agent_copy = rdir / "results.agent.json"
@@ -186,6 +195,7 @@ def rerun_script(work: Path, script: Path, rdir: Path) -> dict[str, Any]:
     new_payload = _read_json(results) if regenerated else None
     if not regenerated and agent_copy.exists():
         shutil.copy2(agent_copy, results)  # keep the agent's file for the match step
+    blind.collect(iso, repo_work)
 
     agent_vals = _result_values(agent_payload) if agent_payload is not None else {}
     new_vals = _result_values(new_payload) if new_payload is not None else {}
