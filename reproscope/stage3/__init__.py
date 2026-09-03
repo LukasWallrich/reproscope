@@ -267,6 +267,17 @@ def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None)
               f"({grid['sample_fraction']:.2%}) as a stratified sample seeded from the "
               f"paper id", flush=True)
 
+    # Nothing the screen accepted, other than the paper's own choices, can change the
+    # estimate or its significance: there is no curve to draw, and the executor, the
+    # ranking and the reading would all cost model time to reach that same conclusion.
+    if not mv.result_moving_levels(grid):
+        space = _abstain(paper_id, focal, grid, proposed, paper, inputs, calls)
+        artifacts.save(space, space_path)
+        paths.mark_done(stage3, inputs)
+        print(f"stage 3: {space.abstain_reason}", flush=True)
+        print(f"stage 3: wrote {space_path}", flush=True)
+        return space
+
     # --- 4. execute + verify ---------------------------------------------
     execute_path = stage3 / "execute.json"
     # A failed executor still writes its report, so resume on the artefact that matters:
@@ -379,6 +390,73 @@ def binding_is_determinate(notes: list[str]) -> bool:
     )
 
 
+def _factors(grid: dict[str, Any]) -> list[SpecFactor]:
+    factors: list[SpecFactor] = []
+    for f in grid["factors"]:
+        # A level the paper itself used carries verdict "paper"; `screen_verdict` says
+        # what the screen made of it, so a reader can see when the screen would have
+        # thrown out the paper's own choice.
+        levels = [FactorLevel(value=lv["value"], verdict=lv.get("verdict", "defensible"),
+                              rationale=lv.get("rationale"), how=lv.get("how"),
+                              affects=lv.get("affects", "estimate"),
+                              screen_verdict=lv.get("screen_verdict", "defensible"))
+                  for lv in f["levels"]]
+        levels += [FactorLevel(value=r["level"], verdict="rejected", rationale=r["rationale"])
+                   for r in grid.get("rejected_levels", []) if r["factor"] == f["name"]]
+        src = f.get("source")
+        factors.append(SpecFactor(
+            name=f["name"],
+            source=src if src in ("trace", "grid", "default", "code") else None,
+            levels=levels,
+            field=f.get("field"),
+            paper_level=f.get("paper_level"),
+        ))
+    return factors
+
+
+def _abstain(
+    paper_id: str,
+    focal: dict[str, Any],
+    grid: dict[str, Any],
+    proposed: dict[str, Any],
+    paper: dict[str, Any],
+    inputs: dict[str, str],
+    calls: list[str],
+) -> SpecificationSpace:
+    """The specification space when no implementable factor can move the estimate."""
+    unimplementable = grid.get("unimplementable", [])
+    reason = (
+        "no implementable factor can move the estimate or its significance; "
+        f"{len(unimplementable)} unimplementable factors listed"
+    )
+    return SpecificationSpace(
+        meta=ArtifactMeta(
+            artifact="SpecificationSpace", stage="3", inputs=inputs,
+            prompt_versions={n: artifacts.prompt_version(n) for n in PROMPTS},
+            model_calls=[c for c in calls if c],
+        ),
+        state="abstained",
+        abstain_reason=reason,
+        confidence="high",
+        open_ambiguities=(list(grid.get("notes", [])) + list(focal.get("notes", []))
+                          + list(paper.get("notes", []))),
+        claim_id=focal["focal_quantity"]["claim_id"],
+        factors=_factors(grid),
+        unimplementable=unimplementable,
+        incompatibilities=[[i["a"], i["b"]] for i in grid.get("incompatible", [])],
+        grid_size=grid.get("grid_size"),
+        runs=[],
+        reported_estimate=focal["focal_quantity"].get("reported_value"),
+        n_specs=0,
+        focal_binding_notes=list(focal.get("notes", [])),
+        focal_quantity=focal["focal_quantity"],
+        analysis_id=focal["analysis_id"],
+        paper_level_source=paper.get("source"),
+        screen_adjustments=grid.get("adjustments", []),
+        dropped_factors=grid.get("dropped_factors", []),
+    )
+
+
 def _assemble(
     paper_id: str,
     focal: dict[str, Any],
@@ -392,26 +470,7 @@ def _assemble(
     calls: list[str],
     paper: dict[str, Any],
 ) -> SpecificationSpace:
-    factors: list[SpecFactor] = []
-    for f in grid["factors"]:
-        # A level the paper itself used carries verdict "paper"; `screen_verdict` says
-        # what the screen made of it, so a reader can see when the screen would have
-        # thrown out the paper's own choice.
-        levels = [FactorLevel(value=lv["value"], verdict=lv.get("verdict", "defensible"),
-                              rationale=lv.get("rationale"), how=lv.get("how"),
-                              screen_verdict=lv.get("screen_verdict", "defensible"))
-                  for lv in f["levels"]]
-        levels += [FactorLevel(value=r["level"], verdict="rejected", rationale=r["rationale"])
-                   for r in grid.get("rejected_levels", []) if r["factor"] == f["name"]]
-        src = f.get("source")
-        factors.append(SpecFactor(
-            name=f["name"],
-            source=src if src in ("trace", "grid", "default", "code") else None,
-            levels=levels,
-            field=f.get("field"),
-            paper_level=f.get("paper_level"),
-        ))
-
+    factors = _factors(grid)
     names = [f["name"] for f in grid["factors"]]
     runs = [SpecRun(spec={k: r.get(k, "") for k in names if k in r},
                     estimate=r["_estimate"], se=r["_se"], p=r["_p"],
@@ -438,6 +497,7 @@ def _assemble(
         open_ambiguities=ambiguities,
         claim_id=focal["focal_quantity"]["claim_id"],
         factors=factors,
+        unimplementable=grid.get("unimplementable", []),
         incompatibilities=[[i["a"], i["b"]] for i in grid.get("incompatible", [])],
         grid_size=grid.get("grid_size"),
         runs=runs,

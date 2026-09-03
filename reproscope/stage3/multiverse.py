@@ -56,6 +56,9 @@ class ProposedLevel(BaseModel):
 
     value: str
     how: str = ""
+    # The significance threshold this level implies, when it changes one (a Bonferroni
+    # or other multiplicity correction). Absent means the executor's default of .05.
+    p_threshold: float | None = None
 
 
 class ProposedFactor(BaseModel):
@@ -68,10 +71,20 @@ class ProposedFactor(BaseModel):
     paper_level: str | None = None
 
 
+class Unimplementable(BaseModel):
+    """A choice the enumerator identified but the supplied data cannot vary."""
+
+    model_config = ConfigDict(extra="allow")
+
+    name: str
+    reason: str = ""
+
+
 class EnumerateOut(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     factors: list[ProposedFactor] = []
+    unimplementable: list[Unimplementable] = []
     notes: str | None = None
 
 
@@ -80,6 +93,9 @@ class ScreenedLevel(BaseModel):
 
     value: str
     verdict: Literal["defensible", "rejected"]
+    # What varying the level can change. A screen output written before this field
+    # existed says nothing, and the level is taken to bear on the estimate.
+    affects: Literal["estimate", "inference", "reporting"] = "estimate"
     rationale: str | None = None
 
 
@@ -273,13 +289,14 @@ def build_grid(
         levels: list[dict[str, Any]] = []
         for lv in pf.get("levels", []):
             value = lv.get("value", "")
+            alpha = {"p_threshold": lv["p_threshold"]} if lv.get("p_threshold") else {}
             is_paper = bool(paper_level) and _norm(paper_level) == _norm(value)
             sv = verdicts.get((_norm(name), _norm(value)))
             if sv is None:
                 notes.append(f"{name}={value}: not returned by the screen; kept by default")
-                levels.append({"value": value, "how": lv.get("how", ""),
+                levels.append({"value": value, "how": lv.get("how", ""), **alpha,
                                "verdict": "paper" if is_paper else "defensible",
-                               "rationale": "not screened"})
+                               "affects": "estimate", "rationale": "not screened"})
             elif sv.verdict == "rejected" and is_paper:
                 # Never drop the paper's own choice: the curve must have room for the
                 # estimate the paper reported, labelled for what the screen thinks of it.
@@ -287,15 +304,16 @@ def build_grid(
                                 "rationale": sv.rationale or ""})
                 notes.append(f"factor {name!r}: the screen rejected the paper's own level "
                              f"{value!r}; kept in the grid with verdict 'paper'")
-                levels.append({"value": value, "how": lv.get("how", ""),
-                               "verdict": "paper", "rationale": sv.rationale or "",
+                levels.append({"value": value, "how": lv.get("how", ""), **alpha,
+                               "verdict": "paper", "affects": sv.affects,
+                               "rationale": sv.rationale or "",
                                "screen_verdict": "rejected"})
             elif sv.verdict == "rejected":
                 rejected.append({"factor": name, "level": value, "rationale": sv.rationale or ""})
             else:
-                levels.append({"value": value, "how": lv.get("how", ""),
+                levels.append({"value": value, "how": lv.get("how", ""), **alpha,
                                "verdict": "paper" if is_paper else "defensible",
-                               "rationale": sv.rationale or ""})
+                               "affects": sv.affects, "rationale": sv.rationale or ""})
         if not levels:
             notes.append(f"factor {name!r} dropped: every level was rejected")
             continue
@@ -369,12 +387,31 @@ def build_grid(
         "grid_size": _grid_size(factors, incompatible),
         "full_factorial": math.prod(len(f["levels"]) for f in factors) if factors else 0,
         "dropped_factors": dropped,
+        "unimplementable": [dict(u) for u in proposed.get("unimplementable", [])],
         "cap": cap,
         "adjustments": screen.get("adjustments", []),
         "notes": notes,
     }
     apply_exec_cap(grid, paper_id=paper_id, exec_cap=exec_cap)
     return grid
+
+
+def result_moving_levels(grid: dict[str, Any]) -> list[dict[str, str]]:
+    """The defensible levels, other than the paper's own, that can change the result.
+
+    Robustness covers the estimate and its significance, so a level that only moves the
+    test or the p-value (an adjusted alpha, a one- versus two-tailed test) is a branch
+    worth running. A level that changes only how the result is presented is not: a grid
+    holding nothing else has no curve to draw, and the rest of the stage would spend an
+    executor run and two model calls to say so.
+    """
+    return [
+        {"factor": f["name"], "level": lv["value"]}
+        for f in grid.get("factors", [])
+        for lv in f.get("levels", [])
+        if lv.get("verdict") != "paper"
+        and lv.get("affects", "estimate") in ("estimate", "inference")
+    ]
 
 
 def apply_exec_cap(
@@ -540,7 +577,9 @@ def _norm_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", str(name).lower()).strip("_")
 
 
-RESULT_COLUMNS = ("spec_id", "estimate", "se", "p", "n", "converged", "error")
+RESULT_COLUMNS = ("spec_id", "estimate", "se", "p", "n", "converged", "error",
+                  "p_threshold")
+DEFAULT_ALPHA = 0.05
 
 
 def read_specs(path: Path, grid: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -589,6 +628,8 @@ def read_specs(path: Path, grid: dict[str, Any] | None = None) -> list[dict[str,
         r["_se"] = _as_float(r.get("se"))
         r["_p"] = _as_float(r.get("p"))
         r["_converged"] = _truthy(r.get("converged", "true")) if "converged" in r else True
+        alpha = _as_float(r.get("p_threshold"))
+        r["_alpha"] = alpha if alpha else DEFAULT_ALPHA
         n = _as_float(r.get("n"))
         r["_n"] = int(n) if n is not None else None
     return rows
@@ -650,7 +691,9 @@ def rank_reported(
     with_p = [r for r in ok if r["_p"] is not None]
     out["n_with_p"] = len(with_p)
     if with_p:
-        out["share_p05"] = round(sum(1 for r in with_p if r["_p"] < 0.05) / len(with_p), 6)
+        out["share_significant"] = round(
+            sum(1 for r in with_p if r["_p"] < r.get("_alpha", DEFAULT_ALPHA)) / len(with_p), 6)
+        out["alphas"] = sorted({r.get("_alpha", DEFAULT_ALPHA) for r in with_p})
 
     if grid:
         paper = {f["name"]: f["paper_level"] for f in grid.get("factors", [])
@@ -825,7 +868,9 @@ def executor_grid(grid: dict[str, Any]) -> dict[str, Any]:
     return {
         "factors": [
             {"name": f["name"], "field": f.get("field"),
-             "levels": [{"value": lv["value"], "how": lv.get("how", "")} for lv in f["levels"]]}
+             "levels": [{"value": lv["value"], "how": lv.get("how", ""),
+                         **({"p_threshold": lv["p_threshold"]} if lv.get("p_threshold") else {})}
+                        for lv in f["levels"]]}
             for f in grid.get("factors", [])
         ],
         # The executor gets ids and levels only; which spec is the paper's stays out of its view.

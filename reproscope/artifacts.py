@@ -353,6 +353,10 @@ class FactorLevel(BaseModel):
     value: str
     verdict: Literal["defensible", "rejected", "paper"] | None = None
     rationale: str | None = None
+    # What varying this level can change: the point estimate, only the test or p-value,
+    # or only how the result is presented. A grid whose defensible non-paper levels all
+    # leave the estimate alone cannot draw a specification curve.
+    affects: Literal["estimate", "inference", "reporting"] = "estimate"
 
 
 class SpecFactor(BaseModel):
@@ -375,6 +379,9 @@ class SpecRun(BaseModel):
 
 class SpecificationSpace(Artifact):
     claim_id: str | None = None
+    # Factors the enumerator identified but could not implement from the supplied data,
+    # each with the reason. They bound what the multiverse could cover.
+    unimplementable: list[dict[str, str]] = []
     factors: list[SpecFactor] = []
     incompatibilities: list[list[str]] = []
     grid_size: int | None = None

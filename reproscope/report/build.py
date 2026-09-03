@@ -494,10 +494,27 @@ def _stage3(base: Path) -> dict[str, Any] | None:
     if space is None and interp is None:
         return None
     space = space or {}
+    factors = space.get("factors") or []
+    if space.get("state") == "abstained":
+        # No specification the screen accepted could move the estimate, so there is no
+        # curve, no ranking and no reading of one. Artefacts of an earlier grid may still
+        # sit in the directory; none of them describes this space.
+        return {
+            "space": space,
+            "abstained": True,
+            "abstain_reason": space.get("abstain_reason"),
+            "factors": factors,
+            "unimplementable": space.get("unimplementable") or [],
+            "claim_id": space.get("claim_id"),
+            "focal_quantity": space.get("focal_quantity") or {},
+            "reported_estimate": space.get("reported_estimate"),
+            "grid_size": space.get("grid_size"),
+            "incompatibilities": space.get("incompatibilities") or [],
+            "dropped_factors": space.get("dropped_factors") or [],
+        }
     runs = space.get("runs") or []
     if not runs:
         runs = _runs_from_csv(d / "work" / "out" / "specs.csv")
-    factors = space.get("factors") or []
     ranking = space.get("ranking") or {}
     ij = space.get("interpretation_json") or {}
     # The level the paper itself used, per factor. Recorded in three places over
@@ -526,7 +543,8 @@ def _stage3(base: Path) -> dict[str, Any] | None:
         "rank": space.get("rank") if space.get("rank") is not None else ranking.get("rank"),
         "extremeness": ranking.get("extremeness"),
         "share_same_sign": ranking.get("share_same_sign"),
-        "share_p05": ranking.get("share_p05", ij.get("share_p05")),
+        "share_significant": ranking.get("share_significant", ij.get("share_significant")),
+        "alphas": ranking.get("alphas") or [],
         "median": ranking.get("median"),
         "range": [ranking.get("min"), ranking.get("max")],
         "claim_id": space.get("claim_id"),

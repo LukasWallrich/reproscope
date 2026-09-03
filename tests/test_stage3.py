@@ -299,7 +299,7 @@ def test_rank_places_the_reported_estimate_and_reports_extremeness():
     assert r["extremeness"] == pytest.approx(1 / 5)   # the smaller of the two shares
     assert r["median"] == 0.3
     assert r["share_same_sign"] == 1.0
-    assert r["share_p05"] == 1.0
+    assert r["share_significant"] == 1.0
     assert r["closest_spec"]["estimate"] == 0.5
 
 
@@ -346,7 +346,7 @@ def test_rank_ignores_failed_specifications_and_counts_shares():
     assert r["n_converged"] == 3
     assert r["n_failed"] == 1
     assert r["share_same_sign"] == pytest.approx(2 / 3)
-    assert r["share_p05"] == pytest.approx(2 / 3)
+    assert r["share_significant"] == pytest.approx(2 / 3)
 
 
 def test_rank_finds_the_paper_level_specification():
@@ -736,3 +736,136 @@ def test_the_paper_verdict_survives_into_the_artifact():
     # a level nobody flagged keeps the screen's own verdict
     unadjusted = next(f for f in space.factors if f.name == "covariate").levels[0]
     assert (unadjusted.verdict, unadjusted.screen_verdict) == ("paper", "defensible")
+
+
+# --- the abstain gate: nothing in the grid can move the estimate -----------
+
+
+def _screen_affecting(**affects: str) -> dict:
+    """SCREEN with `affects` set on the named levels; the rest keep the default."""
+    screen = json.loads(json.dumps(SCREEN))
+    for f in screen["factors"]:
+        for lv in f["levels"]:
+            lv["affects"] = affects.get(lv["value"], "estimate")
+    return screen
+
+
+REPORTING_ONLY = {"keep all": "reporting", "baseline adjusted": "reporting",
+                  "3 SD trim": "reporting", "pooled": "reporting"}
+
+
+def test_a_screen_without_affects_treats_every_level_as_moving_the_estimate():
+    """The field is new; a screen written before it still builds a grid to run."""
+    grid = mv.build_grid(PROPOSED, SCREEN)
+    assert all(lv["affects"] == "estimate" for f in grid["factors"] for lv in f["levels"])
+    assert mv.result_moving_levels(grid)
+
+
+def test_levels_that_only_change_the_presentation_leave_nothing_to_run():
+    grid = mv.build_grid(PROPOSED, _screen_affecting(**REPORTING_ONLY))
+    assert mv.result_moving_levels(grid) == []
+
+
+def test_a_level_that_moves_only_the_test_is_still_worth_running():
+    """Robustness covers significance, so an adjusted alpha is a branch, not a no-op."""
+    screen = _screen_affecting(**{**REPORTING_ONLY, "pooled": "inference"})
+    grid = mv.build_grid(PROPOSED, screen)
+    assert mv.result_moving_levels(grid) == [{"factor": "estimator", "level": "pooled"}]
+
+
+def test_one_estimate_moving_level_is_enough():
+    screen = _screen_affecting(**{**REPORTING_ONLY, "3 SD trim": "estimate"})
+    grid = mv.build_grid(PROPOSED, screen)
+    assert mv.result_moving_levels(grid) == [{"factor": "outliers", "level": "3 SD trim"}]
+
+
+def test_the_enumerator_s_unimplementable_factors_reach_the_grid():
+    proposed = json.loads(json.dumps(PROPOSED))
+    proposed["unimplementable"] = [
+        {"name": "TVA first-stage model fit", "reason": "the files hold fitted parameters"}
+    ]
+    grid = mv.build_grid(proposed, SCREEN)
+    assert grid["unimplementable"] == proposed["unimplementable"]
+
+
+def _stage3_run(sandbox, monkeypatch, screen: dict, steps: list | None = None):
+    """Run Stage 3 with every model call stubbed, recording the steps it called."""
+    from types import SimpleNamespace
+
+    from reproscope import llm
+    import reproscope.stage3 as stage3
+
+    proposed = json.loads(json.dumps(PROPOSED))
+    proposed["unimplementable"] = [{"name": "TVA model fit", "reason": "fitted parameters only"}]
+    parsed = {"enumerate": mv.EnumerateOut.model_validate(proposed),
+              "screen": mv.ScreenOut.model_validate(screen),
+              "paper_level": mv.PaperLevelsOut()}
+    steps = [] if steps is None else steps
+
+    def fake(step, prompt, **kwargs):
+        steps.append(step)
+        return SimpleNamespace(text="prose", parsed=parsed.get(step), ok=True,
+                               error=None, ledger_id=f"{step}-1", duration_s=0.1)
+
+    monkeypatch.setattr(llm, "call", fake)
+    return stage3.run("_fixture3", force=True)
+
+
+def test_stage_3_abstains_without_running_the_executor(sandbox, monkeypatch):
+    steps: list[str] = []
+    space = _stage3_run(sandbox, monkeypatch, _screen_affecting(**REPORTING_ONLY), steps)
+
+    assert space.state == "abstained"
+    assert space.abstain_reason == (
+        "no implementable factor can move the estimate or its significance; "
+        "1 unimplementable factors listed"
+    )
+    assert space.n_specs == 0 and space.runs == []
+    assert space.unimplementable == [{"name": "TVA model fit", "reason": "fitted parameters only"}]
+    assert [f.name for f in space.factors]
+    assert "execute" not in steps and "interpret" not in steps
+
+    written = json.loads((sandbox / "runs" / "_fixture3" / "stage3" / "space.json").read_text())
+    assert written["state"] == "abstained" and written["n_specs"] == 0
+    # the stage is done: a second run reuses the abstention rather than repeating it
+    import reproscope.stage3 as stage3
+    assert stage3.run("_fixture3").state == "abstained"
+
+
+@pytest.mark.parametrize("moving", ["estimate", "inference"])
+def test_stage_3_proceeds_when_a_level_can_change_the_result(sandbox, monkeypatch, moving):
+    screen = _screen_affecting(**{**REPORTING_ONLY, "3 SD trim": moving})
+    steps: list[str] = []
+    # The stubbed executor writes no specs.csv, so the stage stops at the ranking; that
+    # it reached the executor at all is what this asserts.
+    with pytest.raises(RuntimeError, match="no specs.csv"):
+        _stage3_run(sandbox, monkeypatch, screen, steps)
+    assert "execute" in steps
+    space = json.loads((sandbox / "runs" / "_fixture3" / "stage3" / "grid.json").read_text())
+    assert space["grid_size"] > 1
+
+
+def test_significance_uses_each_specification_s_own_threshold(tmp_path):
+    """A Bonferroni level is judged against its own alpha, not a blanket .05."""
+    csv_path = tmp_path / "specs.csv"
+    csv_path.write_text(
+        "spec_id,estimate,se,p,n,converged,error,p_threshold\n"
+        "spec_001,0.5,0.2,0.03,60,TRUE,,\n"
+        "spec_002,0.4,0.2,0.03,60,TRUE,,0.0125\n"
+    )
+    rows = mv.read_specs(csv_path, {"factors": []})
+    assert [r["_alpha"] for r in rows] == [0.05, 0.0125]
+
+    r = mv.rank_reported(rows, 0.45)
+    assert r["share_significant"] == pytest.approx(0.5)
+    assert r["alphas"] == [0.0125, 0.05]
+
+
+def test_the_executor_is_told_a_level_s_significance_threshold():
+    proposed = json.loads(json.dumps(PROPOSED))
+    bonferroni = next(f for f in proposed["factors"] if f["name"] == "estimator")
+    bonferroni["levels"][1]["p_threshold"] = 0.0125
+    grid = mv.build_grid(proposed, SCREEN)
+    levels = mv.executor_grid(grid)["factors"][3]["levels"]
+    assert levels[0] == {"value": "welch", "how": "var.equal = FALSE"}
+    assert levels[1]["p_threshold"] == 0.0125

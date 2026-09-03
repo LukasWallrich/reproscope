@@ -480,6 +480,41 @@ rating, no minimum-detectable-effect curve, no alignment check and no referee-st
 {% if not s3 %}
 <div class="notrun"><b>Stage 3 not run.</b> No <code>stage3/</code> artifacts: no specification
 space, no multiverse runs and no specification curve.</div>
+{% elif s3.abstained %}
+<div class="panel">
+  <p><b>No multiverse to run.</b> Every level the screen accepted, other than the paper's
+  own choices, changes only how the result is presented. Nothing on offer could move the
+  estimate or its significance, so no specification was executed and no curve was drawn.
+  <span class="muted">Recorded as: {{ s3.abstain_reason }}.</span>
+  {% if s3.focal_quantity.kind %} The focal quantity is <b>{{ s3.focal_quantity.kind }}</b>
+  (claim <code>{{ s3.claim_id }}</code>), reported as {{ s3.reported_estimate|num }}.{% endif %}</p>
+</div>
+{% if s3.unimplementable %}
+<h3>Choices the data cannot vary</h3>
+<div class="scroll"><table>
+  <tr><th>choice</th><th>why it cannot be implemented</th></tr>
+  {% for u in s3.unimplementable %}
+  <tr><td><b>{{ u.name }}</b></td><td>{{ u.reason or '—' }}</td></tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+{% if s3.factors %}
+<h3>Factors and levels</h3>
+<div class="scroll"><table>
+  <tr><th>factor</th><th>level</th><th>verdict</th><th>affects</th><th>rationale / how</th></tr>
+  {% for f in s3.factors %}
+    {% for l in f.levels %}
+    <tr>
+      {% if loop.first %}<td rowspan="{{ f.levels|length }}"><b>{{ f.name }}</b></td>{% endif %}
+      <td>{{ l.value }}{% if f.paper_level == l.value %} <span class="pill">paper level</span>{% endif %}</td>
+      <td><span class="pill {{ 'good' if l.verdict == 'defensible' else 'bad' }}">{{ l.verdict or '—' }}</span></td>
+      <td>{{ l.affects or '—' }}</td>
+      <td>{{ l.rationale or l.how or '—' }}</td>
+    </tr>
+    {% endfor %}
+  {% endfor %}
+</table></div>
+{% endif %}
 {% else %}
 <div class="panel">
   <div>
@@ -489,7 +524,9 @@ space, no multiverse runs and no specification curve.</div>
     <span class="stat"><b>{{ s3.reported_estimate|num }}</b><span>reported estimate</span></span>
     <span class="stat"><b>{{ s3.median|num }}</b><span>multiverse median</span></span>
     <span class="stat"><b>{{ s3.share_same_sign|pct }}</b><span>same sign</span></span>
-    <span class="stat"><b>{{ s3.share_p05|pct }}</b><span>p &lt; .05</span></span>
+    <span class="stat"><b>{{ s3.share_significant|pct }}</b><span>significant
+      {% if s3.alphas|length == 1 %}(p &lt; {{ s3.alphas[0] }}){% else %}at each
+      specification's own threshold{% endif %}</span></span>
     <span class="stat"><b>{{ s3.extremeness|num }}</b><span>extremeness</span></span>
   </div>
   <p><b>Rank of the reported estimate:</b>
@@ -521,7 +558,7 @@ factors do not all record a paper level.</p>
 
 <h3>Factors and levels</h3>
 <div class="scroll"><table>
-  <tr><th>factor</th><th>source</th><th>level</th><th>verdict</th><th>rationale / how</th></tr>
+  <tr><th>factor</th><th>source</th><th>level</th><th>verdict</th><th>affects</th><th>rationale / how</th></tr>
   {% for f in s3.factors %}
     {% for l in f.levels %}
     <tr>
@@ -530,6 +567,7 @@ factors do not all record a paper level.</p>
       <td rowspan="{{ f.levels|length }}">{{ f.source or '—' }}</td>{% endif %}
       <td>{{ l.value }}{% if f.paper_level == l.value %} <span class="pill">paper level</span>{% endif %}</td>
       <td><span class="pill {{ 'good' if l.verdict == 'defensible' else 'bad' }}">{{ l.verdict or '—' }}</span></td>
+      <td>{{ l.affects or '—' }}</td>
       <td>{{ l.rationale or l.how or '—' }}</td>
     </tr>
     {% endfor %}
