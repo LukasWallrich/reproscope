@@ -124,31 +124,57 @@ def copy_data(paper_id: str, dest: Path) -> list[str]:
     return copied
 
 
-def bound_contract(paper_id: str, contract_src: Path) -> dict:
-    """Blind contract restricted to analyses the data-readiness check could bind.
+PACKET_NOTE = (
+    "One block per analysis. Fit each analysis once and write every quantity in its "
+    "`quantities` list from that single fit. Analyses listed under analyses_without_data "
+    "were abstained at intake because no data file covers them; do not attempt them."
+)
 
-    Abstention propagates: analyses Stage 0 marked abstained (no data for that study) are
-    listed by id only, so replicas do not spend effort re-discovering that the data are absent.
+
+def blind_packet(paper_id: str, contract_src: Path) -> dict:
+    """The replica's CONTRACT.json: one block per estimand contract, quantities inside it.
+
+    Analyses the data-readiness check could not bind are dropped and listed by id, so
+    replicas do not spend effort re-discovering that the data are absent. Claims that no
+    contract claims go into `unassigned`.
     """
     doc = json.loads(contract_src.read_text())
+    contracts = list(doc.get("contracts", []))
+    dropped: list[str] = []
+
     readiness = stage0_dir(paper_id) / "readiness.json"
-    if not readiness.exists():
-        return doc
-    states = json.loads(readiness.read_text()).get("per_analysis_state") or {}
-    if not states:
-        return doc
-    keep = {a for a, st in states.items() if st == "complete"}
-    contracts = [c for c in doc.get("contracts", []) if c.get("analysis_id") in keep]
-    claim_ids = {cid for c in contracts for cid in c.get("claim_ids", [])}
-    claims_ = [c for c in doc.get("claims", []) if c.get("claim_id") in claim_ids]
-    dropped = sorted(a for a in states if a not in keep)
-    return {
-        "contracts": contracts,
-        "claims": claims_,
-        "analyses_without_data": dropped,
-        "note": "Analyses listed under analyses_without_data were abstained at intake because "
-                "no data file covers them; do not attempt them.",
-    }
+    states = json.loads(readiness.read_text()).get("per_analysis_state") or {} if readiness.exists() else {}
+    if states:
+        keep = {a for a, st in states.items() if st == "complete"}
+        contracts = [c for c in contracts if c.get("analysis_id") in keep]
+        dropped = sorted(a for a in states if a not in keep)
+
+    by_id = {c.get("claim_id"): c for c in doc.get("claims", [])}
+    # A claim belongs to an analysis even when that analysis was dropped for want of data,
+    # so it must not resurface as unassigned.
+    claimed = {cid for c in doc.get("contracts", []) for cid in c.get("claim_ids", [])}
+    analyses = []
+    for contract in contracts:
+        block = {k: v for k, v in contract.items() if k != "claim_ids"}
+        block["quantities"] = [
+            by_id[cid] for cid in contract.get("claim_ids", []) if cid in by_id
+        ]
+        analyses.append(block)
+
+    unassigned = [c for cid, c in by_id.items() if cid not in claimed]
+    packet = {"analyses": analyses, "note": PACKET_NOTE}
+    if unassigned:
+        packet["unassigned"] = unassigned
+    if dropped:
+        packet["analyses_without_data"] = dropped
+    return packet
+
+
+def bound_claim_ids(packet: dict) -> set[str]:
+    """Every claim_id a replica was asked about, across all blocks of a blind packet."""
+    ids = {q.get("claim_id") for a in packet.get("analyses", []) for q in a.get("quantities", [])}
+    ids |= {c.get("claim_id") for c in packet.get("unassigned", [])}
+    return {cid for cid in ids if cid}
 
 
 def assemble(paper_id: str, replica_id: str) -> Path:
@@ -160,17 +186,22 @@ def assemble(paper_id: str, replica_id: str) -> Path:
             raise FileNotFoundError(f"stage0 output missing: {p}")
 
     claim_records = claims(paper_id)
-    hits = scan([methods_src, contract_src], claim_records, paper_id)
+    work = replica_dir(paper_id, replica_id) / "work"
+    (work / "out").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(methods_src, work / "METHODS.md")
+    (work / "CONTRACT.json").write_text(
+        json.dumps(blind_packet(paper_id, contract_src), indent=2, ensure_ascii=False)
+    )
+
+    # The scan runs over the files the replica receives, not their stage 0 sources.
+    hits = scan([work / "METHODS.md", work / "CONTRACT.json"], claim_records, paper_id)
     if hits:
+        shutil.rmtree(work)
         raise LeakDetected(
             f"{len(hits)} reported value(s) found in the blind material; launch blocked:\n  "
             + "\n  ".join(str(h) for h in hits[:20])
         )
 
-    work = replica_dir(paper_id, replica_id) / "work"
-    (work / "out").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(methods_src, work / "METHODS.md")
-    (work / "CONTRACT.json").write_text(json.dumps(bound_contract(paper_id, contract_src), indent=2, ensure_ascii=False))
     (work / "TASK.md").write_text(artifacts.load_prompt("stage1_replica_task"))
     copy_data(paper_id, work / "data")
 
