@@ -28,6 +28,11 @@ INFERENTIAL_KINDS = frozenset(
 HEADLINE_MIN_DIGITS = 2
 SUPPORTING_MIN_DIGITS = 3
 
+# Significance conventions every methods section names ("effects with p between .05
+# and .10"). A coarser rounding of a value onto one of these cannot be told apart
+# from that convention, so it is not searched; the value as the paper printed it is.
+ALPHA_LEVELS = {0.1, 0.05, 0.01, 0.001}
+
 
 def _as_float(value: Any) -> float | None:
     if isinstance(value, bool):
@@ -66,12 +71,15 @@ def variants(value: float, precision: int | None = None, min_digits: int = HEADL
     if "e" in natural or "inf" in natural or "nan" in natural:
         return set()
     reported = precision if isinstance(precision, int) and 0 <= precision <= 6 else _decimals(natural)
-    forms = {natural} | {f"{a:.{d}f}" for d in range(1, reported + 1)}
+    as_printed = f"{a:.{reported}f}" if reported else natural
+    forms = {natural, as_printed} | {f"{a:.{d}f}" for d in range(1, reported + 1)}
     if a == int(a):
         forms.add(str(int(a)))
     out: set[str] = set()
     for f in forms:
         if _significant_digits(f) < min_digits:
+            continue
+        if f != as_printed and round(float(f), 6) in ALPHA_LEVELS:
             continue
         out.add(f)
         if f.startswith("0."):
@@ -83,6 +91,14 @@ def _claim_field(claim: Any, name: str) -> Any:
     if isinstance(claim, dict):
         return claim.get(name)
     return getattr(claim, name, None)
+
+
+def _kinds(claim: Any) -> set[str]:
+    """The validated kind and the extractor's own label ("ci_upper" for a ci_bound)."""
+    return {
+        str(_claim_field(claim, f) or "")
+        for f in ("quantity_kind", "quantity_kind_raw")
+    } - {""}
 
 
 def _uncertainty_numbers(unc: Any) -> list[float]:
@@ -103,20 +119,20 @@ def forbidden_strings(
 
     for claim in claims:
         cid = str(_claim_field(claim, "claim_id") or "?")
-        kind = _claim_field(claim, "quantity_kind") or ""
-        raw_kind = str(_claim_field(claim, "quantity_kind_raw") or kind)
+        kinds = _kinds(claim)
         headline = _claim_field(claim, "importance") == "headline"
         precision = _claim_field(claim, "precision")
         value = _as_float(_claim_field(claim, "value"))
         if value is None:
             continue
 
-        if not headline and raw_kind not in INFERENTIAL_KINDS:
+        if not headline and not (kinds & INFERENTIAL_KINDS):
             skipped.append(
                 {
                     "claim_id": cid,
                     "value": value,
-                    "reason": f"supporting {raw_kind or 'claim'}: sample description, not an inferential result",
+                    "reason": f"supporting {'/'.join(sorted(kinds)) or 'claim'}: "
+                    "sample description, not an inferential result",
                 }
             )
             continue
@@ -142,12 +158,19 @@ def forbidden_strings(
     return forbidden, skipped
 
 
-def _pattern(form: str) -> re.Pattern[str]:
+# Dimensionless statistics: a paper never prints one with a percent sign, so a
+# number followed by "%" is an exclusion rate or a proportion of the sample, not
+# this claim's value.
+NEVER_PERCENT = frozenset({"t", "F", "chi2", "z", "d", "r", "OR", "HR", "eta2", "p_value"})
+
+
+def _pattern(form: str, allow_percent: bool = True) -> re.Pattern[str]:
     # A number, not a digit run inside an identifier or a dotted label: "5.9" must
     # not match inside "5.91", "c591" or "Section 5.9.1", and a leading minus is
     # part of the number.
     # A confidence level ("95% CI") is design text even when 95 is also a reported percentage.
-    return re.compile(r"(?<![\w.])-?" + re.escape(form) + r"(?!\w)(?!\.\d)(?!\s*%\s*(?:CI|confidence))")
+    tail = r"(?!\s*%\s*(?:CI|confidence))" if allow_percent else r"(?!\s*%)"
+    return re.compile(r"(?<![\w.])-?" + re.escape(form) + r"(?!\w)(?!\.\d)" + tail)
 
 
 # JSON keys that carry bookkeeping rather than content: ids, hashes, timestamps
@@ -209,8 +232,17 @@ def scan(
         from .. import paths as _paths
 
         design_numbers = design_numbers_from_manifest(_paths.manifest(paper_id))
+    claims = list(claims)
+    kinds = {str(_claim_field(c, "claim_id")): _kinds(c) for c in claims}
     forbidden, _ = forbidden_strings(claims, design_numbers)
-    patterns = [(form, cids, _pattern(form)) for form, cids in forbidden.items()]
+    patterns = [
+        (
+            form,
+            cids,
+            _pattern(form, any(kinds.get(c, set()) - NEVER_PERCENT for c in cids)),
+        )
+        for form, cids in forbidden.items()
+    ]
     hits: list[dict[str, Any]] = []
     for path in files:
         path = Path(path)

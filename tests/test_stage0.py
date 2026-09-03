@@ -118,6 +118,31 @@ def test_supporting_claims_need_three_significant_digits():
     assert {"0.85", ".85"} <= forms(value=0.85, importance="headline")
 
 
+def test_the_extractors_own_kind_label_still_counts_as_inferential():
+    """The arbiter records `ci_upper` alongside the validated kind `ci_bound`."""
+    forbidden, _ = leakcheck.forbidden_strings(
+        [
+            claim(
+                quantity_kind="ci_bound",
+                quantity_kind_raw="ci_upper",
+                value=16.8,
+                precision=1,
+                importance="supporting",
+            )
+        ]
+    )
+    assert "16.8" in forbidden
+
+
+def test_scan_does_not_read_a_percentage_as_a_test_statistic(tmp_path):
+    doc = tmp_path / "m.md"
+    doc.write_text("We excluded 8.4% of the participants for failing the attention check.\n")
+    assert leakcheck.scan([doc], [claim(quantity_kind="t", value=8.4, precision=1)]) == []
+    # The same digits without the percent sign are the statistic.
+    doc.write_text("The test gave 8.4 on this comparison.\n")
+    assert len(leakcheck.scan([doc], [claim(quantity_kind="t", value=8.4, precision=1)])) == 1
+
+
 def test_forbidden_strings_include_uncertainty_numbers():
     forbidden, _ = leakcheck.forbidden_strings(
         [claim(value=4.58, precision=2, uncertainty="SD = 0.82")]
@@ -341,6 +366,31 @@ def test_leak_repair_sends_only_the_offending_sentences(stage0_root, monkeypatch
     methods = (paths.run_dir("_p", 0) / "redacted_methods.md").read_text()
     assert "5.91" not in methods
     assert "recruited on campus" in methods and "seven points" in methods
+
+
+def test_repair_stops_after_two_rounds_and_leaves_the_hits(stage0_root, monkeypatch):
+    methods = paths.run_dir("_p", 0) / "redacted_methods.md"
+    methods.write_text("Intimacy differed between conditions, t(27) = 5.91.\n")
+    rounds = []
+
+    def fake_call(step, prompt, **kw):
+        rounds.append(step)
+        sent = json.loads(prompt.split("Items:\n")[1].split("\nReturn JSON")[0])
+        # A rewrite that keeps the number: the repair does not converge.
+        return llm.LLMResult(
+            text="",
+            parsed=redact.ScrubOut(
+                items=[redact.ScrubbedText(id=i["id"], text=i["text"]) for i in sent]
+            ),
+            ledger_id="L",
+        )
+
+    monkeypatch.setattr(llm, "call", fake_call)
+    hits, calls = redact.repair(Manifest(), [methods], [record()], [])
+
+    assert rounds == ["leak_repair:1", "leak_repair:2"]
+    assert len(calls) == 2
+    assert [h["value"] for h in hits] == ["5.91"]  # the caller abstains on these
 
 
 # --- readiness ------------------------------------------------------------

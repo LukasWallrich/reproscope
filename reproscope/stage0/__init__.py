@@ -57,13 +57,19 @@ def run(paper_id: str, force: bool = False) -> None:
     print(f"claims: {len(claims)}", flush=True)
 
     # One reading of the paper produces both the contracts and the redacted methods.
-    contract_records, _ = contracts.run(manifest, claims, paper_text, inputs, force=force)
+    contract_records, contract_calls = contracts.run(
+        manifest, claims, paper_text, inputs, force=force
+    )
     print(f"contracts: {len(contract_records)}", flush=True)
 
-    readiness_record, _ = readiness.run(manifest, contract_records, inputs, force=force)
+    # Rebuilt contracts carry new analysis ids and labels, so the two steps that read
+    # them are rebuilt too rather than reused against the previous set.
+    downstream = force or bool(contract_calls)
+
+    readiness_record, _ = readiness.run(manifest, contract_records, inputs, force=downstream)
     print(f"readiness: {len(readiness_record.variable_bindings)} bindings", flush=True)
 
-    report, _ = redact.run(manifest, claims, contract_records, inputs, force=force)
+    report, _ = redact.run(manifest, claims, contract_records, inputs, force=downstream)
     print(
         f"redaction: scan_clean={report.scan_clean} "
         f"audit={report.leakage_audit_verdict}",

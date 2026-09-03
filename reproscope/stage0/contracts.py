@@ -18,7 +18,9 @@ from . import leakcheck, redact
 # Fields a contract must never see, so the writer cannot copy a result across.
 BLIND_DROP = ("value", "precision", "uncertainty", "comparator")
 
-PROMPTS = ("stage0_contracts", "stage0_leak_repair")
+# Only the prompt that writes the artifacts decides whether they are stale. The
+# repair prompt's version is recorded on the redaction report, which owns the scan.
+PROMPTS = ("stage0_contracts",)
 
 
 class SlimAmbiguity(BaseModel):
