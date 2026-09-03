@@ -3,13 +3,20 @@
 Four checks, each a function that writes its own JSON under runs/<paper_id>/stage2/
 so a rerun repeats only what changed: `causal_language`, `mde`, `alignment`, `broad`.
 `assemble` folds them into review.json (AnalysisReview) and review.md.
+
+Every check is scoped to the focal analysis, bound once in `gather` through
+`focal.bind_focal_claim`. No prompt carries the whole paper: the causal-language check
+reads the abstract, the focal passages and the contract; the broad referee pass reads
+the focal analysis's methods and results passages, the data schema, one canonical
+replica script and unified diffs of the others. paper.txt stays in memory only as the
+haystack the quote and anchor checks are verified against.
 """
 
 from __future__ import annotations
 
+import difflib
 import json
 import re
-import shutil
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,6 +25,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict
 
 from .. import artifacts, llm, paths
+from .. import focal as focal_mod
 from ..artifacts import (
     AlignmentCheck,
     AnalysisReview,
@@ -35,7 +43,9 @@ from . import mde as mde_mod
 
 STAGE = "2"
 CHECKS = ("causal_language", "mde", "alignment", "broad")
-PAPER_TEXT_LIMIT = 120_000  # characters of paper.txt inlined into a prompt
+PROMPTS = ("stage2_causal_language", "stage2_alignment", "stage2_broad")
+DIFF_LINE_CAP = 150  # lines of unified diff carried per non-canonical replica
+CHEAP_REASONING_CAP = 512  # hidden-reasoning cap on the two cheap-tier checks
 
 
 # --- per-check record -----------------------------------------------------
@@ -62,12 +72,18 @@ def load_check(paper_id: str, check: str) -> CheckRecord | None:
         return None
 
 
-def reusable(record: CheckRecord | None, inputs: dict[str, str]) -> bool:
+def reusable(
+    record: CheckRecord | None,
+    inputs: dict[str, str],
+    prompts: tuple[str, ...] = (),
+) -> bool:
+    """Whether a record on disk still stands: same inputs, same prompts, complete."""
     return bool(
         record
         and record.state == "complete"
         and record.meta is not None
         and record.meta.inputs == inputs
+        and not artifacts.prompt_stale(record, prompts)
     )
 
 
@@ -151,18 +167,6 @@ class BroadResponse(BaseModel):
     summary: str | None = None
 
 
-class MdeResponse(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    n_analysed: int | None = None
-    assumptions: list[str] = []
-    mde_standardised: float | None = None
-    mde_paper_metric: str | None = None
-    curve: list[dict[str, float]] = []
-    method: str | None = None
-    caveats: list[str] = []
-
-
 # --- inputs ---------------------------------------------------------------
 
 
@@ -180,14 +184,16 @@ class Stage2Inputs:
     paper_id: str
     manifest: Any
     paper_text: str
-    paper_truncated: bool
     claims: list[ClaimRecord]
     contracts: list[EstimandContract]
     readiness: dict[str, Any] | None
     schema_text: str
+    redacted_methods: str
     match: dict[str, Any] | None
     replicas: list[Replica]
     hashes: dict[str, str]
+    focal: dict[str, Any] | None
+    focal_error: str | None
     focal_claim: ClaimRecord | None
     focal_contract: EstimandContract | None
     focal_rule: str
@@ -202,39 +208,108 @@ def _read_json(path: Path) -> Any | None:
         return None
 
 
-def _focal(
-    manifest: Any, claims: list[ClaimRecord], contracts: list[EstimandContract]
-) -> tuple[ClaimRecord | None, EstimandContract | None, str]:
-    """Pick the focal claim and its contract, and say which rule fired.
+# --- passage extraction ---------------------------------------------------
+#
+# Enough structure to hand a prompt the focal analysis instead of the paper. Both
+# helpers work on the pdftotext layer as plain lines and paragraphs.
 
-    Stage 0 does not mark a focal claim, so this walks a fallback chain and
-    records the step it stopped at.
+_HEADING_MAX_CHARS = 60  # a wrapped body line is longer than any section heading
+_METHODS_HEAD = re.compile(
+    r"^(\d+\.?\s*)?(method|methods|materials and methods|participants)\b", re.I
+)
+_METHODS_END = re.compile(r"^(\d+\.?\s*)?(results|discussion)\b", re.I)
+_ABSTRACT_HEAD = re.compile(r"^(abstract|summary)\b[:.]?$", re.I)
+_ABSTRACT_END = re.compile(
+    r"^(\d+\.?\s*)?(introduction|keywords?|highlights|background|method|methods)\b", re.I
+)
+_PARA_SPLIT = re.compile(r"\n\s*\n")
+ABSTRACT_MAX_CHARS = 4000  # papers whose layer carries no heading after the abstract
+SCHEMA_SUMMARY_MAX_CHARS = 12_000
+
+
+def _heading(line: str, pattern: re.Pattern[str]) -> bool:
+    s = line.strip()
+    return bool(s) and len(s) <= _HEADING_MAX_CHARS and bool(pattern.match(s))
+
+
+def methods_section(paper_text: str) -> str | None:
+    """The methods section of the pdftotext layer, or None when no heading is found."""
+    lines = paper_text.splitlines()
+    start = next((i for i, ln in enumerate(lines) if _heading(ln, _METHODS_HEAD)), None)
+    if start is None:
+        return None
+    end = next(
+        (j for j in range(start + 1, len(lines)) if _heading(lines[j], _METHODS_END)),
+        len(lines),
+    )
+    return "\n".join(lines[start:end]).strip() or None
+
+
+def abstract_section(paper_text: str) -> str:
+    """The abstract, or the paper's opening when it carries no abstract heading.
+
+    Capped: a layer with no heading after the abstract would otherwise hand back most
+    of the paper.
     """
-    claim: ClaimRecord | None = None
-    rule = "none"
-    reported = getattr(getattr(manifest, "focal_claim", None), "reported", None)
-    target = getattr(reported, "value", None)
-    if target is not None:
-        matches = [c for c in claims if c.value is not None and str(c.value) == str(target)]
-        if len(matches) == 1:
-            claim, rule = matches[0], "manifest focal_claim.reported.value matched one claim"
-    if claim is None:
-        headline = [c for c in claims if c.importance == "headline"]
-        if len(headline) == 1:
-            claim, rule = headline[0], "single claim marked importance=headline"
-    if claim is None and claims:
-        claim, rule = claims[0], "first claim in claims.json (no better rule applied)"
-
-    contract: EstimandContract | None = None
-    if claim is not None:
-        for ct in contracts:
-            if claim.claim_id in ct.claim_ids:
-                contract = ct
+    lines = paper_text.splitlines()
+    start = next((i for i, ln in enumerate(lines) if _heading(ln, _ABSTRACT_HEAD)), None)
+    body = ""
+    if start is not None:
+        keep: list[str] = []
+        for ln in lines[start + 1:]:
+            if _heading(ln, _ABSTRACT_END):
                 break
-    if contract is None and contracts:
-        contract = contracts[0]
-        rule += "; contract = first in contracts.json"
-    return claim, contract, rule
+            keep.append(ln)
+        body = "\n".join(keep).strip()
+    return (body or paper_text)[:ABSTRACT_MAX_CHARS]
+
+
+def _paragraph_hits(paras: list[str], needles: list[str], max_hits: int) -> list[int]:
+    hits = []
+    for i, p in enumerate(paras):
+        hay = normalise(p)
+        if any(normalise(n) in hay for n in needles):
+            hits.append(i)
+        if len(hits) >= max_hits:
+            break
+    return hits
+
+
+def focal_passages(
+    paper_text: str, claim: ClaimRecord | None, *, window: int = 1, max_hits: int = 3
+) -> list[str]:
+    """Paragraphs carrying the focal claim, each with its neighbour on either side.
+
+    A paragraph counts as a hit when it contains the claim's reported value as printed
+    or the opening of its description. A claim whose value lives only in a table image
+    matches neither, so the claim's location label ("Table 1") is tried after them.
+    """
+    if claim is None:
+        return []
+    paras = [p for p in _PARA_SPLIT.split(paper_text) if p.strip()]
+    needles = [n for n in (
+        str(claim.value) if claim.value is not None else None,
+        (claim.description or "")[:60],
+    ) if n and n.strip()]
+    hits = _paragraph_hits(paras, needles, max_hits) if needles else []
+    label = getattr(claim.location, "label", None) if claim.location else None
+    if not hits and label:
+        hits = _paragraph_hits(paras, [label], max_hits)
+    if not hits:
+        return []
+    keep = sorted({j for i in hits for j in range(max(0, i - window), min(len(paras), i + window + 1))})
+    out: list[str] = []
+    run: list[str] = []
+    previous = None
+    for i in keep:
+        if previous is not None and i != previous + 1:
+            out.append("\n\n".join(run))
+            run = []
+        run.append(paras[i])
+        previous = i
+    if run:
+        out.append("\n\n".join(run))
+    return out
 
 
 def gather(paper_id: str) -> Stage2Inputs:
@@ -242,7 +317,9 @@ def gather(paper_id: str) -> Stage2Inputs:
     s0 = paths.run_dir(paper_id, 0)
     s1 = paths.run_dir(paper_id, 1)
 
-    hashes: dict[str, str] = {}
+    # The stage marker covers the prompts as well as the files: an edited prompt must
+    # clear it, otherwise the stage is skipped before any check can see the change.
+    hashes: dict[str, str] = {f"prompt:{n}": artifacts.prompt_version(n) for n in PROMPTS}
 
     def note(name: str, path: Path) -> None:
         if path.exists():
@@ -253,11 +330,10 @@ def gather(paper_id: str) -> Stage2Inputs:
         raise FileNotFoundError(f"stage 2 needs {paper_path} (stage 0 pdftotext layer)")
     note("paper.txt", paper_path)
     note("manifest.json", corpus / "manifest.json")
-    raw = paper_path.read_text(errors="replace")
-    truncated = len(raw) > PAPER_TEXT_LIMIT
-    paper_text = raw[:PAPER_TEXT_LIMIT] if truncated else raw
+    paper_text = paper_path.read_text(errors="replace")
 
-    for name in ("claims.json", "contracts.json", "readiness.json", "schema.json"):
+    for name in ("claims.json", "contracts.json", "readiness.json", "schema.json",
+                 "redacted_methods.md"):
         note(f"stage0/{name}", s0 / name)
     note("stage1/match.json", s1 / "match.json")
 
@@ -268,6 +344,8 @@ def gather(paper_id: str) -> Stage2Inputs:
     readiness = _read_json(s0 / "readiness.json")
     schema_path = s0 / "schema.json"
     schema_text = schema_path.read_text() if schema_path.exists() else ""
+    methods_path = s0 / "redacted_methods.md"
+    redacted_methods = methods_path.read_text(errors="replace") if methods_path.exists() else ""
     match = _read_json(s1 / "match.json")
 
     replicas: list[Replica] = []
@@ -296,19 +374,46 @@ def gather(paper_id: str) -> Stage2Inputs:
             )
 
     manifest = paths.manifest(paper_id)
-    claim, contract, rule = _focal(manifest, claims, contracts)
+    focal: dict[str, Any] | None = None
+    focal_error: str | None = None
+    claim: ClaimRecord | None = None
+    contract: EstimandContract | None = None
+    rule = ""
+    try:
+        # The one shared binding: the manifest's `focal_claim.claim_id` override wins,
+        # then a numeric match against the reported statistic. No model call here —
+        # Stage 2 abstains rather than paying for a guess Stage 3 already made.
+        focal = focal_mod.bind_focal_claim(
+            manifest, claims, contracts, paper_id=paper_id, allow_llm=False
+        )
+    except ValueError as e:
+        focal_error = str(e)
+    if focal is not None:
+        focal_id = focal["focal_quantity"]["claim_id"]
+        claim = next((c for c in claims if c.claim_id == focal_id), None)
+        contract = next(
+            (ct for ct in contracts if ct.analysis_id == focal["analysis_id"]), None
+        )
+        rule = "; ".join(focal["notes"]) or (
+            "exact numeric match against the manifest's reported statistic"
+        )
+    else:
+        rule = f"unbound: {focal_error}"
+
     return Stage2Inputs(
         paper_id=paper_id,
         manifest=manifest,
         paper_text=paper_text,
-        paper_truncated=truncated,
         claims=claims,
         contracts=contracts,
         readiness=readiness,
         schema_text=schema_text,
+        redacted_methods=redacted_methods,
         match=match,
         replicas=replicas,
         hashes=hashes,
+        focal=focal,
+        focal_error=focal_error,
         focal_claim=claim,
         focal_contract=contract,
         focal_rule=rule,
@@ -331,33 +436,216 @@ def _focal_claim_text(inp: Stage2Inputs) -> str:
             parts.append("As reported: " + json.dumps(fc.reported.model_dump(), default=str))
     if inp.focal_claim is not None:
         parts.append("Matched claim record: " + inp.focal_claim.model_dump_json())
+    if inp.focal_rule:
+        parts.append(f"Bound by: {inp.focal_rule}")
     return "\n".join(p for p in parts if p) or "(no focal claim in the manifest)"
+
+
+def _versions(*names: str) -> dict[str, str]:
+    return {n: artifacts.prompt_version(n) for n in names}
+
+
+def _focal_abstain(
+    inp: Stage2Inputs, check: str, inputs: dict[str, str], prompts: tuple[str, ...]
+) -> CheckRecord | None:
+    """Abstain without a model call when the focal claim could not be bound."""
+    if inp.focal_error is None:
+        return None
+    return write_check(
+        inp.paper_id, check, inputs=inputs, prompt_versions=_versions(*prompts),
+        model_calls=[], response=None,
+        abstain_reason=f"focal claim not bound: {inp.focal_error}",
+    )
+
+
+def _focal_material(inp: Stage2Inputs) -> tuple[str, str]:
+    """The methods text and the results/discussion passages for the focal analysis."""
+    methods = methods_section(inp.paper_text)
+    if methods is None:
+        methods = inp.redacted_methods or "(no methods section found in paper.txt)"
+    passages = focal_passages(inp.paper_text, inp.focal_claim)
+    joined = "\n\n---\n\n".join(passages) if passages else \
+        "(no paragraph in paper.txt carries the focal claim's value or description)"
+    return methods, joined
+
+
+def _num(x: Any) -> float | None:
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def _row_distance(row: dict[str, Any]) -> float:
+    reported, replicated = _num(row.get("reported")), _num(row.get("replicated"))
+    if reported is not None and replicated is not None:
+        return abs(replicated - reported)
+    raw = _num(row.get("raw_diff"))
+    return abs(raw) if raw is not None else float("inf")
+
+
+def canonical_replica(inp: Stage2Inputs) -> tuple[Replica | None, str]:
+    """The replica whose focal estimate is closest to the reported value.
+
+    Ties break on replica id, so the choice is the same on every run. Only replicas
+    with a script are eligible; without match rows for the focal claim the first
+    such replica by id is used.
+    """
+    eligible = sorted((r for r in inp.replicas if r.script_text), key=lambda r: r.replica_id)
+    if not eligible:
+        return None, "no replica wrote a script"
+    focal_ids = set(inp.focal["claim_ids"]) if inp.focal else set()
+    focal_id = inp.focal["focal_quantity"]["claim_id"] if inp.focal else None
+    rows = (inp.match or {}).get("rows") or []
+    scoped = [r for r in rows if r.get("claim_id") == focal_id] \
+        or [r for r in rows if r.get("claim_id") in focal_ids]
+    distances: dict[str, float] = {}
+    for row in scoped:
+        rid = row.get("replica_id")
+        if rid is None:
+            continue
+        distances[rid] = min(distances.get(rid, float("inf")), _row_distance(row))
+    if not distances:
+        return eligible[0], "no match row for the focal claim; first replica with a script by id"
+    best = min(eligible, key=lambda r: (distances.get(r.replica_id, float("inf")), r.replica_id))
+    d = distances.get(best.replica_id)
+    if d is None or d == float("inf"):
+        return best, "no usable match distance for the focal claim; first replica by id"
+    return best, f"closest to the reported focal value on the match table (|difference| = {d:g})"
+
+
+def replica_diffs(canonical: Replica, others: list[Replica]) -> list[tuple[str, str]]:
+    """Unified diffs of every other replica's script against the canonical one."""
+    out = []
+    base = canonical.script_text.splitlines()
+    base_name = canonical.script_path.name if canonical.script_path else "script"
+    for rep in others:
+        lines = list(difflib.unified_diff(
+            base, rep.script_text.splitlines(),
+            fromfile=f"{canonical.replica_id}/{base_name}",
+            tofile=f"{rep.replica_id}/{rep.script_path.name if rep.script_path else 'script'}",
+            lineterm="",
+        ))
+        if not lines:
+            out.append((rep.replica_id, "(identical to the canonical script)"))
+            continue
+        if len(lines) > DIFF_LINE_CAP:
+            lines = lines[:DIFF_LINE_CAP] + [
+                f"... diff truncated at {DIFF_LINE_CAP} lines"
+            ]
+        out.append((rep.replica_id, "\n".join(lines)))
+    return out
+
+
+def focal_match_summary(inp: Stage2Inputs) -> dict[str, Any]:
+    """The match rows and per-claim summaries belonging to the focal analysis."""
+    if not inp.match:
+        return {}
+    ids = set(inp.focal["claim_ids"]) if inp.focal else set()
+    analysis_id = inp.focal["analysis_id"] if inp.focal else None
+    return {
+        "summaries": [s for s in (inp.match.get("summaries") or [])
+                      if s.get("claim_id") in ids
+                      or (analysis_id and s.get("analysis_id") == analysis_id)],
+        "rows": [r for r in (inp.match.get("rows") or []) if r.get("claim_id") in ids],
+    }
+
+
+def focal_results(rep: Replica, inp: Stage2Inputs) -> list[dict[str, Any]]:
+    """A replica's result rows for the focal analysis's claims."""
+    rows = (rep.results or {}).get("results", []) if isinstance(rep.results, dict) else []
+    ids = set(inp.focal["claim_ids"]) if inp.focal else set()
+    analysis_id = inp.focal["analysis_id"] if inp.focal else None
+    return [r for r in rows
+            if r.get("claim_id") in ids
+            or (analysis_id and r.get("analysis_id") == analysis_id)]
+
+
+def _column_line(col: dict[str, Any]) -> str:
+    bits = [str(col.get("name")), str(col.get("dtype") or col.get("type") or "?")]
+    if col.get("n_missing"):
+        bits.append(f"missing={col['n_missing']}")
+    if col.get("n_distinct") is not None:
+        bits.append(f"distinct={col['n_distinct']}")
+    levels = col.get("levels") or list(col.get("value_counts") or {})
+    if levels:
+        shown = ", ".join(str(x) for x in levels[:8])
+        bits.append(f"levels=[{shown}{', ...' if len(levels) > 8 else ''}]")
+    elif col.get("min") is not None or col.get("max") is not None:
+        bits.append(f"range={col.get('min')}..{col.get('max')}")
+    if col.get("mean") is not None:
+        bits.append(f"mean={col['mean']}")
+    return "  - " + " | ".join(bits)
+
+
+def schema_summary(schema_text: str, *, cap: int = SCHEMA_SUMMARY_MAX_CHARS) -> str:
+    """One line per table and per column: name, type, missingness, range or levels.
+
+    schema.json carries the full profile of every column, examples included, which on a
+    wide dataset is larger than everything else in the prompt together. The raw text is
+    used when the file has a shape this cannot read.
+    """
+    if not schema_text.strip():
+        return "(none)"
+    try:
+        data = json.loads(schema_text)
+    except json.JSONDecodeError:
+        return schema_text[:cap]
+    lines: list[str] = []
+    columns_seen = 0
+    for f in (data.get("files") or []) if isinstance(data, dict) else []:
+        # Two shapes in use: columns directly on the file, or one level down per table.
+        tables = f.get("tables") or [{"table": None, "rows": f.get("rows"),
+                                      "columns": f.get("columns") or []}]
+        for t in tables:
+            name = f"{f.get('path')}" + (f" [{t['table']}]" if t.get("table") else "")
+            cols = t.get("columns") or []
+            columns_seen += len(cols)
+            lines.append(f"{name}: {t.get('rows')} rows, {len(cols)} columns")
+            lines += [_column_line(c) for c in cols]
+    if not columns_seen:
+        return schema_text[:cap]
+    out = "\n".join(lines)
+    if len(out) > cap:
+        out = out[:cap] + f"\n... schema summary truncated at {cap} characters"
+    return out
 
 
 # --- check 1: causal language --------------------------------------------
 
 
 def check_causal_language(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
-    inputs = _subset(inp.hashes, "paper.txt", "manifest.json")
+    prompts = ("stage2_causal_language",)
+    inputs = _subset(
+        inp.hashes, "paper.txt", "manifest.json", "stage0/claims", "stage0/contracts"
+    )
+    abstained = _focal_abstain(inp, "causal_language", inputs, prompts)
+    if abstained is not None:
+        return abstained
     existing = load_check(inp.paper_id, "causal_language")
-    if reusable(existing, inputs) and not force:
+    if reusable(existing, inputs, prompts) and not force:
         return existing  # type: ignore[return-value]
 
+    _, passages = _focal_material(inp)
     prompt = artifacts.load_prompt(
         "stage2_causal_language",
         focal_claim=_focal_claim_text(inp),
-        paper=inp.paper_text,
+        abstract=abstract_section(inp.paper_text),
+        passages=passages,
+        contract=(inp.focal_contract.model_dump_json(indent=2) if inp.focal_contract
+                  else "(no contract available)"),
     )
     r = llm.call(
         "causal_language",
         prompt,
         paper_id=inp.paper_id,
         stage=STAGE,
-        tier="strong",
+        tier="cheap",
         schema=CausalLanguageResponse,
+        reasoning_max_tokens=CHEAP_REASONING_CAP,
         log_path=paths.run_dir(inp.paper_id, 2) / "logs" / "causal_language.log",
     )
-    versions = {"stage2_causal_language": artifacts.prompt_version("stage2_causal_language")}
+    versions = _versions(*prompts)
     calls = [r.ledger_id] if r.ledger_id else []
     if r.parsed is None:
         return write_check(
@@ -366,11 +654,10 @@ def check_causal_language(inp: Stage2Inputs, *, force: bool = False) -> CheckRec
             abstain_reason=r.error or "model returned no valid rating",
         )
     payload = r.parsed.model_dump()
+    # Quotes are checked against the whole paper, not just the passages the model saw:
+    # a quote invented from a nearby sentence should still fail.
     payload["quotes_verified"] = _verify_quotes(payload, inp.paper_text)
-    if inp.paper_truncated:
-        payload.setdefault("caveats", []).append(
-            f"paper.txt was truncated to the first {PAPER_TEXT_LIMIT} characters"
-        )
+    payload["focal_claim_rule"] = inp.focal_rule
     return write_check(
         inp.paper_id, "causal_language", inputs=inputs, prompt_versions=versions,
         model_calls=calls, response=payload,
@@ -387,14 +674,19 @@ def _verify_quotes(payload: dict[str, Any], paper_text: str) -> dict[str, bool]:
 
 
 def _focal_n(inp: Stage2Inputs) -> tuple[int | None, str]:
-    """n for the power calculation, preferring what the replicas actually analysed."""
-    claim_id = inp.focal_claim.claim_id if inp.focal_claim else None
+    """n for the power calculation, preferring what the replicas actually analysed.
+
+    Every claim of the focal analysis counts: a replica often reports n on the test
+    statistic's row only, so restricting to the curve quantity's own claim would
+    throw the number away.
+    """
+    claim_ids = set(inp.focal["claim_ids"]) if inp.focal else set()
     ns: list[int] = []
     for rep in inp.replicas:
         for row in (rep.results or {}).get("results", []) if isinstance(rep.results, dict) else []:
             if row.get("n") is None:
                 continue
-            if claim_id is None or row.get("claim_id") == claim_id:
+            if not claim_ids or row.get("claim_id") in claim_ids:
                 ns.append(int(row["n"]))
     if ns:
         mode = max(set(ns), key=ns.count)
@@ -412,12 +704,21 @@ def _focal_n(inp: Stage2Inputs) -> tuple[int | None, str]:
 
 
 def check_mde(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
-    # match.json is deliberately excluded: neither check reads it, so a stage 1
-    # rematch must not invalidate a strong-tier call.
+    """The MDE for the focal analysis, computed in R, or an abstention with the reason.
+
+    No model is involved: a power calculation the deterministic path cannot cover is a
+    design the pipeline does not know how to state assumptions for, and a modelled
+    guess would put an unverifiable number in the report.
+    """
+    # match.json is deliberately excluded: the check does not read it, so a stage 1
+    # rematch must not invalidate the computation.
     inputs = _subset(
-        inp.hashes, "manifest.json", "stage0/contracts", "stage0/readiness", "stage1/",
-        exclude=("stage1/match.json",),
+        inp.hashes, "manifest.json", "stage0/claims", "stage0/contracts", "stage0/readiness",
+        "stage1/", exclude=("stage1/match.json",),
     )
+    abstained = _focal_abstain(inp, "mde", inputs, ())
+    if abstained is not None:
+        return abstained
     existing = load_check(inp.paper_id, "mde")
     if reusable(existing, inputs) and not force:
         return existing  # type: ignore[return-value]
@@ -451,65 +752,19 @@ def check_mde(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
                 model_calls=[], response=result,
             )
         except mde_mod.MdeError as e:
-            fallback_reason = f"deterministic path failed: {e}"
+            reason = f"the power computation failed: {e}"
     elif design is None:
-        fallback_reason = (
-            f"model_type {ct.model_type!r} is not one of the covered designs"
-            if ct is not None else "no estimand contract to read the design from"
+        reason = (
+            f"model_type {ct.model_type!r} is not one of the designs the power "
+            "computation covers" if ct is not None
+            else "no estimand contract to read the design from"
         )
     else:
-        fallback_reason = f"no analysed n available ({n_source})"
+        reason = f"no analysed n available ({n_source})"
 
-    return _mde_agentic(inp, inputs, fallback_reason)
-
-
-def _mde_agentic(inp: Stage2Inputs, inputs: dict[str, str], reason: str) -> CheckRecord:
-    """Fallback: an agentic call in a directory holding only the design inputs."""
-    work = paths.run_dir(inp.paper_id, 2) / "mde_work"
-    if work.exists():
-        shutil.rmtree(work)
-    work.mkdir(parents=True)
-    if inp.focal_contract is not None:
-        (work / "CONTRACT.json").write_text(inp.focal_contract.model_dump_json(indent=2))
-    if inp.readiness is not None:
-        (work / "READINESS.json").write_text(json.dumps(inp.readiness, indent=2))
-    (work / "TRACES.json").write_text(
-        json.dumps([r.trace for r in inp.replicas], indent=2, default=str)
-    )
-
-    material = (
-        f"The working directory holds CONTRACT.json, READINESS.json and TRACES.json. "
-        f"Read them there and run R with Rscript.\n"
-        f"Deterministic power computation was not applicable: {reason}.\n"
-        f"Effect grid to report power for: {', '.join(str(e) for e in mde_mod.EFFECTS)}."
-    )
-    prompt = artifacts.load_prompt("stage2_mde", material=material)
-    r = llm.call(
-        "mde",
-        prompt,
-        paper_id=inp.paper_id,
-        stage=STAGE,
-        tier="strong",
-        agentic=True,
-        cwd=work,
-        schema=MdeResponse,
-        log_path=paths.run_dir(inp.paper_id, 2) / "logs" / "mde.log",
-    )
-    versions = {"stage2_mde": artifacts.prompt_version("stage2_mde")}
-    calls = [r.ledger_id] if r.ledger_id else []
-    if r.parsed is None:
-        return write_check(
-            inp.paper_id, "mde", inputs=inputs, prompt_versions=versions, model_calls=calls,
-            response={"method": "agentic", "fallback_reason": reason},
-            abstain_reason=r.error or "model returned no valid MDE",
-        )
-    payload = r.parsed.model_dump()
-    payload["method"] = payload.get("method") or "agentic"
-    payload["computed_by"] = "agentic"
-    payload["fallback_reason"] = reason
     return write_check(
-        inp.paper_id, "mde", inputs=inputs, prompt_versions=versions,
-        model_calls=calls, response=payload,
+        inp.paper_id, "mde", inputs=inputs, prompt_versions={}, model_calls=[],
+        response=None, abstain_reason=reason,
     )
 
 
@@ -517,14 +772,18 @@ def _mde_agentic(inp: Stage2Inputs, inputs: dict[str, str], reason: str) -> Chec
 
 
 def check_alignment(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
-    # match.json is deliberately excluded: neither check reads it, so a stage 1
-    # rematch must not invalidate a strong-tier call.
+    prompts = ("stage2_alignment",)
+    # match.json is deliberately excluded: the check does not read it, so a stage 1
+    # rematch must not invalidate the call.
     inputs = _subset(
-        inp.hashes, "manifest.json", "stage0/contracts", "stage0/readiness", "stage1/",
-        exclude=("stage1/match.json",),
+        inp.hashes, "manifest.json", "stage0/claims", "stage0/contracts", "stage0/readiness",
+        "stage1/", exclude=("stage1/match.json",),
     )
+    abstained = _focal_abstain(inp, "alignment", inputs, prompts)
+    if abstained is not None:
+        return abstained
     existing = load_check(inp.paper_id, "alignment")
-    if reusable(existing, inputs) and not force:
+    if reusable(existing, inputs, prompts) and not force:
         return existing  # type: ignore[return-value]
 
     open_choices = {
@@ -550,11 +809,12 @@ def check_alignment(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
         prompt,
         paper_id=inp.paper_id,
         stage=STAGE,
-        tier="strong",
+        tier="cheap",
         schema=AlignmentResponse,
+        reasoning_max_tokens=CHEAP_REASONING_CAP,
         log_path=paths.run_dir(inp.paper_id, 2) / "logs" / "alignment.log",
     )
-    versions = {"stage2_alignment": artifacts.prompt_version("stage2_alignment")}
+    versions = _versions(*prompts)
     calls = [r.ledger_id] if r.ledger_id else []
     if r.parsed is None:
         return write_check(
@@ -564,6 +824,7 @@ def check_alignment(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
         )
     payload = r.parsed.model_dump()
     payload["traced_open_choices"] = {k: v["open_choices"] for k, v in open_choices.items()}
+    payload["focal_claim_rule"] = inp.focal_rule
     return write_check(
         inp.paper_id, "alignment", inputs=inputs, prompt_versions=versions,
         model_calls=calls, response=payload,
@@ -602,27 +863,70 @@ def verify_anchors(findings: list[dict[str, Any]], sources: dict[str, str]) -> l
     return out
 
 
+def broad_material(inp: Stage2Inputs) -> tuple[str, dict[str, Any]]:
+    """The one strong-tier prompt's payload, scoped to the focal analysis.
+
+    One canonical replica script in full plus unified diffs of the others: ten
+    near-identical scripts say nothing the diffs do not, and cost ten times as much.
+    """
+    methods, passages = _focal_material(inp)
+    canonical, why = canonical_replica(inp)
+    blocks = [
+        f"## Focal claim\n\n{_focal_claim_text(inp)}",
+        f"## Focal analysis — estimand contract\n\n"
+        + (inp.focal_contract.model_dump_json(indent=2) if inp.focal_contract
+           else "(no contract available)"),
+        f"## Methods section (from paper.txt)\n\n{methods}",
+        f"## Results and discussion passages carrying the focal claim\n\n{passages}",
+        f"## Data schema (stage0/schema.json)\n\n{schema_summary(inp.schema_text)}",
+    ]
+    provenance: dict[str, Any] = {"canonical_replica": None, "canonical_replica_reason": why,
+                                  "diffed_replicas": []}
+    if canonical is not None:
+        name = canonical.script_path.name if canonical.script_path else "script"
+        blocks.append(
+            f"## Canonical replica script — {canonical.replica_id} / {name}\n"
+            f"Chosen because it is {why}.\n\n```\n{canonical.script_text}\n```"
+        )
+        rows = focal_results(canonical, inp)
+        blocks.append(
+            f"## Canonical replica results for the focal analysis — {canonical.replica_id}\n\n"
+            f"{json.dumps(rows, indent=2, default=str) if rows else '(none)'}"
+        )
+        others = [r for r in inp.replicas
+                  if r.replica_id != canonical.replica_id and r.script_text]
+        diffs = replica_diffs(canonical, sorted(others, key=lambda r: r.replica_id))
+        provenance["canonical_replica"] = canonical.replica_id
+        provenance["diffed_replicas"] = [rid for rid, _ in diffs]
+        for rid, diff in diffs:
+            blocks.append(
+                f"## Replica {rid} — unified diff against {canonical.replica_id}\n\n"
+                f"```diff\n{diff}\n```"
+            )
+    else:
+        blocks.append(f"## Replica scripts\n\n({why})")
+    blocks.append(
+        "## Match summary for the focal analysis\n\n"
+        + json.dumps(focal_match_summary(inp), indent=2, default=str)
+    )
+    return "\n\n".join(blocks), provenance
+
+
 def check_broad(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
-    inputs = _subset(inp.hashes, "paper.txt", "stage0/schema", "stage1/")
+    prompts = ("stage2_broad",)
+    inputs = _subset(
+        inp.hashes, "paper.txt", "manifest.json", "stage0/claims", "stage0/contracts",
+        "stage0/schema", "stage0/redacted_methods", "stage1/",
+    )
+    abstained = _focal_abstain(inp, "broad", inputs, prompts)
+    if abstained is not None:
+        return abstained
     existing = load_check(inp.paper_id, "broad")
-    if reusable(existing, inputs) and not force:
+    if reusable(existing, inputs, prompts) and not force:
         return existing  # type: ignore[return-value]
 
-    blocks = [f"## Paper text\n\n{inp.paper_text}"]
-    blocks.append(f"## Data schema (stage0/schema.json)\n\n{inp.schema_text or '(none)'}")
-    for rep in inp.replicas:
-        name = rep.script_path.name if rep.script_path else "(no script)"
-        blocks.append(f"## Replica {rep.replica_id} — {name}\n\n```\n{rep.script_text}\n```")
-        blocks.append(
-            f"## Replica {rep.replica_id} — results.json\n\n"
-            f"{json.dumps(rep.results, indent=2, default=str) if rep.results else '(none)'}"
-        )
-    blocks.append(
-        "## Match summary (stage1/match.json)\n\n"
-        + (json.dumps((inp.match or {}).get("summaries") or inp.match, indent=2, default=str)
-           if inp.match else "(none)")
-    )
-    prompt = artifacts.load_prompt("stage2_broad", material="\n\n".join(blocks))
+    material, provenance = broad_material(inp)
+    prompt = artifacts.load_prompt("stage2_broad", material=material)
     r = llm.call(
         "broad",
         prompt,
@@ -632,7 +936,7 @@ def check_broad(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
         schema=BroadResponse,
         log_path=paths.run_dir(inp.paper_id, 2) / "logs" / "broad.log",
     )
-    versions = {"stage2_broad": artifacts.prompt_version("stage2_broad")}
+    versions = _versions(*prompts)
     calls = [r.ledger_id] if r.ledger_id else []
     if r.parsed is None:
         return write_check(
@@ -641,12 +945,15 @@ def check_broad(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
             abstain_reason=r.error or "model returned no valid referee findings",
         )
     payload = r.parsed.model_dump()
+    # Anchors are checked against everything on disk, not only what the prompt carried.
     sources = {"paper.txt": inp.paper_text, "schema.json": inp.schema_text}
     for rep in inp.replicas:
         if rep.script_text:
             sources[f"{rep.replica_id}/{rep.script_path.name}"] = rep.script_text  # type: ignore[union-attr]
     payload["findings"] = verify_anchors(payload.get("findings") or [], sources)
     payload["anchor_sources"] = sorted(sources)
+    payload["focal_claim_rule"] = inp.focal_rule
+    payload.update(provenance)
     return write_check(
         inp.paper_id, "broad", inputs=inputs, prompt_versions=versions,
         model_calls=calls, response=payload,
@@ -690,8 +997,8 @@ def assemble(inp: Stage2Inputs, records: dict[str, CheckRecord]) -> AnalysisRevi
             note=p.get("method"),
             **{k: p[k] for k in
                ("design", "n_analysed", "n_per_group", "mde_standardised", "mde_metric",
-                "mde_paper_metric", "alpha", "target_power", "caveats", "r_script",
-                "fallback_reason", "design_source", "computed_by") if k in p},
+                "alpha", "target_power", "caveats", "r_script", "design_source")
+               if k in p},
         )
 
     alignment = None
@@ -748,8 +1055,8 @@ def assemble(inp: Stage2Inputs, records: dict[str, CheckRecord]) -> AnalysisRevi
         prompt_versions.update(records[name].meta.prompt_versions if records[name].meta else {})
 
     ambiguities = [f"check {name} abstained: {records[name].abstain_reason}" for name in abstained]
-    if inp.paper_truncated:
-        ambiguities.append(f"paper.txt truncated to {PAPER_TEXT_LIMIT} characters for the prompts")
+    if inp.focal_error:
+        ambiguities.append(f"focal claim not bound: {inp.focal_error}")
 
     return AnalysisReview(
         narrow=NarrowChecks(causal_language=causal, mde=mde_check, alignment=alignment),
@@ -781,7 +1088,8 @@ def _md_quote(text: str | None) -> str:
 
 def render_md(inp: Stage2Inputs, review: AnalysisReview, records: dict[str, CheckRecord]) -> str:
     L: list[str] = [f"# Stage 2 — analysis review: {inp.paper_id}", ""]
-    L.append(f"Focal claim selected by: {inp.focal_rule}.")
+    L.append(f"Focal claim could not be bound: {inp.focal_error}." if inp.focal_error
+             else f"Focal claim bound by: {inp.focal_rule}.")
     if inp.focal_claim:
         L.append(f"Focal claim id: `{inp.focal_claim.claim_id}`.")
     if inp.focal_contract:
@@ -826,10 +1134,7 @@ def render_md(inp: Stage2Inputs, review: AnalysisReview, records: dict[str, Chec
         m = review.narrow.mde if review.narrow else None
         p = records["mde"].response or {}
         if m is not None:
-            how = "computed in R" if p.get("method") == "deterministic" else "produced by an agentic model call"
-            L.append(f"Method: {how}.")
-            if p.get("fallback_reason"):
-                L.append(f"Deterministic path not used because {p['fallback_reason']}.")
+            L.append(f"Computed in R from n and the model form ({p.get('design')} design).")
             mde_val = p.get("mde_standardised")
             metric = p.get("mde_metric") or p.get("mde_paper_metric") or "standardised effect"
             if mde_val is not None:
@@ -881,6 +1186,14 @@ def render_md(inp: Stage2Inputs, review: AnalysisReview, records: dict[str, Chec
         b = review.broad
         p = records["broad"].response or {}
         if b is not None:
+            if p.get("canonical_replica"):
+                L += [
+                    f"Read: the focal analysis's methods and results passages, the data "
+                    f"schema, replica `{p['canonical_replica']}`'s script in full "
+                    f"({p.get('canonical_replica_reason')}), and unified diffs of "
+                    f"{', '.join('`' + r + '`' for r in p.get('diffed_replicas') or []) or 'no other replica'}.",
+                    "",
+                ]
             if p.get("summary"):
                 L += [str(p["summary"]), ""]
             verified = [f for f in b.findings if getattr(f, "anchor_verified", False)]

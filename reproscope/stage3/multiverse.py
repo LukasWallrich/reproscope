@@ -7,7 +7,9 @@ when its output is already there and `force` is off:
                      the curve is drawn in (`focal_quantity`)
 2. `factors_proposed.json`   cheap enumerator over contract, schema and replica traces
 3. `screen.json` + `grid.json`   adversarial screen (different model family), then a
-                     deterministic grid build with incompatible pruning and a size cap
+                     deterministic grid build with incompatible pruning, a size cap and
+                     a stratified fractional sample above the execution cap. The grid
+                     is rebuilt every run: it is a pure function of the two steps above.
 4. `execute.json`    agentic executor writes and runs out/multiverse.R -> out/specs.csv,
                      then deterministic verification plus a hardcoding audit
 5. `rank.json`       where the paper's reported estimate sits in the curve
@@ -18,9 +20,11 @@ when its output is already there and `force` is off:
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import math
+import random
 import re
 import shutil
 import subprocess
@@ -35,7 +39,12 @@ from .. import artifacts, llm, paths
 from ..artifacts import ClaimRecord, EstimandContract
 from ..focal import QUANTITY_PREFERENCE, _TSTAT_KINDS, _as_float, _norm, bind_focal_claim  # noqa: F401
 
+# Two caps with different jobs. GRID_CAP bounds the design itself: above it, low-priority
+# factors are pinned or dropped, so the grid stays a grid a reader can describe. EXEC_CAP
+# bounds what is actually run: above it the curve is estimated from a stratified fraction
+# of the pruned grid instead of all of it.
 GRID_CAP = 256
+EXEC_CAP = 64
 EXECUTOR_TIMEOUT_S = 2400
 
 
@@ -227,6 +236,8 @@ def build_grid(
     screen: dict[str, Any],
     *,
     cap: int = GRID_CAP,
+    exec_cap: int | None = EXEC_CAP,
+    paper_id: str | None = None,
     paper_levels: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Turn the enumerator's factors plus the screen's verdicts into the executor's GRID.json.
@@ -241,6 +252,10 @@ def build_grid(
     counted out exactly. If the surviving grid is still larger than `cap`, multi-level
     factors are dropped from the end of the enumerator's list, which is where it was
     asked to put the choices least likely to move the estimate.
+
+    A grid still larger than `exec_cap` after that is executed as a stratified fraction:
+    `grid_size` stays the full count, `n_specs` says how many specifications run, and
+    `sampled_spec_ids` names them.
 
     `paper_levels` maps factor name to the level the paper itself used, read off the
     best-matching replica; it overrides the enumerator's own `paper_level` mark.
@@ -346,7 +361,7 @@ def build_grid(
         by_name = {_norm(f2["name"]): f2 for f2 in factors}
         incompatible = [inc for inc in incompatible if resolves(inc["a"]) and resolves(inc["b"])]
 
-    return {
+    grid = {
         "factors": factors,
         "incompatible": incompatible,
         "rejected_levels": rejected,
@@ -358,6 +373,86 @@ def build_grid(
         "adjustments": screen.get("adjustments", []),
         "notes": notes,
     }
+    apply_exec_cap(grid, paper_id=paper_id, exec_cap=exec_cap)
+    return grid
+
+
+def apply_exec_cap(
+    grid: dict[str, Any], *, paper_id: str | None, exec_cap: int | None
+) -> dict[str, Any]:
+    """Decide which specifications of the grid are executed, and record the decision.
+
+    `grid_size` keeps the full count of the pruned grid. `n_specs` is what runs,
+    `sampled` says whether that is a fraction, and `sample_fraction` how large a one.
+    """
+    specs = enumerate_specs(grid)
+    grid["exec_cap"] = exec_cap
+    grid["n_specs"] = len(specs)
+    grid["sampled"] = False
+    grid["sample_fraction"] = 1.0
+    if exec_cap is None or len(specs) <= exec_cap:
+        return grid
+    chosen = sample_specs(specs, grid, paper_id=paper_id, cap=exec_cap)
+    grid["sampled_spec_ids"] = [s["spec_id"] for s in chosen]
+    grid["n_specs"] = len(chosen)
+    grid["sampled"] = True
+    grid["sample_fraction"] = round(len(chosen) / len(specs), 6)
+    note = (f"the grid of {len(specs)} specifications exceeds the execution cap of "
+            f"{exec_cap}; {len(chosen)} are executed as a stratified fractional sample "
+            f"seeded from the paper id")
+    if not any(s.get("is_paper_level") for s in specs):
+        note += "; the paper's own specification is not identified in this grid"
+    grid.setdefault("notes", []).append(note)
+    return grid
+
+
+def sample_specs(
+    specs: list[dict[str, Any]],
+    grid: dict[str, Any],
+    *,
+    paper_id: str | None,
+    cap: int,
+) -> list[dict[str, Any]]:
+    """A deterministic fraction of the grid that still covers every factor level.
+
+    The seed is fixed from the paper id, so the same paper always executes the same
+    specifications. The paper's own specification goes in first; then every level of
+    every factor is given at least one specification, as far as the cap allows; then the
+    remainder is drawn at random. The result is in grid order.
+    """
+    seed = int(hashlib.sha256((paper_id or "").encode()).hexdigest()[:16], 16)
+    rng = random.Random(seed)
+    by_id = {s["spec_id"]: s for s in specs}
+    order = {s["spec_id"]: i for i, s in enumerate(specs)}
+    chosen: list[str] = []
+
+    def take(spec_id: str) -> None:
+        if spec_id not in chosen and len(chosen) < cap:
+            chosen.append(spec_id)
+
+    for s in specs:
+        if s.get("is_paper_level"):
+            take(s["spec_id"])
+            break
+
+    pool = [s["spec_id"] for s in specs]
+    rng.shuffle(pool)
+    for f in grid.get("factors", []):
+        name = f["name"]
+        for lv in f["levels"]:
+            value = _norm(lv["value"])
+            if any(_norm(by_id[c]["levels"].get(name, "")) == value for c in chosen):
+                continue
+            hit = next((sid for sid in pool
+                        if sid not in chosen
+                        and _norm(by_id[sid]["levels"].get(name, "")) == value), None)
+            if hit is not None:
+                take(hit)
+    for sid in pool:
+        if len(chosen) >= cap:
+            break
+        take(sid)
+    return sorted((by_id[c] for c in chosen), key=lambda s: order[s["spec_id"]])
 
 
 def _grid_size(factors: list[dict[str, Any]], incompatible: list[dict[str, Any]]) -> int:
@@ -415,6 +510,10 @@ def enumerate_specs(grid: dict[str, Any]) -> list[dict[str, Any]]:
     `is_paper_level` marks the one specification that uses the paper's own level on
     every factor. It is absent when the screen or the size cap left any factor without
     a paper level, because then the paper's own specification is not fully determined.
+
+    When the grid carries `sampled_spec_ids`, only those specifications are returned.
+    Ids still come from the full enumeration, so a sampled specification keeps the id it
+    would have had in the whole grid.
     """
     combos = grid_specs(grid)
     width = max(3, len(str(len(combos))))
@@ -427,6 +526,10 @@ def enumerate_specs(grid: dict[str, Any]) -> list[dict[str, Any]]:
         if complete and all(_norm(levels[k]) == _norm(v) for k, v in paper.items()):
             spec["is_paper_level"] = True
         out.append(spec)
+    sampled = grid.get("sampled_spec_ids")
+    if sampled is not None:
+        keep = set(sampled)
+        out = [s for s in out if s["spec_id"] in keep]
     return out
 
 
@@ -729,6 +832,7 @@ def executor_grid(grid: dict[str, Any]) -> dict[str, Any]:
         "specs": [{k: v for k, v in s.items() if k != "is_paper_level"} for s in enumerate_specs(grid)],
         "incompatible": grid.get("incompatible", []),
         "grid_size": grid.get("grid_size"),
+        "n_specs": grid.get("n_specs"),
         "cap": grid.get("cap"),
     }
 
@@ -802,9 +906,12 @@ def verify_execution(work: Path, grid: dict[str, Any], paper_id: str) -> dict[st
 
     rows = read_specs(specs_path, grid)
     specs = enumerate_specs(grid)
-    expected = grid.get("grid_size", 0)
+    # The executed count, not the grid size: above the execution cap only a sample runs.
+    expected = grid.get("n_specs", len(specs))
     report["checks"]["n_rows"] = len(rows)
     report["checks"]["n_expected"] = expected
+    report["checks"]["grid_size"] = grid.get("grid_size")
+    report["checks"]["sampled"] = bool(grid.get("sampled"))
     report["checks"]["row_count_matches"] = len(rows) == expected
     if len(rows) != expected:
         report["problems"].append(f"specs.csv has {len(rows)} rows, grid expects {expected}")
