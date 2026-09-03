@@ -113,6 +113,16 @@ def test_two_sentences_on_one_page_are_not_a_value_conflict():
     assert sorted(r.source for r in arbitrate.partition(a, b)) == ["A", "B"]
 
 
+def test_a_cell_is_matched_on_its_words_not_their_order():
+    assert arbitrate.cells_match("Attachment - Total attachment / SD", "Total attachment / SD")
+    assert arbitrate.cells_match("HKSS / Total attachment", "Total attachment / HKSS")
+    assert arbitrate.cells_match("Total attachment / SD", None)
+    # One word apart is a different cell of the same table.
+    assert not arbitrate.cells_match("Banging head / Men - Percentage", "Banging head / Women percentage")
+    assert not arbitrate.cells_match("Total attachment / SD", "Total attachment / M")
+    assert not arbitrate.cells_match("Table 3 row 1", "Table 3 row 2")
+
+
 def test_table_four_is_not_table_five():
     a = ClaimList(claims=[claim(value=0.2, kind="r", label="Table 4", cell="age")])
     b = ClaimList(claims=[claim(value=0.2, kind="r", label="Table 5", cell="age")])

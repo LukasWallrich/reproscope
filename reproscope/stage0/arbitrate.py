@@ -98,6 +98,24 @@ def labels_match(a: str | None, b: str | None) -> bool:
     return SequenceMatcher(None, na, nb).ratio() >= LABEL_SIM
 
 
+def cells_match(a: str | None, b: str | None) -> bool:
+    """Same table cell: the same words, in any order, and the same numbering.
+
+    Cells are slash-separated coordinates ("Attachment - Total attachment / SD"),
+    which the two extractors write in different orders and with different lead-ins,
+    so the words they share decide. One word apart — Men against Women, M against
+    SD — is far enough to keep two cells separate.
+    """
+    ta, tb = set(re.findall(r"[a-z0-9]+", (a or "").lower())), set(
+        re.findall(r"[a-z0-9]+", (b or "").lower())
+    )
+    if not ta or not tb:
+        return True
+    if re.findall(r"\d+", a or "") != re.findall(r"\d+", b or ""):
+        return False
+    return len(ta & tb) / len(ta | tb) >= LABEL_SIM
+
+
 def canonical_kind(claim: SlimClaim) -> str:
     raw = (claim.quantity_kind or "other").strip()
     return raw if raw in ALLOWED_KINDS else KIND_MAP.get(raw, "other")
@@ -126,7 +144,7 @@ def _candidate(a: SlimClaim, b: SlimClaim, require_value: bool) -> float | None:
         return None
     if require_value and not values_agree(a, b):
         return None
-    if not labels_match(la.label, lb.label) or not labels_match(la.cell, lb.cell):
+    if not labels_match(la.label, lb.label) or not cells_match(la.cell, lb.cell):
         return None
     if not require_value and not (normalise(la.cell) and normalise(lb.cell)):
         # Without two table cells to compare, only the wording separates two claims
