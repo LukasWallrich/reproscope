@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config, paths
+from . import focal as focal_mod
 
 BANDS = ("A", "B", "C", "fail", "not_found")
 SEVERITIES = ("minor", "major", "critical", "unrated")
@@ -150,14 +151,13 @@ def _focal(paper_id: str, stage0: Path, stage3: Path) -> tuple[dict | None, str 
         return cached, "stage3/focal.json"
     try:
         from . import artifacts
-        from .stage3 import multiverse
 
         man = paths.manifest(paper_id)
         claims = [artifacts.ClaimRecord.model_validate(c)
                   for c in (_read_json(stage0 / "claims.json") or [])]
         contracts = [artifacts.EstimandContract.model_validate(c)
                      for c in (_read_json(stage0 / "contracts.json") or [])]
-        return multiverse.bind_focal_claim(
+        return focal_mod.bind_focal_claim(
             man, claims, contracts, paper_id=paper_id, allow_llm=False
         ), "bound offline from the manifest focal claim"
     except Exception:  # no manifest, no claims, or nothing matched numerically

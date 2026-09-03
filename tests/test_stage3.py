@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from reproscope import artifacts, paths
+from reproscope import focal as focal_mod
 from reproscope.artifacts import ClaimRecord, EstimandContract
 from reproscope.stage3 import multiverse as mv
 
@@ -58,7 +59,7 @@ def _fixture_inputs(root: Path):
 
 def test_binding_prefers_the_effect_size_over_the_test_statistic(sandbox):
     manifest, claims, contracts = _fixture_inputs(sandbox)
-    focal = mv.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
+    focal = focal_mod.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
 
     # every claim whose value appears in the reported sentence is bound...
     assert set(focal["claim_ids"]) >= {"c1", "c2", "c3"}
@@ -73,13 +74,13 @@ def test_binding_prefers_the_effect_size_over_the_test_statistic(sandbox):
 def test_binding_derives_d_when_only_t_is_reported(sandbox):
     manifest, claims, contracts = _fixture_inputs(sandbox)
     claims = [c for c in claims if c.quantity_kind != "d"]  # paper reports no effect size
-    focal = mv.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
+    focal = focal_mod.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
 
     fq = focal["focal_quantity"]
     assert fq["claim_id"] == "c3" or fq["kind"] in {"d", "mean"}
     # drop the group mean too: only the t statistic is left
     claims = [c for c in claims if c.quantity_kind not in {"d", "mean"}]
-    fq = mv.bind_focal_claim(manifest, claims, contracts, allow_llm=False)["focal_quantity"]
+    fq = focal_mod.bind_focal_claim(manifest, claims, contracts, allow_llm=False)["focal_quantity"]
     assert fq["kind"] == "d"
     assert fq["derived_from"] == "t"
     t, df = manifest.focal_claim.reported.value, manifest.focal_claim.reported.df
@@ -91,7 +92,7 @@ def test_binding_raises_when_nothing_matches(sandbox):
     other = [ClaimRecord(claim_id="x1", quantity_kind="coefficient", value=99.9,
                          description="An unrelated coefficient.")]
     with pytest.raises(ValueError):
-        mv.bind_focal_claim(manifest, other, contracts, allow_llm=False)
+        focal_mod.bind_focal_claim(manifest, other, contracts, allow_llm=False)
 
 
 # --- step 3: grid builder ------------------------------------------------
@@ -377,7 +378,7 @@ def test_parse_interpretation_reads_the_trailing_json_block():
 
 def test_assemble_work_picks_the_best_matching_replica_and_withholds_the_value(sandbox):
     manifest, claims, contracts = _fixture_inputs(sandbox)
-    focal = mv.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
+    focal = focal_mod.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
     grid = mv.build_grid(PROPOSED, SCREEN)
     info = mv.assemble_work("_fixture3", focal, grid)
 
@@ -520,7 +521,7 @@ def test_a_band_b_replica_does_not_override_the_enumerator(sandbox, monkeypatch)
 
     monkeypatch.setattr(mv.llm, "call", refuse)
     manifest, claims, contracts = _fixture_inputs(sandbox)
-    focal = mv.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
+    focal = focal_mod.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
     out = mv.derive_paper_levels("_fixture3", PROPOSED, focal)
 
     assert out["source"] == "enumerator"
@@ -545,7 +546,7 @@ def test_a_band_a_replica_overrides_and_records_the_disagreement(sandbox, monkey
                                        "ledger_id": "abc123"})(),
     )
     manifest, claims, contracts = _fixture_inputs(sandbox)
-    focal = mv.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
+    focal = focal_mod.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
     out = mv.derive_paper_levels("_fixture3", PROPOSED, focal)
 
     assert out["band"] == "A" and out["replica_id"] == "opus_1"

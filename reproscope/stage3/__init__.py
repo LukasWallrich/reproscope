@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import artifacts, config, llm, paths
+from .. import focal as focal_mod
 from ..artifacts import (
     ArtifactMeta,
     ClaimRecord,
@@ -116,7 +117,7 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     # --- 1. focal claim binding ------------------------------------------
     focal_path = stage3 / "focal.json"
     if _step(focal_path, force):
-        focal = mv.bind_focal_claim(manifest, claims, contracts, paper_id=paper_id)
+        focal = focal_mod.bind_focal_claim(manifest, claims, contracts, paper_id=paper_id)
         mv._write_json(focal_path, focal)
     focal = mv._read_json(focal_path)
     fq = focal["focal_quantity"]
