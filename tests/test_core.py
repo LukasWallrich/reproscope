@@ -69,7 +69,7 @@ def test_config_reads_models_toml():
     assert config.executor().route == "opencode"
     labels = dict((s.route + "/" + s.model, label) for label, s in config.all_specs())
     assert "opencode/z-ai/glm-5.3-flash" in labels
-    assert config.shadow_price("gpt-5.6-luna") == 2.5
+    assert config.shadow_price("gpt-5.6-luna") == 0.2
     assert config.shadow_price("opus") is None
     with pytest.raises(KeyError):
         config.tier("no_such_tier")
@@ -331,7 +331,7 @@ def test_codex_tokens_are_priced_at_the_shadow_rate(sandbox, monkeypatch):
     assert r.cost_usd == 0.0  # subscription seat: no marginal cash
     row = ledger.rows("p")[0]
     assert row["cost_source"] == "subscription"
-    assert row["cost_usd_equiv"] == pytest.approx(1000 * 2.5 / 1e6)
+    assert row["cost_usd_equiv"] == pytest.approx(1000 * 0.2 / 1e6)
 
 
 # --- live route probes ----------------------------------------------------
