@@ -84,6 +84,41 @@ def test_a_different_label_is_not_the_same_claim():
     assert sorted(r.source for r in arbitrate.partition(a, b)) == ["A", "B"]
 
 
+def test_two_table_cells_are_not_a_value_conflict():
+    """Different rows of one table stay two claims, each checked on its own."""
+    a = ClaimList(claims=[claim(value=4.3, kind="percent", label="Table 3", cell="Sandpaper / Men")])
+    b = ClaimList(claims=[claim(value=11.1, kind="percent", label="Table 3", cell="Carving / Women")])
+    assert sorted(r.source for r in arbitrate.partition(a, b)) == ["A", "B"]
+
+
+def test_two_sentences_on_one_page_are_not_a_value_conflict():
+    a = ClaimList(
+        claims=[
+            claim(
+                value=0.29,
+                kind="p_value",
+                description="p = .29 for the baseline vs. suppressed comparison in ruminators (flanker latencies).",
+            )
+        ]
+    )
+    b = ClaimList(
+        claims=[
+            claim(
+                value=0.209,
+                kind="p_value",
+                description="Target ratings by ruminators were not significantly different, p = .209.",
+            )
+        ]
+    )
+    assert sorted(r.source for r in arbitrate.partition(a, b)) == ["A", "B"]
+
+
+def test_table_four_is_not_table_five():
+    a = ClaimList(claims=[claim(value=0.2, kind="r", label="Table 4", cell="age")])
+    b = ClaimList(claims=[claim(value=0.2, kind="r", label="Table 5", cell="age")])
+    assert sorted(r.source for r in arbitrate.partition(a, b)) == ["A", "B"]
+
+
 def test_headline_from_either_extractor_survives_the_merge():
     a = ClaimList(claims=[claim(importance="supporting")])
     b = ClaimList(claims=[claim(importance="headline")])

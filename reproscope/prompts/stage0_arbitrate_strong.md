@@ -1,6 +1,6 @@
 Two extractors read the same paper independently. A first vision pass settled most of the entries they disagreed on. The items below are headline claims it left open, so decide them carefully.
 
-Each item is either an entry only one extractor reported, or an entry both reported at the same place with different values (`candidate_values`). The page images listed below cover every item; find the item's location from its `page`, `location` and `description` fields.
+Each item is either an entry only one extractor reported, or an entry both reported at the same place with different values (`candidate_values`). Each item names its page image in `image`, numbered in the list below; find the value on that page from the item's `location` and `description` fields.
 
 Decide each item:
 

@@ -40,6 +40,7 @@ KIND_MAP = {
 ALLOWED_TYPES = {"scalar", "range", "table_cell", "qualitative", "figure"}
 
 LABEL_SIM = 0.8  # difflib ratio over normalised location labels
+DESCRIPTION_SIM = 0.5  # a looser floor: two extractors paraphrase the same sentence
 BATCH_SIZE = 20  # items per cheap-tier call
 BATCH_WORKERS = 4
 CROP_DPI = 110
@@ -83,6 +84,20 @@ def label_similarity(a: str | None, b: str | None) -> float:
     return SequenceMatcher(None, na, nb).ratio()
 
 
+def labels_match(a: str | None, b: str | None) -> bool:
+    """Same place in the paper: similar wording and the same numbering.
+
+    Table 4 and Table 5, or row 1 and row 2, read as similar text but are different
+    locations, so any digits in the two labels have to be identical.
+    """
+    na, nb = normalise(a), normalise(b)
+    if not na or not nb:
+        return True
+    if re.findall(r"\d+", a or "") != re.findall(r"\d+", b or ""):
+        return False
+    return SequenceMatcher(None, na, nb).ratio() >= LABEL_SIM
+
+
 def canonical_kind(claim: SlimClaim) -> str:
     raw = (claim.quantity_kind or "other").strip()
     return raw if raw in ALLOWED_KINDS else KIND_MAP.get(raw, "other")
@@ -111,10 +126,18 @@ def _candidate(a: SlimClaim, b: SlimClaim, require_value: bool) -> float | None:
         return None
     if require_value and not values_agree(a, b):
         return None
-    label = label_similarity(la.label, lb.label)
-    if label < LABEL_SIM:
+    if not labels_match(la.label, lb.label) or not labels_match(la.cell, lb.cell):
         return None
-    return label + label_similarity(la.cell, lb.cell) + label_similarity(a.description, b.description)
+    if not require_value and not (normalise(la.cell) and normalise(lb.cell)):
+        # Without two table cells to compare, only the wording separates two claims
+        # printed on the same page, so a value conflict needs a similar description.
+        if label_similarity(a.description, b.description) < DESCRIPTION_SIM:
+            return None
+    return (
+        label_similarity(la.label, lb.label)
+        + label_similarity(la.cell, lb.cell)
+        + label_similarity(a.description, b.description)
+    )
 
 
 def _pair_pass(
@@ -582,9 +605,18 @@ def run(
         if res.unresolved and res.claim.importance == "headline"
     ]
     if escalated:
-        page_numbers = sorted({_location(r.claim).page for _, r in escalated if _location(r.claim).page})
-        imgs = [pages[p - 1] for p in page_numbers if 1 <= p <= len(pages)]
-        per_item = {item_id: 0 for item_id, _ in escalated}
+        page_numbers = [
+            p
+            for p in sorted({_location(r.claim).page for _, r in escalated if _location(r.claim).page})
+            if 1 <= p <= len(pages)
+        ]
+        imgs = [pages[p - 1] for p in page_numbers]
+        per_item = {
+            item_id: page_numbers.index(_location(res.claim).page) + 1
+            if _location(res.claim).page in page_numbers
+            else 0
+            for item_id, res in escalated
+        }
         decisions, call_id = _call_batch(
             manifest,
             "stage0_arbitrate_strong",
