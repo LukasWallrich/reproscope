@@ -231,6 +231,10 @@ def link(
     direct = direct_link(claim.claim_id, results_text)
     if direct is not None:
         return direct, None
+    if results_keyed(results_text):
+        # The replica keyed its results by claim_id and has no value for this one:
+        # it did not compute it. No model call needed.
+        return LinkResult(found=False, note="not in the replica's keyed results.json"), None
     prompt = fill(
         "stage1_link_results",
         claim=blind_claim(claim),
@@ -242,6 +246,15 @@ def link(
     if r.parsed is None:
         return LinkResult(found=False, note=f"link call failed: {r.error}"), r.ledger_id
     return r.parsed, r.ledger_id  # type: ignore[return-value]
+
+
+def results_keyed(results_text: str) -> bool:
+    """Whether the replica's results.json uses claim_id keys (the TASK.md format)."""
+    try:
+        entries = json.loads(results_text).get("results", [])
+    except (json.JSONDecodeError, AttributeError):
+        return False
+    return any(isinstance(e, dict) and e.get("claim_id") for e in entries)
 
 
 def direct_link(claim_id: str, results_text: str) -> LinkResult | None:
