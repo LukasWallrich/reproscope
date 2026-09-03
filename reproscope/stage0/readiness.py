@@ -14,6 +14,7 @@ from .. import artifacts, llm, paths
 MAX_VALUE_COUNTS = 12
 N_EXAMPLES = 3
 TEXT_SUFFIXES = {".txt", ".md"}
+PROMPTS = ("stage0_readiness",)
 
 
 # --- deterministic schema summary ----------------------------------------
@@ -250,20 +251,26 @@ def run(
     summary = json.loads(schema_path.read_text())
 
     if out_path.exists() and not force:
-        return artifacts.load(artifacts.DataReadinessRecord, out_path), []  # type: ignore[return-value]
+        existing = artifacts.load(artifacts.DataReadinessRecord, out_path)
+        if not artifacts.prompt_stale(existing, PROMPTS):  # type: ignore[arg-type]
+            return existing, []  # type: ignore[return-value]
 
+    # The paper text is not part of this call: binding columns to contract fields
+    # needs the data's own documentation and the contracts, nothing more.
     prompt = artifacts.load_prompt(
         "stage0_readiness",
         schema=json.dumps(summary, indent=1),
         codebook=codebook_text(manifest, summary),
-        contracts=json.dumps([c.model_dump(exclude_none=True) for c in contract_records], indent=1),
+        contracts=json.dumps(
+            [c.model_dump(exclude={"meta"}, exclude_none=True) for c in contract_records], indent=1
+        ),
     )
     r = llm.call(
         "readiness",
         prompt,
         paper_id=manifest.paper_id,
         stage="0",
-        tier="strong",
+        tier="mid",
         schema=ReadinessOut,
         cwd=manifest.dir / "data",
         timeout_s=3600,
@@ -279,7 +286,7 @@ def run(
                 artifact="DataReadinessRecord",
                 stage="0",
                 inputs=inputs or {},
-                prompt_versions={"stage0_readiness": artifacts.prompt_version("stage0_readiness")},
+                prompt_versions={n: artifacts.prompt_version(n) for n in PROMPTS},
                 model_calls=[r.ledger_id or ""],
             ).model_dump(),
             "files": [f.model_dump() for f in out.files],

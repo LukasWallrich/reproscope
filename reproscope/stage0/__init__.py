@@ -14,7 +14,7 @@ PROMPTS = (
     "stage0_arbitrate",
     "stage0_contracts",
     "stage0_readiness",
-    "stage0_redact",
+    "stage0_leak_repair",
     "stage0_leak_audit",
 )
 
@@ -56,13 +56,14 @@ def run(paper_id: str, force: bool = False) -> None:
     claims, _ = arbitrate.run(manifest, list_a, list_b, pages, inputs, force=force)
     print(f"claims: {len(claims)}", flush=True)
 
+    # One reading of the paper produces both the contracts and the redacted methods.
     contract_records, _ = contracts.run(manifest, claims, paper_text, inputs, force=force)
     print(f"contracts: {len(contract_records)}", flush=True)
 
     readiness_record, _ = readiness.run(manifest, contract_records, inputs, force=force)
     print(f"readiness: {len(readiness_record.variable_bindings)} bindings", flush=True)
 
-    report, _ = redact.run(manifest, claims, contract_records, paper_text, inputs, force=force)
+    report, _ = redact.run(manifest, claims, contract_records, inputs, force=force)
     print(
         f"redaction: scan_clean={report.scan_clean} "
         f"audit={report.leakage_audit_verdict}",

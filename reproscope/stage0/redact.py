@@ -1,4 +1,9 @@
-"""Steps 6-8: the redacted methods document, the blind contract, the scan and the audit."""
+"""Blind materials: the value-free contract, the local leak repair, the scan and the audit.
+
+The redacted methods document itself is written by the combined contracts call
+(`contracts.py`); this module never sees the paper text. When the scan finds a
+reported value, only the offending sentences go to a cheap model for a rewrite.
+"""
 
 from __future__ import annotations
 
@@ -24,6 +29,8 @@ BLIND_DROP = (
     "importance",  # "headline" marks which tests the paper's conclusions rest on
     "meta",
 )
+
+REPAIR_ROUNDS = 2
 
 
 class ScrubbedText(BaseModel):
@@ -84,36 +91,151 @@ CONTRACT_TEXT_FIELDS = (
 )
 
 
-def analysis_labels(contract_records: list[artifacts.EstimandContract]) -> str:
-    lines = []
-    for c in contract_records:
-        label = getattr(c, "analysis_label", None) or c.model_type or c.analysis_id
-        lines.append(f"- {c.analysis_id}: {label}")
-    return "\n".join(lines) or "- (no contracts)"
+# --- local leak repair ----------------------------------------------------
+
+_BREAK = re.compile(r"(?<=[.!?])\s+|\n")
+_PATH_TOKEN = re.compile(r"\.([^.\[\]]+)|\[(\d+)\]")
 
 
-def _write_methods(
-    manifest, paper_text: str, contract_records, extra_instruction: str, attempt: int
-) -> tuple[str, str]:
+def sentence_span(text: str, start: int, end: int) -> tuple[int, int]:
+    """The sentence (or line) containing [start, end) in `text`."""
+    left = 0
+    for m in _BREAK.finditer(text[:start]):
+        left = m.end()
+    m = _BREAK.search(text[end:])
+    return left, (end + m.start() if m else len(text))
+
+
+def _merge(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    out: list[tuple[int, int]] = []
+    for a, b in sorted(spans):
+        if out and a <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], b))
+        else:
+            out.append((a, b))
+    return out
+
+
+def _json_set(obj: Any, path: str, value: str) -> None:
+    tokens = [k or int(i) for k, i in _PATH_TOKEN.findall(path)]
+    cur = obj
+    for t in tokens[:-1]:
+        cur = cur[t]
+    cur[tokens[-1]] = value
+
+
+def repair_items(files: list[Path], hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One repair item per passage that leaks: its text and the forms to remove.
+
+    Markdown passages are sentences; JSON passages are whole string leaves, which are
+    short enough to rewrite as a unit. Numeric JSON leaves have no text to rewrite and
+    are left for the caller to abstain on.
+    """
+    by_name = {p.name: p for p in files}
+    items: list[dict[str, Any]] = []
+    for name in sorted({h["file"] for h in hits}):
+        path = by_name.get(name)
+        if path is None:
+            continue
+        file_hits = [h for h in hits if h["file"] == name]
+        if path.suffix.lower() == ".json":
+            data = json.loads(path.read_text())
+            for location in sorted({h["location"] for h in file_hits}):
+                leaf = _json_leaf(data, location)
+                if not isinstance(leaf, str):
+                    continue
+                forms = sorted({h["value"] for h in file_hits if h["location"] == location})
+                items.append(
+                    {"id": f"{name}|{location}", "file": name, "span": None,
+                     "location": location, "text": leaf, "forms": forms}
+                )
+        else:
+            text = path.read_text()
+            spans = _merge([sentence_span(text, h["start"], h["end"]) for h in file_hits])
+            for a, b in spans:
+                forms = sorted({h["value"] for h in file_hits if a <= h["start"] < b})
+                items.append(
+                    {"id": f"{name}|{a}", "file": name, "span": (a, b),
+                     "location": None, "text": text[a:b], "forms": forms}
+                )
+    return items
+
+
+def _json_leaf(obj: Any, path: str) -> Any:
+    cur = obj
+    for k, i in _PATH_TOKEN.findall(path):
+        try:
+            cur = cur[k or int(i)]
+        except (KeyError, IndexError, TypeError):
+            return None
+    return cur
+
+
+def apply_repairs(files: list[Path], items: list[dict[str, Any]], rewrites: dict[str, str]) -> None:
+    by_name = {p.name: p for p in files}
+    for name in sorted({i["file"] for i in items}):
+        path = by_name[name]
+        mine = [i for i in items if i["file"] == name and i["id"] in rewrites]
+        if not mine:
+            continue
+        if path.suffix.lower() == ".json":
+            data = json.loads(path.read_text())
+            for item in mine:
+                _json_set(data, item["location"], rewrites[item["id"]])
+            path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        else:
+            text = path.read_text()
+            for item in sorted(mine, key=lambda i: -i["span"][0]):
+                a, b = item["span"]
+                text = text[:a] + rewrites[item["id"]] + text[b:]
+            path.write_text(text)
+
+
+def repair(
+    manifest,
+    files: list[Path],
+    claims: list[artifacts.ClaimRecord],
+    design: list[float],
+    rounds: int = REPAIR_ROUNDS,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Rewrite the leaking passages in place, at most `rounds` times.
+
+    Only the offending passages are sent to the model; the paper text is not in this
+    module's reach. Returns the hits that survive and the ledger ids of the calls made.
+    """
     stage_dir = paths.run_dir(manifest.paper_id, 0)
-    prompt = artifacts.load_prompt(
-        "stage0_redact",
-        paper_text=paper_text,
-        analysis_labels=analysis_labels(contract_records),
-    ) + extra_instruction
-    r = llm.call(
-        "redact" if attempt == 1 else "redact:retry",
-        prompt,
-        paper_id=manifest.paper_id,
-        stage="0",
-        tier="strong",
-        cwd=manifest.dir,
-        timeout_s=3600,
-        log_path=stage_dir / "logs" / f"redact{attempt}.log",
-    )
-    if not r.ok or not r.text.strip():
-        raise llm.LLMError(f"redaction failed: {r.error}")
-    return r.text.strip(), (r.ledger_id or "")
+    calls: list[str] = []
+    hits = leakcheck.scan(files, claims, design)
+    for round_no in range(1, rounds + 1):
+        if not hits:
+            break
+        items = repair_items(files, hits)
+        if not items:
+            break
+        payload = [{"id": i["id"], "text": i["text"], "remove": i["forms"]} for i in items]
+        r = llm.call(
+            f"leak_repair:{round_no}",
+            artifacts.load_prompt(
+                "stage0_leak_repair", items=json.dumps(payload, indent=1, ensure_ascii=False)
+            ),
+            paper_id=manifest.paper_id,
+            stage="0",
+            tier="cheap",
+            schema=ScrubOut,
+            reasoning_max_tokens=256,
+            cwd=manifest.dir,
+            timeout_s=900,
+            log_path=stage_dir / "logs" / f"leak_repair{round_no}.log",
+        )
+        calls.append(r.ledger_id or "")
+        if r.parsed is None:
+            break
+        apply_repairs(files, items, {t.id: t.text for t in r.parsed.items})  # type: ignore[attr-defined]
+        hits = leakcheck.scan(files, claims, design)
+    return hits, calls
+
+
+# --- description scrubbing ------------------------------------------------
 
 
 def _scrub_chunk(manifest, items: list[dict[str, str]], index: int):
@@ -122,10 +244,11 @@ def _scrub_chunk(manifest, items: list[dict[str, str]], index: int):
         SCRUB_PROMPT.format(items=json.dumps(items, indent=1, ensure_ascii=False)),
         paper_id=manifest.paper_id,
         stage="0",
-        tier="strong",
+        tier="cheap",
         schema=ScrubOut,
+        reasoning_max_tokens=256,
         cwd=manifest.dir,
-        timeout_s=3600,
+        timeout_s=1800,
         log_path=paths.run_dir(manifest.paper_id, 0) / "logs" / f"scrub{index}.log",
     )
     if r.parsed is None:
@@ -256,11 +379,10 @@ def build_blind_dir(stage_dir: Path) -> Path:
     return blind
 
 
-def leak_audit(manifest, blind_dir: Path, force: bool = False) -> tuple[dict[str, Any], str]:
+def leak_audit(manifest, blind_dir: Path) -> tuple[dict[str, Any], str]:
+    """Ask a model that has not seen the paper what it can infer. Recorded, not load-bearing."""
     stage_dir = paths.run_dir(manifest.paper_id, 0)
     out_path = stage_dir / "leak_audit.json"
-    if out_path.exists() and not force:
-        return json.loads(out_path.read_text()), ""
     material = "\n\n".join(
         f"--- {p.name} ---\n{p.read_text()}" for p in sorted(blind_dir.iterdir())
     )
@@ -269,9 +391,9 @@ def leak_audit(manifest, blind_dir: Path, force: bool = False) -> tuple[dict[str
         artifacts.load_prompt("stage0_leak_audit", blind_material=material),
         paper_id=manifest.paper_id,
         stage="0",
-        tier="strong_alt",
+        tier="cheap",
         cwd=blind_dir,
-        timeout_s=1800,
+        timeout_s=900,
         log_path=stage_dir / "logs" / "leak_audit.log",
     )
     verdict: dict[str, Any]
@@ -286,11 +408,13 @@ def leak_audit(manifest, blind_dir: Path, force: bool = False) -> tuple[dict[str
     return verdict, (r.ledger_id or "")
 
 
+PROMPTS = ("stage0_leak_repair", "stage0_leak_audit")
+
+
 def run(
     manifest,
     claims: list[artifacts.ClaimRecord],
     contract_records: list[artifacts.EstimandContract],
-    paper_text: str,
     inputs: dict[str, str] | None = None,
     force: bool = False,
 ) -> tuple[artifacts.RedactionReport, list[str]]:
@@ -301,51 +425,33 @@ def run(
     design = leakcheck.design_numbers_from_manifest(manifest)
     calls: list[str] = []
 
-    # A leaking file is never reused: the resume check is the scan itself, so a rerun
-    # after a failure rewrites the offending file instead of failing on it again. The
-    # two outputs are checked separately, so one does not force the other's rewrite.
-    def stale(path: Path) -> bool:
-        return force or not path.exists() or bool(leakcheck.scan([path], claims, design))
+    if report_path.exists() and blind_path.exists() and not force:
+        existing = artifacts.load(artifacts.RedactionReport, report_path)
+        if not artifacts.prompt_stale(existing, PROMPTS):  # type: ignore[arg-type]
+            return existing, []  # type: ignore[return-value]
 
-    if stale(blind_path):
-        scrubbed, scrub_calls = scrub_texts(manifest, scrub_items(claims, contract_records))
-        calls += scrub_calls
-        blind_path.write_text(
-            json.dumps(
-                {
-                    "contracts": blind_contracts(contract_records, scrubbed),
-                    "claims": blind_claims(claims, scrubbed),
-                },
-                indent=2,
-                ensure_ascii=False,
-            )
-            + "\n"
+    scrubbed, scrub_calls = scrub_texts(manifest, scrub_items(claims, contract_records))
+    calls += scrub_calls
+    blind_path.write_text(
+        json.dumps(
+            {
+                "contracts": blind_contracts(contract_records, scrubbed),
+                "claims": blind_claims(claims, scrubbed),
+            },
+            indent=2,
+            ensure_ascii=False,
         )
+        + "\n"
+    )
 
-    if stale(methods_path):
-        extra = ""
-        hits: list[dict[str, Any]] = []
-        for attempt in (1, 2):
-            text, call_id = _write_methods(
-                manifest, paper_text, contract_records, extra, attempt
-            )
-            calls.append(call_id)
-            methods_path.write_text(text + "\n")
-            hits = leakcheck.scan([methods_path], claims, design)
-            if not hits:
-                break
-            extra = (
-                "\n\nA previous draft of this document still contained these reported "
-                "values. Remove every one of them and any sentence that carries a "
-                "result:\n" + json.dumps(hits, indent=1)[:4000]
-            )
-    hits = leakcheck.scan([methods_path, blind_path], claims, design)
+    hits, repair_calls = repair(manifest, [methods_path, blind_path], claims, design)
+    calls += repair_calls
 
     forbidden, skipped = leakcheck.forbidden_strings(claims, design)
     blind_dir = build_blind_dir(stage_dir)
-    audit, audit_call = ({}, "")
+    audit: dict[str, Any] = {}
     if not hits:
-        audit, audit_call = leak_audit(manifest, blind_dir, force=force)
+        audit, audit_call = leak_audit(manifest, blind_dir)
         if audit_call:
             calls.append(audit_call)
 
@@ -355,10 +461,7 @@ def run(
                 artifact="RedactionReport",
                 stage="0",
                 inputs=inputs or {},
-                prompt_versions={
-                    "stage0_redact": artifacts.prompt_version("stage0_redact"),
-                    "stage0_leak_audit": artifacts.prompt_version("stage0_leak_audit"),
-                },
+                prompt_versions={n: artifacts.prompt_version(n) for n in PROMPTS},
                 model_calls=calls,
             ).model_dump(),
             "removed_spans": removed_spans(methods_path),
@@ -377,8 +480,4 @@ def run(
         }
     )
     artifacts.save(report, report_path)
-    if hits:
-        raise RuntimeError(
-            "redaction leaks reported values:\n" + json.dumps(hits, indent=2)
-        )
     return report, calls
