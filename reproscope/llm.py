@@ -607,11 +607,11 @@ def call(
             stats = getattr(e, "stats", None) or {}
             if getattr(e, "log", ""):
                 logs.append(e.log)
-            # CLI routes fail transiently (rate limits, overload, concurrent sessions);
-            # retry once. An agentic call retries only when it died early, so a
-            # session that did real work before failing is not repeated blindly.
+            # Routes fail transiently (rate limits, overload, a provider returning no
+            # choices); retry once. An agentic call retries only when it died early,
+            # so a session that did real work before failing is not repeated blindly.
             early = time.monotonic() - attempt_started < EARLY_FAILURE_S
-            transient = route != "openrouter" and (not agentic or early)
+            transient = not agentic or early
         else:
             if schema is not None:
                 try:

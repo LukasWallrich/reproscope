@@ -205,7 +205,8 @@ reproduction failure; the paper's numbers are all reached.</p>
 Opus and GLM's first run are at 100% band A, most others at 83–92%, and GLM's second run at 73%: its model for the
 cue-type analysis diverged (F = 8.6 against the reported 24.9, with the matching p and partial eta-squared), while its
 focal analysis and the rest of the table matched. The two replicas the isolation-path bug had marked as failed
-(one Opus, one DeepSeek) re-execute cleanly once the checker runs the script from the directory it was written for.</p>
+(one Opus, one DeepSeek) re-execute cleanly once the checker runs the script inside the isolation copy the agent wrote
+it for.</p>
 """
 
 

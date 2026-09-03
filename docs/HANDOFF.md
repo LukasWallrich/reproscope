@@ -28,7 +28,7 @@ Read this first in a new session. It states where the pilot stands and what wait
 - Axt: every family produces the same profile; the fails are the sign-convention artefact above.
 - Hertel: all ten replicas reproduce the focal F; differences sit in supporting claims (GLM's second run 73% band A, the rest 83–100%).
 - The model-based leak audit rates every paper "strong" for structural reasons and does not discriminate.
-- Claude Opus returned "529 Overloaded" on 15 strong-call attempts during the rebuild; a retry runner (`scratch_chain_retry.py`, gitignored) completed them in later passes.
+- Claude Opus returned "529 Overloaded" on 15 strong-call attempts during the rebuild; a retry runner (`scripts/chain_retry.py`) completed them in later passes. `scripts/repair_replicas.sh` re-checks replicas marked failed and clears everything downstream of the traces.
 
 ## How to run
 
