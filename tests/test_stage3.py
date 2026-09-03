@@ -869,3 +869,25 @@ def test_the_executor_is_told_a_level_s_significance_threshold():
     levels = mv.executor_grid(grid)["factors"][3]["levels"]
     assert levels[0] == {"value": "welch", "how": "var.equal = FALSE"}
     assert levels[1]["p_threshold"] == 0.0125
+
+
+def test_reporting_only_factor_is_pinned_to_one_level():
+    proposed = {"factors": [
+        {"name": "sign convention", "levels": [{"value": "a minus b"}, {"value": "b minus a"}],
+         "paper_level": "a minus b"},
+        {"name": "alpha", "levels": [{"value": ".05"}, {"value": "bonferroni"}], "paper_level": ".05"},
+    ]}
+    screen = {"factors": [
+        {"name": "sign convention", "levels": [
+            {"value": "a minus b", "verdict": "defensible", "affects": "reporting"},
+            {"value": "b minus a", "verdict": "defensible", "affects": "reporting"}]},
+        {"name": "alpha", "levels": [
+            {"value": ".05", "verdict": "defensible", "affects": "inference"},
+            {"value": "bonferroni", "verdict": "defensible", "affects": "inference"}]},
+    ], "incompatible": []}
+    grid = mv.build_grid(proposed, screen)
+    by_name = {f["name"]: f for f in grid["factors"]}
+    assert [lv["value"] for lv in by_name["sign convention"]["levels"]] == ["a minus b"]
+    assert by_name["sign convention"]["pinned"]
+    assert len(by_name["alpha"]["levels"]) == 2
+    assert grid["grid_size"] == 2

@@ -321,11 +321,20 @@ def build_grid(
         if paper_level and not paper_kept:
             notes.append(f"factor {name!r}: the paper's level {paper_level!r} matches none of "
                          "the enumerated levels")
+        pinned = None
+        if len(levels) > 1 and all(lv.get("affects", "estimate") == "reporting" for lv in levels):
+            # A factor that only changes how the result is written (a sign convention,
+            # an effect-size label) is not a branch of the curve; executing it would
+            # multiply the grid and, for a sign convention, mirror the estimates.
+            keep = next((lv for lv in levels if lv.get("verdict") == "paper"), levels[0])
+            levels, pinned = [keep], "reporting-only factor pinned to one level"
+            notes.append(f"factor {name!r}: {pinned} ({keep['value']!r})")
         factors.append({
             "name": name,
             "field": pf.get("field"),
             "source": pf.get("source"),
             "paper_level": paper_level if paper_kept else None,
+            "pinned": pinned,
             "levels": levels,
         })
 
