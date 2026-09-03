@@ -174,8 +174,9 @@ and no column marks that participant. The blind analysts had every modelling cho
 operationalise the exclusion. The targeted arm, given the reported values, narrowed the candidates to two
 interchangeable records from the reported sample description and reached all seven reported quantities exactly.
 Outcome: <em>reachable</em>, with one added choice (which record is excluded). The Stage 2 review flags the same gap
-as its first major finding. Stage 3 is uninformative here: the enumerator's only exclusion level is "exclude one
-arbitrary record", so the two-specification grid sits at d = 2.38, away from both the replicas and the paper.</p>
+as its first major finding. Stage 3 lists the exclusion as unimplementable with the deposited data and varies what it can
+(pooled versus Welch t, two d formulas, sex as a covariate): six specifications with d from 2.21 to 2.26, all significant,
+the paper's 2.20 at rank 1.</p>
 
 <h3>Hurst: cells no specification reaches</h3>
 <p>The focal partial correlation r = −.51 reproduces exactly in every family. Under the broader trigger in use when
@@ -189,18 +190,21 @@ table. The rerun under the corrected trigger records <em>not triggered</em>; the
 
 <h3>Petersen: a multiverse with nothing to vary</h3>
 <p>The supplied data are first-stage output: per-participant TVA parameter estimates. The focal paired t on those
-columns reproduces to six decimals in every replica. The enumerator proposed eight factors, but every one that could
-move the estimate belongs to the model fit the data have already absorbed. The screen, which sees the data schema,
-kept factors on tails, sign conventions, correction and effect-size formula; all 64 executed specifications return
-the identical estimate. The specification curve is a point mass, which is the correct answer for these data and
-an argument for gating Stage 3 on whether any factor touches the estimand.</p>
+columns reproduces to six decimals in every replica. Every factor that could move the estimate belongs to the model fit
+the data have already absorbed; the enumerator lists six of them as unimplementable (non-report trial coding, estimator
+bounds and start values, session pooling, the variance-explained definition, first-stage uncertainty). What remains
+executable is one inference branch, Bonferroni across the three parameter tests, so the curve has two specifications
+with the identical estimate, both significant. Reporting-only choices (the sign convention of the paired difference,
+the dz formula) are pinned to one level; executed as factors they had mirrored the estimate and halved the
+"same sign" share for no analytical reason.</p>
 
 <h3>Axt and Hertel: where families differ</h3>
-<p>On Axt every replica, cheap or frontier, produced the same 46-claim profile: 29 A, 9 B, 8 fail (one GLM run: 27 A,
-8 B, 11 fail). The eight universal fails are one analysis reported with the opposite sign convention (t = 25.19 and
-9.01 for good- versus bad-focal D scores, reproduced as −25.19 and −9.01) and its confidence-interval bounds,
-which the matcher's sign gate and bound ordering count as failures. That is a matching-rule limit, not a
-reproduction failure; the paper's numbers are all reached.</p>
+<p>On Axt every replica, cheap or frontier, produced the same profile. Eight claims had failed for every replica under
+the first matching rule: one analysis reported with the opposite sign convention (t = 25.19 and 9.01 for good- versus
+bad-focal D scores, reproduced as −25.19 and −9.01) and its confidence-interval bounds. The matcher now grades a
+reversed two-group contrast on the flipped value and mirrors its bounds, and marks the row "sign flipped"; seven of
+the eight are band A. The eighth, the printed upper bound of .93 in "d = .45 [.42, .93]", stays failed under every
+rule: the interval is inconsistent with its own d, whose mirrored upper bound is about .49.</p>
 <p>On Hertel the focal F(1, 48) = 6.20 reproduces in all ten replicas. Differences sit in the supporting claims:
 Opus and GLM's first run are at 100% band A, most others at 83–92%, and GLM's second run at 73%: its model for the
 cue-type analysis diverged (F = 8.6 against the reported 24.9, with the matching p and partial eta-squared), while its
@@ -266,6 +270,10 @@ A replica counts as run once it has a trace; a lineup replica without one reopen
 understated), Codex calls carried no price. Every attempt is now a ledger row, cache tokens count, and Codex has a
 configurable shadow price.</li>
 <li><b>Focal binding misread leading-decimal numbers</b> (".42" as 42) and comparator strings ("&lt; .001").</li>
+<li><b>A DeepSeek script that needed scipy failed re-execution in the checker's own interpreter.</b> Replicas now declare
+packages beyond the base stack in <code>out/requirements.txt</code> or <code>out/r_packages.txt</code>; the checker builds a
+per-replica environment from the declaration and records an install failure as an environment abstention, not a script
+failure.</li>
 </ul>
 """
 
@@ -274,21 +282,22 @@ def sec_limits():
     return """
 <h2 id="limits">What the pilot cannot yet say</h2>
 <ul>
-<li><b>The leak audit does not discriminate.</b> The deterministic scan is clean on all five papers under the new rule
-(inferential kinds plus headline claims, with significant-digit thresholds), but the model-based audit rates leakage
-"strong" on every paper for structural reasons: the claim inventory itself reveals which analyses carry p-values.</li>
-<li><b>The matcher's sign gate penalises arbitrary contrast directions</b> (Axt). A direction-agnostic rule for
-two-group contrasts, with the CI bounds mirrored, would remove eight universal fails.</li>
+<li><b>The leak audit does not discriminate.</b> The deterministic scan is clean on all five papers under the rule as it
+stands (inferential kinds, headline claims, and every numeric claim of an analysis that carries either, with
+significant-digit thresholds), but the model-based audit rates leakage "strong" on every paper for structural reasons: the
+claim inventory itself reveals which analyses carry p-values. The rule has not yet been exercised on a fresh Stage 0 run.</li>
 <li><b>MDE covers three designs</b> (two-group, paired, correlation) and abstains on the rest; on Hertel and Hurst it abstains.</li>
-<li><b>Stage 3 runs even when no factor can move the estimand</b> (Petersen). A gate on the screen's output would save the
-executor run and the interpretation call.</li>
+<li><b>Stage 3 abstains when nothing can move the estimate or its significance.</b> The enumerator lists factors it cannot
+implement with the supplied data, the screen marks each level as affecting the estimate, the inference or only reporting,
+and a grid with no defensible level in the first two classes is recorded as an abstention with those lists instead of an
+executed point mass (Petersen).</li>
 <li><b>Opus availability.</b> During the rebuild, Claude Opus returned "529 Overloaded" on 15 strong-call attempts (each after
 about 200 s); a retry runner completed them in later passes. An early-failing agentic call is now retried once, but a strong-tier
 outage still stalls the targeted arm, the broad review and the interpretation.</li>
 <li><b>Stage 3 interpretation receives the rank statistics</b> alongside specs.csv, which the design describes as a
 specs-only prompt. Left as is; flagged for a decision.</li>
-<li><b>Shadow prices for Codex models are placeholders</b> (USD 2.5 per million tokens) until real list prices are entered
-in <code>models.toml</code>.</li>
+<li><b>Codex list-equivalents use the input list price</b> (Sol USD 4, Luna USD 0.20 per million tokens) because Codex
+reports one token total per call; output tokens are priced as input.</li>
 </ul>
 """
 

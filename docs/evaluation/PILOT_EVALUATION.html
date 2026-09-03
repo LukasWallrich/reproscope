@@ -19,7 +19,7 @@ a{color:var(--acc)}
 </head><body><main>
 <h1>reproscope v0 pilot — evaluation</h1>
 <p class="meta">Five Multi100 papers; replica runs 2026-09-02, everything downstream rebuilt 2026-09-03 after the efficiency
-fixes. Evaluation tables generated 2026-09-03T19:29:09 UTC.</p>
+fixes. Evaluation tables generated 2026-09-03T22:58:59 UTC.</p>
 <nav><a href="#summary">Summary</a><a href="#lineup">Corpus and lineup</a><a href="#families">By family</a>
 <a href="#papers">Per paper</a><a href="#cases">Cases</a><a href="#cost">Cost</a><a href="#bugs">Bugs</a>
 <a href="#limits">Limits</a><a href="#refs">Sources</a></nav>
@@ -31,8 +31,8 @@ blind reproduction by ten replica agents per paper (Stage 1), an analysis review
 ones from the 2026-09-02 pilot; matching, the targeted arm, the reviews, the multiverse and the reports were
 rebuilt on 2026-09-03 with the efficiency and correctness fixes listed in <a href="#bugs">Correctness bugs</a>.</p>
 <ul>
-<li><b>Reproduction.</b> Over every scored claim × replica pair, frontier families reach band A on 76%
-and A or B on 83%; the cheap families reach 74% and 80%.
+<li><b>Reproduction.</b> Over every scored claim × replica pair, frontier families reach band A on 81%
+and A or B on 88%; the cheap families reach 79% and 85%.
 On the focal claim alone, every family is at or above 88% A+B.</li>
 <li><b>Cheap versus frontier.</b> Where a paper's numbers are reachable from the deposited data, GLM and DeepSeek land
 on the same values as Opus and Fable. The Claude families are the only ones with no hard-coded
@@ -43,8 +43,8 @@ deposited workbook does not mark; the targeted arm recovers all seven reported q
 Hurst's Mini-K correlation table contains cells that no defensible specification reproduces, and one that is
 arithmetically inconsistent with the subscale values printed beside it (this finding came from a targeted run under
 the old, broader trigger; it is kept under <code>runs/logs/superseded/</code>).</li>
-<li><b>Cost.</b> A single clean pass of Stages 1 to 3 on the rebuilt code costs USD 0.05–0.08
-metered and 1.9–6.0 list-equivalent per paper on top of the replica runs,
+<li><b>Cost.</b> A single clean pass of Stages 1 to 3 on the rebuilt code costs USD 0.03–0.05
+metered and 1.7–5.6 list-equivalent per paper on top of the replica runs,
 against 20–48 list-equivalent per paper in the pilot as run. See <a href="#cost">Cost</a>.</li>
 </ul>
 
@@ -67,14 +67,14 @@ has a trace on disk, so sol and the second Opus run are still counted even thoug
 A pair is <em>abstained</em> when the replica wrote no value for the claim or the link step failed; abstained pairs are
 outside every denominator. Bands: A relative difference under 2%, B under 20%, C under 40%, fail otherwise, with
 quantity-specific rules for p-values, ratios and sample sizes (<code>docs/PILOT_DESIGN.md</code>, Matching rules).</p>
-<div class="tbl"><table class=""><thead><tr><th>family</th><th>launched</th><th>ran</th><th>failed</th><th>pairs</th><th>abstained</th><th>A</th><th>A+B</th><th>headline A+B</th><th>focal A+B</th></tr></thead><tbody><tr><td>opus</td><td>10</td><td>10</td><td>0</td><td>934</td><td>29</td><td>83%</td><td>89%</td><td>83%</td><td>91%</td></tr>
-<tr><td>fable</td><td>5</td><td>5</td><td>0</td><td>467</td><td>5</td><td>82%</td><td>88%</td><td>83%</td><td>88%</td></tr>
-<tr><td>sol</td><td>5</td><td>5</td><td>0</td><td>467</td><td>15</td><td>78%</td><td>85%</td><td>67%</td><td>88%</td></tr>
-<tr><td>luna</td><td>10</td><td>10</td><td>0</td><td>934</td><td>36</td><td>65%</td><td>74%</td><td>64%</td><td>88%</td></tr>
-<tr><td>glm</td><td>10</td><td>10</td><td>0</td><td>934</td><td>22</td><td>80%</td><td>86%</td><td>73%</td><td>91%</td></tr>
-<tr><td>deepseek</td><td>10</td><td>8</td><td>2</td><td>700</td><td>5</td><td>66%</td><td>73%</td><td>76%</td><td>89%</td></tr>
-<tr><td>frontier</td><td>30</td><td>30</td><td>0</td><td>2802</td><td>85</td><td>76%</td><td>83%</td><td>74%</td><td>89%</td></tr>
-<tr><td>cheap</td><td>20</td><td>18</td><td>2</td><td>1634</td><td>27</td><td>74%</td><td>80%</td><td>74%</td><td>90%</td></tr></tbody></table></div>
+<div class="tbl"><table class=""><thead><tr><th>family</th><th>launched</th><th>ran</th><th>failed</th><th>pairs</th><th>abstained</th><th>A</th><th>A+B</th><th>headline A+B</th><th>focal A+B</th></tr></thead><tbody><tr><td>opus</td><td>10</td><td>10</td><td>0</td><td>934</td><td>29</td><td>87%</td><td>93%</td><td>98%</td><td>91%</td></tr>
+<tr><td>fable</td><td>5</td><td>5</td><td>0</td><td>467</td><td>5</td><td>86%</td><td>92%</td><td>98%</td><td>88%</td></tr>
+<tr><td>sol</td><td>5</td><td>5</td><td>0</td><td>467</td><td>15</td><td>86%</td><td>93%</td><td>98%</td><td>88%</td></tr>
+<tr><td>luna</td><td>10</td><td>10</td><td>0</td><td>934</td><td>36</td><td>71%</td><td>80%</td><td>89%</td><td>88%</td></tr>
+<tr><td>glm</td><td>10</td><td>10</td><td>0</td><td>934</td><td>22</td><td>86%</td><td>92%</td><td>96%</td><td>91%</td></tr>
+<tr><td>deepseek</td><td>10</td><td>10</td><td>0</td><td>934</td><td>25</td><td>72%</td><td>78%</td><td>90%</td><td>88%</td></tr>
+<tr><td>frontier</td><td>30</td><td>30</td><td>0</td><td>2802</td><td>85</td><td>81%</td><td>88%</td><td>95%</td><td>89%</td></tr>
+<tr><td>cheap</td><td>20</td><td>20</td><td>0</td><td>1868</td><td>47</td><td>79%</td><td>85%</td><td>93%</td><td>90%</td></tr></tbody></table></div>
 <p>The last two rows pool every replica in a tier (frontier = the subscription routes, cheap = opencode via OpenRouter).
 Luna's lower A share comes almost entirely from Hurst, where it disagreed with the other families on the correlation
 table's supporting cells; on the focal claims it matches the others.</p>
@@ -88,7 +88,7 @@ median numeric CV: 0.133.</p>
 <tr><td>luna</td><td>2</td><td>2</td><td>0</td><td>40</td><td>0</td><td>45%</td><td>57%</td><td>93%</td><td>94%</td></tr>
 <tr><td>glm</td><td>2</td><td>2</td><td>0</td><td>40</td><td>0</td><td>48%</td><td>72%</td><td>100%</td><td>100%</td></tr>
 <tr><td>deepseek</td><td>2</td><td>2</td><td>0</td><td>40</td><td>0</td><td>35%</td><td>57%</td><td>93%</td><td>94%</td></tr></tbody></table></div>
-<p><b>Focal quantity</b> d = 2.200 (claim c093). Replicas: deepseek_1 2.264, deepseek_2 2.008, fable_1 2.264, glm_1 2.264, glm_2 2.264, luna_1 2.264, luna_2 2.264, opus_1 2.264, opus_2 2.264, sol_1 2.264.</p><p><b>Multi100 analysts</b> (n = 6): d from 1.14 to 3.11, median 2.01.</p><p><b>Targeted reconstruction</b> reachable: The whole gap is the one exclusion the methods state. The closest analyst applied every other choice as the paper made it - item-mean intimacy that matches the workbook&#x27;s own aggregate, pooled-variance Student t, pooled-SD d - but analysed all 30 records because the data file gives no way to find the excluded case, which yields t(28) = 6.20 and d = 2.26. Dropping the right record moves every one of the seven quantities onto the reported value at once, including the reported df of 27; the attention condition&#x27;s mean and SD are already exact on the full 30 records, which places the excluded parti</p>
+<p><b>Focal quantity</b> d = 2.200 (claim c093). Replicas: deepseek_1 2.264, deepseek_2 2.008, fable_1 2.264, glm_1 2.264, glm_2 2.264, luna_1 2.264, luna_2 2.264, opus_1 2.264, opus_2 2.264, sol_1 2.264.</p><p><b>Multi100 analysts</b> (n = 6): d from 1.14 to 3.11, median 2.01.</p><p><b>Targeted reconstruction</b> reachable: All seven quantities of analysis a20 are reproduced. The only change from the closest replica is dropping one of the two no-attention records with intimacy 2.25; every other choice in that script was already correct. Attempts 1-4 show the discrepancy is not an estimator choice: Welch, Hedges and d-from-t all leave the attention-group mean and SD and the df at their 30-record values. Attempt 5 shows the paper&#x27;s own participant description already forces a 29-record sample and rules out 25 of the 30 possible exclusions. The residual gap is that the shared data file omits the suspicion variable, </p>
 
 <h3 id="paper-hurst">Hurst <small>Hurst_EvoHumanBehavior_2017_yypJ</small></h3>
 <p>Claims scored: 258. Decision agreement across replicas: 0.78;
@@ -102,26 +102,26 @@ median numeric CV: 0.268.</p>
 <p><b>Focal quantity</b> r = -0.510 (claim c175). Replicas: deepseek_1 -0.513, deepseek_2 -0.513, fable_1 -0.513, glm_1 -0.513, glm_2 -0.513, luna_1 -0.513, luna_2 -0.513, opus_1 -0.513, opus_2 -0.513, sol_1 -0.513.</p><p><b>Multi100 analysts</b> (n = 5): d from 0.93 to 1.61, median 1.20.</p><p><b>Targeted reconstruction</b> not_triggered</p>
 
 <h3 id="paper-axt">Axt <small>Axt_JournExpSocPsych_2018_zK2</small></h3>
-<p>Claims scored: 46. Decision agreement across replicas: 0.77;
+<p>Claims scored: 46. Decision agreement across replicas: 0.91;
 median numeric CV: 0.000.</p>
-<div class="tbl"><table class=""><thead><tr><th>family</th><th>launched</th><th>ran</th><th>failed</th><th>pairs</th><th>abstained</th><th>A</th><th>A+B</th><th>headline A+B</th><th>focal A+B</th></tr></thead><tbody><tr><td>opus</td><td>2</td><td>2</td><td>0</td><td>92</td><td>0</td><td>63%</td><td>83%</td><td>71%</td><td>100%</td></tr>
-<tr><td>fable</td><td>1</td><td>1</td><td>0</td><td>46</td><td>0</td><td>63%</td><td>83%</td><td>71%</td><td>100%</td></tr>
-<tr><td>sol</td><td>1</td><td>1</td><td>0</td><td>46</td><td>0</td><td>63%</td><td>83%</td><td>71%</td><td>100%</td></tr>
-<tr><td>luna</td><td>2</td><td>2</td><td>0</td><td>92</td><td>0</td><td>63%</td><td>83%</td><td>71%</td><td>100%</td></tr>
-<tr><td>glm</td><td>2</td><td>2</td><td>0</td><td>92</td><td>0</td><td>61%</td><td>79%</td><td>66%</td><td>100%</td></tr>
-<tr><td>deepseek</td><td>2</td><td>2</td><td>0</td><td>92</td><td>0</td><td>70%</td><td>83%</td><td>71%</td><td>100%</td></tr></tbody></table></div>
+<div class="tbl"><table class=""><thead><tr><th>family</th><th>launched</th><th>ran</th><th>failed</th><th>pairs</th><th>abstained</th><th>A</th><th>A+B</th><th>headline A+B</th><th>focal A+B</th></tr></thead><tbody><tr><td>opus</td><td>2</td><td>2</td><td>0</td><td>92</td><td>0</td><td>78%</td><td>98%</td><td>96%</td><td>100%</td></tr>
+<tr><td>fable</td><td>1</td><td>1</td><td>0</td><td>46</td><td>0</td><td>78%</td><td>98%</td><td>96%</td><td>100%</td></tr>
+<tr><td>sol</td><td>1</td><td>1</td><td>0</td><td>46</td><td>0</td><td>78%</td><td>98%</td><td>96%</td><td>100%</td></tr>
+<tr><td>luna</td><td>2</td><td>2</td><td>0</td><td>92</td><td>0</td><td>75%</td><td>96%</td><td>93%</td><td>100%</td></tr>
+<tr><td>glm</td><td>2</td><td>2</td><td>0</td><td>92</td><td>0</td><td>76%</td><td>95%</td><td>91%</td><td>100%</td></tr>
+<tr><td>deepseek</td><td>2</td><td>2</td><td>0</td><td>92</td><td>0</td><td>82%</td><td>96%</td><td>93%</td><td>100%</td></tr></tbody></table></div>
 <p><b>Focal quantity</b> mean = -0.120 (claim c221). Replicas: deepseek_1 -0.118, deepseek_2 -0.118, fable_1 -0.118, glm_1 -0.118, glm_2 -0.118, luna_1 -0.118, luna_2 -0.118, opus_1 -0.118, opus_2 -0.118, sol_1 -0.118.</p><p><b>Multi100 analysts</b> (n = 5): d from 0.30 to 1.33, median 0.43.</p><p><b>Targeted reconstruction</b> not_triggered</p>
 
 <h3 id="paper-petersen">Petersen <small>Petersen_Cognition_2017_yJwG</small></h3>
-<p>Claims scored: 117. Decision agreement across replicas: 0.43;
+<p>Claims scored: 117. Decision agreement across replicas: 0.80;
 median numeric CV: 0.000.</p>
-<div class="tbl"><table class=""><thead><tr><th>family</th><th>launched</th><th>ran</th><th>failed</th><th>pairs</th><th>abstained</th><th>A</th><th>A+B</th><th>headline A+B</th><th>focal A+B</th></tr></thead><tbody><tr><td>opus</td><td>2</td><td>2</td><td>0</td><td>234</td><td>21</td><td>80%</td><td>84%</td><td>76%</td><td>90%</td></tr>
-<tr><td>fable</td><td>1</td><td>1</td><td>0</td><td>117</td><td>1</td><td>80%</td><td>84%</td><td>76%</td><td>87%</td></tr>
-<tr><td>sol</td><td>1</td><td>1</td><td>0</td><td>117</td><td>12</td><td>62%</td><td>66%</td><td>37%</td><td>87%</td></tr>
-<tr><td>luna</td><td>2</td><td>2</td><td>0</td><td>234</td><td>24</td><td>66%</td><td>70%</td><td>48%</td><td>87%</td></tr>
-<tr><td>glm</td><td>2</td><td>2</td><td>0</td><td>234</td><td>18</td><td>71%</td><td>75%</td><td>57%</td><td>87%</td></tr>
-<tr><td>deepseek</td><td>2</td><td>0</td><td>2</td><td>0</td><td>0</td><td>n/a</td><td>n/a</td><td>n/a</td><td>n/a</td></tr></tbody></table></div>
-<p><b>Focal quantity</b> d = 0.890 (claim c008). Replicas: fable_1 0.890, glm_1 0.890, glm_2 0.890, luna_1 0.890, luna_2 0.890, opus_1 0.890, opus_2 0.890, sol_1 0.890.</p><p><b>Multi100 analysts</b> (n = 5): d from 1.81 to 2.28, median 1.81.</p><p><b>Targeted reconstruction</b> not_triggered</p>
+<div class="tbl"><table class=""><thead><tr><th>family</th><th>launched</th><th>ran</th><th>failed</th><th>pairs</th><th>abstained</th><th>A</th><th>A+B</th><th>headline A+B</th><th>focal A+B</th></tr></thead><tbody><tr><td>opus</td><td>2</td><td>2</td><td>0</td><td>234</td><td>21</td><td>91%</td><td>94%</td><td>98%</td><td>90%</td></tr>
+<tr><td>fable</td><td>1</td><td>1</td><td>0</td><td>117</td><td>1</td><td>90%</td><td>93%</td><td>98%</td><td>87%</td></tr>
+<tr><td>sol</td><td>1</td><td>1</td><td>0</td><td>117</td><td>12</td><td>89%</td><td>92%</td><td>98%</td><td>87%</td></tr>
+<tr><td>luna</td><td>2</td><td>2</td><td>0</td><td>234</td><td>24</td><td>89%</td><td>92%</td><td>98%</td><td>87%</td></tr>
+<tr><td>glm</td><td>2</td><td>2</td><td>0</td><td>234</td><td>18</td><td>89%</td><td>93%</td><td>98%</td><td>87%</td></tr>
+<tr><td>deepseek</td><td>2</td><td>2</td><td>0</td><td>234</td><td>20</td><td>87%</td><td>91%</td><td>98%</td><td>87%</td></tr></tbody></table></div>
+<p><b>Focal quantity</b> d = 0.890 (claim c008). Replicas: deepseek_1 0.890, deepseek_2 0.890, fable_1 0.890, glm_1 0.890, glm_2 0.890, luna_1 0.890, luna_2 0.890, opus_1 0.890, opus_2 0.890, sol_1 0.890.</p><p><b>Multi100 analysts</b> (n = 5): d from 1.81 to 2.28, median 1.81.</p><p><b>Targeted reconstruction</b> not_triggered</p>
 
 <h3 id="paper-hertel">Hertel <small>Hertel_ClinPsychSci_2018_YabW</small></h3>
 <p>Claims scored: 26. Decision agreement across replicas: 0.96;
@@ -143,8 +143,9 @@ and no column marks that participant. The blind analysts had every modelling cho
 operationalise the exclusion. The targeted arm, given the reported values, narrowed the candidates to two
 interchangeable records from the reported sample description and reached all seven reported quantities exactly.
 Outcome: <em>reachable</em>, with one added choice (which record is excluded). The Stage 2 review flags the same gap
-as its first major finding. Stage 3 is uninformative here: the enumerator's only exclusion level is "exclude one
-arbitrary record", so the two-specification grid sits at d = 2.38, away from both the replicas and the paper.</p>
+as its first major finding. Stage 3 lists the exclusion as unimplementable with the deposited data and varies what it can
+(pooled versus Welch t, two d formulas, sex as a covariate): six specifications with d from 2.21 to 2.26, all significant,
+the paper's 2.20 at rank 1.</p>
 
 <h3>Hurst: cells no specification reaches</h3>
 <p>The focal partial correlation r = −.51 reproduces exactly in every family. Under the broader trigger in use when
@@ -158,18 +159,21 @@ table. The rerun under the corrected trigger records <em>not triggered</em>; the
 
 <h3>Petersen: a multiverse with nothing to vary</h3>
 <p>The supplied data are first-stage output: per-participant TVA parameter estimates. The focal paired t on those
-columns reproduces to six decimals in every replica. The enumerator proposed eight factors, but every one that could
-move the estimate belongs to the model fit the data have already absorbed. The screen, which sees the data schema,
-kept factors on tails, sign conventions, correction and effect-size formula; all 64 executed specifications return
-the identical estimate. The specification curve is a point mass, which is the correct answer for these data and
-an argument for gating Stage 3 on whether any factor touches the estimand.</p>
+columns reproduces to six decimals in every replica. Every factor that could move the estimate belongs to the model fit
+the data have already absorbed; the enumerator lists six of them as unimplementable (non-report trial coding, estimator
+bounds and start values, session pooling, the variance-explained definition, first-stage uncertainty). What remains
+executable is one inference branch, Bonferroni across the three parameter tests, so the curve has two specifications
+with the identical estimate, both significant. Reporting-only choices (the sign convention of the paired difference,
+the dz formula) are pinned to one level; executed as factors they had mirrored the estimate and halved the
+"same sign" share for no analytical reason.</p>
 
 <h3>Axt and Hertel: where families differ</h3>
-<p>On Axt every replica, cheap or frontier, produced the same 46-claim profile: 29 A, 9 B, 8 fail (one GLM run: 27 A,
-8 B, 11 fail). The eight universal fails are one analysis reported with the opposite sign convention (t = 25.19 and
-9.01 for good- versus bad-focal D scores, reproduced as −25.19 and −9.01) and its confidence-interval bounds,
-which the matcher's sign gate and bound ordering count as failures. That is a matching-rule limit, not a
-reproduction failure; the paper's numbers are all reached.</p>
+<p>On Axt every replica, cheap or frontier, produced the same profile. Eight claims had failed for every replica under
+the first matching rule: one analysis reported with the opposite sign convention (t = 25.19 and 9.01 for good- versus
+bad-focal D scores, reproduced as −25.19 and −9.01) and its confidence-interval bounds. The matcher now grades a
+reversed two-group contrast on the flipped value and mirrors its bounds, and marks the row "sign flipped"; seven of
+the eight are band A. The eighth, the printed upper bound of .93 in "d = .45 [.42, .93]", stays failed under every
+rule: the interval is inconsistent with its own d, whose mirrored upper bound is about .49.</p>
 <p>On Hertel the focal F(1, 48) = 6.20 reproduces in all ten replicas. Differences sit in the supporting claims:
 Opus and GLM's first run are at 100% band A, most others at 83–92%, and GLM's second run at 73%: its model for the
 cue-type analysis diverged (F = 8.6 against the reported 24.9, with the matching p and partial eta-squared), while its
@@ -185,11 +189,11 @@ rebuild, including retries and the repair cascade the audit describes. <em>Singl
 per step of the rebuilt Stages 1 to 3 (matching, targeted arm, review, multiverse, report), which excludes the repeats
 caused by Opus overload retries and by trace changes during the rebuild. <em>Replica runs</em> are the eight-replica
 development lineup's agent runs from the pilot ledger. Stage 0 was not rerun; its post-fix cost is projected below.</p>
-<div class="tbl"><table class=""><thead><tr><th>paper</th><th>pilot as run: metered</th><th>list-equiv</th><th>single pass S1–3: metered</th><th>list-equiv</th><th>replica runs: metered</th><th>list-equiv</th><th>clean S1–3 total: metered</th><th>list-equiv</th></tr></thead><tbody><tr><td>Ohtsubo</td><td>1.17</td><td>48.5</td><td>0.06</td><td>3.8</td><td>0.18</td><td>2.9</td><td>0.24</td><td>6.7</td></tr>
-<tr><td>Hurst</td><td>0.89</td><td>39.4</td><td>0.05</td><td>6.0</td><td>0.53</td><td>6.8</td><td>0.59</td><td>12.9</td></tr>
-<tr><td>Axt</td><td>1.24</td><td>38.9</td><td>0.08</td><td>2.4</td><td>0.21</td><td>3.7</td><td>0.28</td><td>6.1</td></tr>
-<tr><td>Petersen</td><td>0.92</td><td>20.4</td><td>0.05</td><td>3.3</td><td>0.28</td><td>6.3</td><td>0.33</td><td>9.6</td></tr>
-<tr><td>Hertel</td><td>0.71</td><td>24.2</td><td>0.08</td><td>1.9</td><td>0.27</td><td>3.4</td><td>0.35</td><td>5.3</td></tr></tbody></table></div>
+<div class="tbl"><table class=""><thead><tr><th>paper</th><th>pilot as run: metered</th><th>list-equiv</th><th>single pass S1–3: metered</th><th>list-equiv</th><th>replica runs: metered</th><th>list-equiv</th><th>clean S1–3 total: metered</th><th>list-equiv</th></tr></thead><tbody><tr><td>Ohtsubo</td><td>1.17</td><td>48.5</td><td>0.03</td><td>3.7</td><td>0.18</td><td>2.9</td><td>0.21</td><td>6.6</td></tr>
+<tr><td>Hurst</td><td>0.89</td><td>39.4</td><td>0.04</td><td>5.6</td><td>0.53</td><td>6.8</td><td>0.57</td><td>12.5</td></tr>
+<tr><td>Axt</td><td>1.24</td><td>38.9</td><td>0.03</td><td>1.7</td><td>0.21</td><td>3.7</td><td>0.24</td><td>5.4</td></tr>
+<tr><td>Petersen</td><td>0.92</td><td>20.4</td><td>0.05</td><td>3.9</td><td>0.28</td><td>6.3</td><td>0.33</td><td>10.2</td></tr>
+<tr><td>Hertel</td><td>0.71</td><td>24.2</td><td>0.04</td><td>2.1</td><td>0.27</td><td>3.4</td><td>0.31</td><td>5.5</td></tr></tbody></table></div>
 <p><b>Stage 0 projection.</b> Arbitration on the existing extractions needs 2–22 cheap vision calls per paper (Axt at the
 top, with 968 and 587 extracted entries) and at most one strong call; contracts and the redacted methods are one strong
 call with the paper text; readiness is one Sonnet call; leak repair is 0–4 cheap calls. Rescanning the pilot's first-draft
@@ -225,25 +229,30 @@ A replica counts as run once it has a trace; a lineup replica without one reopen
 understated), Codex calls carried no price. Every attempt is now a ledger row, cache tokens count, and Codex has a
 configurable shadow price.</li>
 <li><b>Focal binding misread leading-decimal numbers</b> (".42" as 42) and comparator strings ("&lt; .001").</li>
+<li><b>A DeepSeek script that needed scipy failed re-execution in the checker's own interpreter.</b> Replicas now declare
+packages beyond the base stack in <code>out/requirements.txt</code> or <code>out/r_packages.txt</code>; the checker builds a
+per-replica environment from the declaration and records an install failure as an environment abstention, not a script
+failure.</li>
 </ul>
 
 <h2 id="limits">What the pilot cannot yet say</h2>
 <ul>
-<li><b>The leak audit does not discriminate.</b> The deterministic scan is clean on all five papers under the new rule
-(inferential kinds plus headline claims, with significant-digit thresholds), but the model-based audit rates leakage
-"strong" on every paper for structural reasons: the claim inventory itself reveals which analyses carry p-values.</li>
-<li><b>The matcher's sign gate penalises arbitrary contrast directions</b> (Axt). A direction-agnostic rule for
-two-group contrasts, with the CI bounds mirrored, would remove eight universal fails.</li>
+<li><b>The leak audit does not discriminate.</b> The deterministic scan is clean on all five papers under the rule as it
+stands (inferential kinds, headline claims, and every numeric claim of an analysis that carries either, with
+significant-digit thresholds), but the model-based audit rates leakage "strong" on every paper for structural reasons: the
+claim inventory itself reveals which analyses carry p-values. The rule has not yet been exercised on a fresh Stage 0 run.</li>
 <li><b>MDE covers three designs</b> (two-group, paired, correlation) and abstains on the rest; on Hertel and Hurst it abstains.</li>
-<li><b>Stage 3 runs even when no factor can move the estimand</b> (Petersen). A gate on the screen's output would save the
-executor run and the interpretation call.</li>
+<li><b>Stage 3 abstains when nothing can move the estimate or its significance.</b> The enumerator lists factors it cannot
+implement with the supplied data, the screen marks each level as affecting the estimate, the inference or only reporting,
+and a grid with no defensible level in the first two classes is recorded as an abstention with those lists instead of an
+executed point mass (Petersen).</li>
 <li><b>Opus availability.</b> During the rebuild, Claude Opus returned "529 Overloaded" on 15 strong-call attempts (each after
 about 200 s); a retry runner completed them in later passes. An early-failing agentic call is now retried once, but a strong-tier
 outage still stalls the targeted arm, the broad review and the interpretation.</li>
 <li><b>Stage 3 interpretation receives the rank statistics</b> alongside specs.csv, which the design describes as a
 specs-only prompt. Left as is; flagged for a decision.</li>
-<li><b>Shadow prices for Codex models are placeholders</b> (USD 2.5 per million tokens) until real list prices are entered
-in <code>models.toml</code>.</li>
+<li><b>Codex list-equivalents use the input list price</b> (Sol USD 4, Luna USD 0.20 per million tokens) because Codex
+reports one token total per call; output tokens are priced as input.</li>
 </ul>
 
 <h2 id="refs">Sources</h2>

@@ -43,33 +43,33 @@
       },
       "rerun": {
         "total": {
-          "calls": 43,
-          "ok": 28,
-          "tokens": 5810669,
-          "cash": 0.0945,
-          "equiv": 10.8201
+          "calls": 54,
+          "ok": 39,
+          "tokens": 8822488,
+          "cash": 0.1698,
+          "equiv": 14.471
         },
         "by_stage": {
           "1": {
-            "calls": 19,
-            "ok": 12,
-            "tokens": 3188328,
-            "cash": 0.0101,
-            "equiv": 5.1319
+            "calls": 21,
+            "ok": 14,
+            "tokens": 3969425,
+            "cash": 0.0106,
+            "equiv": 6.5847
           },
           "2": {
-            "calls": 12,
-            "ok": 6,
-            "tokens": 674229,
+            "calls": 13,
+            "ok": 7,
+            "tokens": 800775,
             "cash": 0.0092,
-            "equiv": 5.0774
+            "equiv": 6.6096
           },
           "3": {
-            "calls": 12,
-            "ok": 10,
-            "tokens": 1948112,
-            "cash": 0.0752,
-            "equiv": 0.6108
+            "calls": 20,
+            "ok": 18,
+            "tokens": 4052288,
+            "cash": 0.15,
+            "equiv": 1.2767
           }
         },
         "by_step": {
@@ -95,17 +95,17 @@
             "equiv": 0.0
           },
           "1:targeted": {
-            "calls": 6,
-            "ok": 3,
-            "tokens": 3106953,
+            "calls": 7,
+            "ok": 4,
+            "tokens": 3885231,
             "cash": 0.0,
-            "equiv": 4.8308
+            "equiv": 6.2837
           },
           "1:targeted_hardcoding_audit": {
-            "calls": 3,
-            "ok": 3,
-            "tokens": 13894,
-            "cash": 0.0041,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 16713,
+            "cash": 0.0046,
             "equiv": 0.0
           },
           "1:trace_choices": {
@@ -123,11 +123,11 @@
             "equiv": 0.0
           },
           "2:broad": {
-            "calls": 9,
-            "ok": 3,
-            "tokens": 628593,
+            "calls": 10,
+            "ok": 4,
+            "tokens": 755139,
             "cash": 0.0,
-            "equiv": 5.0774
+            "equiv": 6.6096
           },
           "2:causal_language": {
             "calls": 1,
@@ -137,38 +137,38 @@
             "equiv": 0.0
           },
           "3:enumerate": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 67315,
-            "cash": 0.0108,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 101946,
+            "cash": 0.0166,
             "equiv": 0.0
           },
           "3:execute": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 1733937,
-            "cash": 0.0632,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 3690158,
+            "cash": 0.1304,
             "equiv": 0.0
           },
           "3:interpret": {
-            "calls": 4,
-            "ok": 2,
-            "tokens": 59114,
+            "calls": 6,
+            "ok": 4,
+            "tokens": 121936,
             "cash": 0.0,
-            "equiv": 0.4119
+            "equiv": 0.9184
           },
           "3:screen": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 79549,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 119402,
             "cash": 0.0,
-            "equiv": 0.1989
+            "equiv": 0.3583
           },
           "3:stage3_hardcoding_audit": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 8197,
-            "cash": 0.0013,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 18846,
+            "cash": 0.0029,
             "equiv": 0.0
           }
         }
@@ -183,13 +183,13 @@
       "rerun_single_pass": {
         "calls": 14,
         "ok": 14,
-        "tokens": 2532460,
-        "cash": 0.0572,
-        "equiv": 3.8181
+        "tokens": 1714407,
+        "cash": 0.032,
+        "equiv": 3.6686
       },
       "clean_v01_stages123": {
-        "cash": 0.2382,
-        "equiv": 6.7023
+        "cash": 0.213,
+        "equiv": 6.5528
       }
     },
     "Hurst_EvoHumanBehavior_2017_yypJ": {
@@ -234,42 +234,42 @@
       },
       "rerun": {
         "total": {
-          "calls": 26,
-          "ok": 26,
-          "tokens": 5174174,
-          "cash": 0.1022,
-          "equiv": 8.2776
+          "calls": 36,
+          "ok": 36,
+          "tokens": 7370626,
+          "cash": 0.157,
+          "equiv": 10.8789
         },
         "by_stage": {
           "1": {
-            "calls": 9,
-            "ok": 9,
-            "tokens": 2566985,
+            "calls": 10,
+            "ok": 10,
+            "tokens": 2608927,
             "cash": 0.014,
-            "equiv": 3.6996
+            "equiv": 4.0151
           },
           "2": {
-            "calls": 5,
-            "ok": 5,
-            "tokens": 636149,
+            "calls": 6,
+            "ok": 6,
+            "tokens": 773344,
             "cash": 0.0156,
-            "equiv": 3.8452
+            "equiv": 5.3916
           },
           "3": {
-            "calls": 12,
-            "ok": 12,
-            "tokens": 1971040,
-            "cash": 0.0726,
-            "equiv": 0.7327
+            "calls": 20,
+            "ok": 20,
+            "tokens": 3988355,
+            "cash": 0.1274,
+            "equiv": 1.4722
           }
         },
         "by_step": {
           "1:diagnose": {
-            "calls": 1,
-            "ok": 1,
-            "tokens": 42474,
+            "calls": 2,
+            "ok": 2,
+            "tokens": 84416,
             "cash": 0.0,
-            "equiv": 0.3573
+            "equiv": 0.6728
           },
           "1:fix_severity": {
             "calls": 2,
@@ -314,11 +314,11 @@
             "equiv": 0.0
           },
           "2:broad": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 560020,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 697215,
             "cash": 0.0,
-            "equiv": 3.8452
+            "equiv": 5.3916
           },
           "2:causal_language": {
             "calls": 1,
@@ -328,25 +328,25 @@
             "equiv": 0.0
           },
           "3:enumerate": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 110223,
-            "cash": 0.0212,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 161141,
+            "cash": 0.0297,
             "equiv": 0.0
           },
           "3:execute": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 1661538,
-            "cash": 0.0446,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 3495145,
+            "cash": 0.0891,
             "equiv": 0.0
           },
           "3:interpret": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 68008,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 140531,
             "cash": 0.0,
-            "equiv": 0.4896
+            "equiv": 1.0361
           },
           "3:paper_level": {
             "calls": 2,
@@ -356,17 +356,17 @@
             "equiv": 0.0
           },
           "3:screen": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 97248,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 145487,
             "cash": 0.0,
-            "equiv": 0.2431
+            "equiv": 0.4361
           },
           "3:stage3_hardcoding_audit": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 10072,
-            "cash": 0.002,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 22100,
+            "cash": 0.0038,
             "equiv": 0.0
           }
         }
@@ -381,13 +381,13 @@
       "rerun_single_pass": {
         "calls": 15,
         "ok": 15,
-        "tokens": 3954651,
-        "cash": 0.0541,
-        "equiv": 6.025
+        "tokens": 3250578,
+        "cash": 0.0389,
+        "equiv": 5.6221
       },
       "clean_v01_stages123": {
-        "cash": 0.588,
-        "equiv": 12.8678
+        "cash": 0.5728,
+        "equiv": 12.4649
       }
     },
     "Axt_JournExpSocPsych_2018_zK2": {
@@ -432,42 +432,42 @@
       },
       "rerun": {
         "total": {
-          "calls": 32,
-          "ok": 31,
-          "tokens": 4622109,
-          "cash": 0.1625,
-          "equiv": 5.7545
+          "calls": 44,
+          "ok": 43,
+          "tokens": 6526773,
+          "cash": 0.2203,
+          "equiv": 7.6368
         },
         "by_stage": {
           "1": {
-            "calls": 6,
-            "ok": 6,
-            "tokens": 114725,
-            "cash": 0.0116,
-            "equiv": 0.5236
+            "calls": 9,
+            "ok": 9,
+            "tokens": 166212,
+            "cash": 0.0149,
+            "equiv": 0.7883
           },
           "2": {
-            "calls": 8,
-            "ok": 7,
-            "tokens": 470015,
+            "calls": 9,
+            "ok": 8,
+            "tokens": 567282,
             "cash": 0.0135,
-            "equiv": 3.5488
+            "equiv": 4.6251
           },
           "3": {
-            "calls": 18,
-            "ok": 18,
-            "tokens": 4037369,
-            "cash": 0.1373,
-            "equiv": 1.6821
+            "calls": 26,
+            "ok": 26,
+            "tokens": 5793279,
+            "cash": 0.1919,
+            "equiv": 2.2234
           }
         },
         "by_step": {
           "1:diagnose": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 72243,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 108445,
             "cash": 0.0,
-            "equiv": 0.5236
+            "equiv": 0.7883
           },
           "1:hardcoding_audit": {
             "calls": 2,
@@ -477,10 +477,10 @@
             "equiv": 0.0
           },
           "1:trace_choices": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 26682,
-            "cash": 0.0092,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 41967,
+            "cash": 0.0125,
             "equiv": 0.0
           },
           "2:alignment": {
@@ -491,11 +491,11 @@
             "equiv": 0.0
           },
           "2:broad": {
-            "calls": 3,
-            "ok": 3,
-            "tokens": 392892,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 490159,
             "cash": 0.0,
-            "equiv": 3.5488
+            "equiv": 4.6251
           },
           "2:causal_language": {
             "calls": 2,
@@ -505,25 +505,25 @@
             "equiv": 0.0
           },
           "3:enumerate": {
-            "calls": 3,
-            "ok": 3,
-            "tokens": 91814,
-            "cash": 0.0167,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 119208,
+            "cash": 0.0216,
             "equiv": 0.0
           },
           "3:execute": {
-            "calls": 3,
-            "ok": 3,
-            "tokens": 3548297,
-            "cash": 0.1138,
+            "calls": 5,
+            "ok": 5,
+            "tokens": 5171580,
+            "cash": 0.1616,
             "equiv": 0.0
           },
           "3:interpret": {
-            "calls": 3,
-            "ok": 3,
-            "tokens": 261314,
+            "calls": 5,
+            "ok": 5,
+            "tokens": 322627,
             "cash": 0.0,
-            "equiv": 1.4423
+            "equiv": 1.8552
           },
           "3:paper_level": {
             "calls": 3,
@@ -533,17 +533,17 @@
             "equiv": 0.0
           },
           "3:screen": {
-            "calls": 3,
-            "ok": 3,
-            "tokens": 95897,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 128004,
             "cash": 0.0,
-            "equiv": 0.2397
+            "equiv": 0.3682
           },
           "3:stage3_hardcoding_audit": {
-            "calls": 3,
-            "ok": 3,
-            "tokens": 18665,
-            "cash": 0.0029,
+            "calls": 5,
+            "ok": 5,
+            "tokens": 30478,
+            "cash": 0.0047,
             "equiv": 0.0
           }
         }
@@ -558,13 +558,13 @@
       "rerun_single_pass": {
         "calls": 12,
         "ok": 12,
-        "tokens": 2313140,
-        "cash": 0.0777,
-        "equiv": 2.3895
+        "tokens": 837574,
+        "cash": 0.0316,
+        "equiv": 1.6771
       },
       "clean_v01_stages123": {
-        "cash": 0.2845,
-        "equiv": 6.1282
+        "cash": 0.2384,
+        "equiv": 5.4158
       }
     },
     "Petersen_Cognition_2017_yJwG": {
@@ -609,55 +609,55 @@
       },
       "rerun": {
         "total": {
-          "calls": 17,
-          "ok": 17,
-          "tokens": 2035796,
-          "cash": 0.0569,
-          "equiv": 3.3065
+          "calls": 34,
+          "ok": 33,
+          "tokens": 4669359,
+          "cash": 0.1309,
+          "equiv": 6.251
         },
         "by_stage": {
           "1": {
-            "calls": 8,
-            "ok": 8,
-            "tokens": 730599,
-            "cash": 0.0114,
-            "equiv": 1.3947
+            "calls": 13,
+            "ok": 13,
+            "tokens": 830038,
+            "cash": 0.0217,
+            "equiv": 1.6833
           },
           "2": {
-            "calls": 3,
-            "ok": 3,
-            "tokens": 182666,
-            "cash": 0.0073,
-            "equiv": 1.5428
+            "calls": 6,
+            "ok": 5,
+            "tokens": 1018497,
+            "cash": 0.0132,
+            "equiv": 3.6777
           },
           "3": {
-            "calls": 6,
-            "ok": 6,
-            "tokens": 1122531,
-            "cash": 0.0382,
-            "equiv": 0.369
+            "calls": 15,
+            "ok": 15,
+            "tokens": 2820824,
+            "cash": 0.0961,
+            "equiv": 0.89
           }
         },
         "by_step": {
           "1:diagnose": {
-            "calls": 1,
-            "ok": 1,
-            "tokens": 35709,
-            "cash": 0.0,
-            "equiv": 0.2562
-          },
-          "1:fix_severity": {
             "calls": 2,
             "ok": 2,
-            "tokens": 9715,
-            "cash": 0.0015,
+            "tokens": 73802,
+            "cash": 0.0,
+            "equiv": 0.5448
+          },
+          "1:fix_severity": {
+            "calls": 3,
+            "ok": 3,
+            "tokens": 14565,
+            "cash": 0.0023,
             "equiv": 0.0
           },
           "1:hardcoding_audit": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 42954,
-            "cash": 0.0068,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 85434,
+            "cash": 0.0134,
             "equiv": 0.0
           },
           "1:targeted": {
@@ -675,25 +675,25 @@
             "equiv": 0.0
           },
           "1:trace_choices": {
-            "calls": 1,
-            "ok": 1,
-            "tokens": 11713,
-            "cash": 0.0027,
+            "calls": 2,
+            "ok": 2,
+            "tokens": 25729,
+            "cash": 0.0056,
             "equiv": 0.0
           },
           "2:alignment": {
-            "calls": 1,
-            "ok": 1,
-            "tokens": 34681,
-            "cash": 0.0062,
+            "calls": 2,
+            "ok": 2,
+            "tokens": 68639,
+            "cash": 0.012,
             "equiv": 0.0
           },
           "2:broad": {
-            "calls": 1,
-            "ok": 1,
-            "tokens": 141435,
+            "calls": 3,
+            "ok": 2,
+            "tokens": 943308,
             "cash": 0.0,
-            "equiv": 1.5428
+            "equiv": 3.6777
           },
           "2:causal_language": {
             "calls": 1,
@@ -703,45 +703,45 @@
             "equiv": 0.0
           },
           "3:enumerate": {
-            "calls": 1,
-            "ok": 1,
-            "tokens": 32669,
-            "cash": 0.0056,
+            "calls": 2,
+            "ok": 2,
+            "tokens": 65715,
+            "cash": 0.0115,
             "equiv": 0.0
           },
           "3:execute": {
-            "calls": 1,
-            "ok": 1,
-            "tokens": 1002447,
-            "cash": 0.0293,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 2559793,
+            "cash": 0.0781,
             "equiv": 0.0
           },
           "3:interpret": {
-            "calls": 1,
-            "ok": 1,
-            "tokens": 38868,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 97136,
             "cash": 0.0,
-            "equiv": 0.2931
+            "equiv": 0.6905
           },
           "3:paper_level": {
-            "calls": 1,
-            "ok": 1,
-            "tokens": 13377,
-            "cash": 0.0024,
+            "calls": 2,
+            "ok": 2,
+            "tokens": 24499,
+            "cash": 0.0044,
             "equiv": 0.0
           },
           "3:screen": {
-            "calls": 1,
-            "ok": 1,
-            "tokens": 30365,
+            "calls": 2,
+            "ok": 2,
+            "tokens": 61269,
             "cash": 0.0,
-            "equiv": 0.0759
+            "equiv": 0.1995
           },
           "3:stage3_hardcoding_audit": {
-            "calls": 1,
-            "ok": 1,
-            "tokens": 4805,
-            "cash": 0.0008,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 12412,
+            "cash": 0.0021,
             "equiv": 0.0
           }
         }
@@ -756,13 +756,13 @@
       "rerun_single_pass": {
         "calls": 15,
         "ok": 15,
-        "tokens": 2008857,
-        "cash": 0.0526,
-        "equiv": 3.3065
+        "tokens": 2507270,
+        "cash": 0.0502,
+        "equiv": 3.8572
       },
       "clean_v01_stages123": {
-        "cash": 0.3278,
-        "equiv": 9.6176
+        "cash": 0.3254,
+        "equiv": 10.1683
       }
     },
     "Hertel_ClinPsychSci_2018_YabW": {
@@ -807,42 +807,42 @@
       },
       "rerun": {
         "total": {
-          "calls": 27,
-          "ok": 25,
-          "tokens": 4373708,
-          "cash": 0.1562,
-          "equiv": 4.1129
+          "calls": 37,
+          "ok": 35,
+          "tokens": 10913383,
+          "cash": 0.3003,
+          "equiv": 6.4935
         },
         "by_stage": {
           "1": {
-            "calls": 10,
-            "ok": 8,
-            "tokens": 119321,
+            "calls": 11,
+            "ok": 9,
+            "tokens": 154459,
             "cash": 0.0091,
-            "equiv": 0.5415
+            "equiv": 0.7957
           },
           "2": {
-            "calls": 5,
-            "ok": 5,
-            "tokens": 408794,
+            "calls": 6,
+            "ok": 6,
+            "tokens": 625326,
             "cash": 0.0244,
-            "equiv": 2.9181
+            "equiv": 4.4247
           },
           "3": {
-            "calls": 12,
-            "ok": 12,
-            "tokens": 3845593,
-            "cash": 0.1227,
-            "equiv": 0.6533
+            "calls": 20,
+            "ok": 20,
+            "tokens": 10133598,
+            "cash": 0.2668,
+            "equiv": 1.2731
           }
         },
         "by_step": {
           "1:diagnose": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 70584,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 105722,
             "cash": 0.0,
-            "equiv": 0.5383
+            "equiv": 0.7925
           },
           "1:fix_severity": {
             "calls": 2,
@@ -880,11 +880,11 @@
             "equiv": 0.0
           },
           "2:broad": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 325373,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 541905,
             "cash": 0.0,
-            "equiv": 2.9181
+            "equiv": 4.4247
           },
           "2:causal_language": {
             "calls": 1,
@@ -894,25 +894,25 @@
             "equiv": 0.0
           },
           "3:enumerate": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 45613,
-            "cash": 0.008,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 69606,
+            "cash": 0.0123,
             "equiv": 0.0
           },
           "3:execute": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 3639312,
-            "cash": 0.1083,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 9794239,
+            "cash": 0.246,
             "equiv": 0.0
           },
           "3:interpret": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 69942,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 138980,
             "cash": 0.0,
-            "equiv": 0.5209
+            "equiv": 1.0334
           },
           "3:paper_level": {
             "calls": 2,
@@ -922,17 +922,17 @@
             "equiv": 0.0
           },
           "3:screen": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 52965,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 79797,
             "cash": 0.0,
-            "equiv": 0.1324
+            "equiv": 0.2397
           },
           "3:stage3_hardcoding_audit": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 11540,
-            "cash": 0.0018,
+            "calls": 4,
+            "ok": 4,
+            "tokens": 24755,
+            "cash": 0.0039,
             "equiv": 0.0
           }
         }
@@ -947,13 +947,13 @@
       "rerun_single_pass": {
         "calls": 13,
         "ok": 13,
-        "tokens": 2430939,
-        "cash": 0.0774,
-        "equiv": 1.8675
+        "tokens": 1139988,
+        "cash": 0.0376,
+        "equiv": 2.108
       },
       "clean_v01_stages123": {
-        "cash": 0.3468,
-        "equiv": 5.3073
+        "cash": 0.307,
+        "equiv": 5.5478
       }
     }
   }

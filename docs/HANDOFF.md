@@ -4,27 +4,32 @@ Read this first in a new session. It states where the pilot stands and what wait
 
 ## State
 
-- Package `reproscope/` implements Stages 0–3, the report and the evaluation; 194 offline tests pass (`.venv/bin/python -m pytest tests -q`).
+- Package `reproscope/` implements Stages 0–3, the report and the evaluation; 222 offline tests pass (`.venv/bin/python -m pytest tests -q`).
 - The efficiency and correctness work list from the audit is implemented and merged (git log from `36cc1d9` to HEAD). Highlights: deterministic arbitration with cheap-vision batches, one strong call for contracts plus redacted methods, leak scan limited to inferential and headline quantities, CONTRACT.json grouped per analysis, abstained match rows, focal claim bound through `reproscope/focal.py` everywhere, targeted arm on the focal quantity only with `max_turns`, Stage 2 scoped to the focal analysis, Stage 3 execution capped at 64 with stratified sampling, content-hash cache keys with per-step input and prompt checks, `--force-step`, per-attempt ledger rows, opencode cache tokens, Codex shadow prices.
 - All five papers have complete runs (`runs/<paper_id>/`, gitignored): Stage 0 from the 2026-09-02 pilot; replica agent runs from the pilot (ten per paper, all traces present); matching, targeted arm, diagnosis, Stage 2, Stage 3 and reports rebuilt on 2026-09-03 with the fixed code. Two DeepSeek replicas (Petersen) stay `ran: false`: their scripts import scipy, which the re-execution interpreter lacks.
 - Evaluation: `docs/evaluation/pilot_eval.{md,json}` (from `python -m reproscope.evaluate`), `docs/evaluation/cost_table.json` (from `docs/evaluation/cost_table.py`), and the writeup `docs/evaluation/PILOT_EVALUATION.html` (from `docs/evaluation/build_writeup.py`).
-- Spend on the rebuild: about USD 0.5 metered, USD 27 list-equivalent across the five papers including retries; a single clean pass of Stages 1–3 is USD 0.05–0.08 metered and 1.9–6.0 list-equivalent per paper. OpenRouter balance was about USD 8 at the end (45 credited, 36.85 used).
+- Spend on the rebuild (all passes, including the evening's reruns): about USD 1.0 metered, USD 46 list-equivalent across the five papers including retries; a single clean pass of Stages 1–3 is USD 0.05–0.08 metered and 1.9–6.0 list-equivalent per paper. OpenRouter balance was about USD 8 at the end (45 credited, 36.85 used).
 - No pipeline process is running.
+
+## Decisions taken on 2026-09-03 (evening)
+
+- **Shadow prices** are OpenAI's input list prices (Sol 4.0, Luna 0.2 USD per million tokens; Sol's rate is promotional through at least 2026-11-21).
+- **Leak rule** is widened by analysis: every numeric claim of an analysis that carries an inferential or headline claim is forbidden, sample-description analyses stay exempt. Verified offline against the current blind materials (0 hits); not yet exercised on a fresh Stage 0 run.
+- **Stage 3 interpretation** reads specs.csv, the grid's factors and the reported estimate only.
+- **Sign gate**: a reversed two-group contrast (t, d) is graded on the flipped value and its CI bounds are mirrored, marked `direction_flipped` and shown as "sign flipped" in the report; coefficients and correlations keep the gate.
+- **Stage 3 gate**: the enumerator lists unimplementable factors, the screen marks each level as affecting the estimate, the inference or only reporting; reporting-only factors are pinned to one level; a grid with no defensible level that moves the estimate or the inference is recorded as an abstention. Significance shares use each specification's own threshold.
+- **Replica packages**: the task names the interpreters and the base stack (numpy, pandas, scipy, statsmodels, pyreadstat, openpyxl); anything beyond goes in `out/requirements.txt` or `out/r_packages.txt`, and the checker builds a per-replica environment from it; an install failure is `abstained: environment`.
 
 ## Decisions waiting on Lukas
 
-1. **Shadow prices** are set to OpenAI's input list prices (Sol 4.0, Luna 0.2 USD per million tokens, 2026-08-21 rates); Codex reports one token total, so output tokens are priced as input. Revisit when Sol's promotional rate ends (at least 2026-11-21).
-2. **Leak rule for p-values.** The scan forbids inferential kinds plus headline claims, with three significant digits required for supporting claims. Supporting p-values are exempt from the three-digit rule (a printed p rarely has three), so ".03" from a supporting claim is still forbidden. The narrowed rule lets through supporting means, MSEs, percentages and CI bounds that the pilot's first-draft contracts had leaked into ambiguity notes; the cheap description scrub is what removes those now. Confirm or widen (add `other`/`mean` to the inferential set).
-3. **Stage 3 interpretation input.** The interpretation prompt receives the rank statistics alongside specs.csv; the design describes a specs-only prompt. Keep or strip.
-4. **Matching sign gate for contrasts.** Axt's eight universal fails are one two-group contrast reported with the opposite sign and its CI bounds. A direction-agnostic rule for two-group contrasts would remove them. Decide whether to change the rule or keep it and annotate.
-5. **Stage 3 gate.** Petersen's 64 specifications all return the identical estimate because no factor touches the second-stage test. A gate on the screen's output (skip execution when no defensible factor can move the estimand) would save the executor run and the interpretation call.
-6. **Replica environment.** DeepSeek's two Petersen scripts need scipy. Either add scipy to the re-execution interpreter or state the pinned environment in the replica task.
+1. **Agent interpreter.** Replica agents run `python3` from PATH (Homebrew 3.14.6) inside the isolation copy, while the checker re-executes with the repo `.venv` (3.14.3) plus declared packages. The stacks match today by coincidence. Putting `.venv/bin` first on the agent's PATH would align them but reveals the repository path to a blind agent. Decide which side to move.
+2. **Stage 0 on the new code.** Stage 0 has not been rerun since the fixes. The first Stage 0 run (a sixth paper, or `--force` on one of the five) exercises the rebuilt arbitration, the combined contracts call, the leak repair and the widened scan live for the first time; budget about USD 0.1 metered and 2–3 list-equivalent.
 
 ## Known findings (in the writeup)
 
 - Ohtsubo: the deposited workbook has 30 rows and no exclusion marker; the targeted arm identifies the excluded participant and reproduces all seven reported quantities exactly.
 - Hurst: five cells of the Mini-K correlation table are unreachable by any defensible specification; one is arithmetically inconsistent with its subscales (a likely transcription error). This came from a targeted run under the earlier, broader trigger; kept under `runs/logs/superseded/`.
-- Petersen: the multiverse is a point mass; the data are first-stage output.
+- Petersen: the data are first-stage output; six factors are unimplementable and the executable curve is two specifications (Bonferroni on or off) with the identical estimate.
 - Axt: every family produces the same profile; the fails are the sign-convention artefact above.
 - Hertel: all ten replicas reproduce the focal F; differences sit in supporting claims (GLM's second run 73% band A, the rest 83–100%).
 - The model-based leak audit rates every paper "strong" for structural reasons and does not discriminate.

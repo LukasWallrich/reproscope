@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-03T19:29:09.960936+00:00",
+  "generated": "2026-09-03T22:58:59.682889+00:00",
   "papers": [
     "Axt_JournExpSocPsych_2018_zK2",
     "Hertel_ClinPsychSci_2018_YabW",
@@ -11,62 +11,62 @@
     {
       "label": "deepseek",
       "launched": 10,
-      "ran": 8,
-      "failed": 2,
+      "ran": 10,
+      "failed": 0,
       "no_trace": 0,
       "match": {
         "all": {
-          "n": 700,
-          "n_abstained": 5,
-          "n_found": 695,
+          "n": 934,
+          "n_abstained": 25,
+          "n_found": 909,
           "share_found": 1.0,
           "bands": {
-            "A": 461,
-            "B": 43,
-            "C": 9,
-            "fail": 182,
+            "A": 658,
+            "B": 53,
+            "C": 10,
+            "fail": 188,
             "not_found": 0,
-            "abstained": 5
+            "abstained": 25
           },
-          "share_a": 0.6633093525179856,
-          "share_ab": 0.7251798561151079
+          "share_a": 0.7238723872387238,
+          "share_ab": 0.7821782178217822
         },
         "headline": {
-          "n": 134,
+          "n": 226,
           "n_abstained": 0,
-          "n_found": 134,
+          "n_found": 226,
           "share_found": 1.0,
           "bands": {
-            "A": 85,
-            "B": 17,
-            "C": 1,
-            "fail": 31,
+            "A": 180,
+            "B": 24,
+            "C": 2,
+            "fail": 20,
             "not_found": 0,
             "abstained": 0
           },
-          "share_a": 0.6343283582089553,
-          "share_ab": 0.7611940298507462
+          "share_a": 0.7964601769911505,
+          "share_ab": 0.9026548672566371
         },
         "focal": {
-          "n": 38,
+          "n": 68,
           "n_abstained": 1,
-          "n_found": 37,
+          "n_found": 67,
           "share_found": 1.0,
           "bands": {
-            "A": 25,
-            "B": 8,
+            "A": 47,
+            "B": 12,
             "C": 1,
-            "fail": 3,
+            "fail": 7,
             "not_found": 0,
             "abstained": 1
           },
-          "share_a": 0.6756756756756757,
-          "share_ab": 0.8918918918918919
+          "share_a": 0.7014925373134329,
+          "share_ab": 0.8805970149253731
         }
       },
       "fixes": {
-        "total": 20,
-        "minor": 19,
+        "total": 18,
+        "minor": 17,
         "major": 0,
         "critical": 0,
         "unrated": 1
@@ -104,15 +104,15 @@
           "n_found": 462,
           "share_found": 1.0,
           "bands": {
-            "A": 380,
+            "A": 398,
             "B": 26,
             "C": 2,
-            "fail": 54,
+            "fail": 36,
             "not_found": 0,
             "abstained": 5
           },
-          "share_a": 0.8225108225108225,
-          "share_ab": 0.8787878787878788
+          "share_a": 0.8614718614718615,
+          "share_ab": 0.9177489177489178
         },
         "headline": {
           "n": 113,
@@ -120,15 +120,15 @@
           "n_found": 113,
           "share_found": 1.0,
           "bands": {
-            "A": 84,
+            "A": 101,
             "B": 10,
             "C": 0,
-            "fail": 19,
+            "fail": 2,
             "not_found": 0,
             "abstained": 0
           },
-          "share_a": 0.7433628318584071,
-          "share_ab": 0.831858407079646
+          "share_a": 0.8938053097345132,
+          "share_ab": 0.9823008849557522
         },
         "focal": {
           "n": 34,
@@ -187,15 +187,15 @@
           "n_found": 912,
           "share_found": 1.0,
           "bands": {
-            "A": 729,
+            "A": 782,
             "B": 55,
             "C": 4,
-            "fail": 124,
+            "fail": 71,
             "not_found": 0,
             "abstained": 22
           },
-          "share_a": 0.7993421052631579,
-          "share_ab": 0.8596491228070176
+          "share_a": 0.8574561403508771,
+          "share_ab": 0.9177631578947368
         },
         "headline": {
           "n": 226,
@@ -203,15 +203,15 @@
           "n_found": 226,
           "share_found": 1.0,
           "bands": {
-            "A": 145,
+            "A": 197,
             "B": 19,
             "C": 0,
-            "fail": 62,
+            "fail": 10,
             "not_found": 0,
             "abstained": 0
           },
-          "share_a": 0.6415929203539823,
-          "share_ab": 0.7256637168141593
+          "share_a": 0.8716814159292036,
+          "share_ab": 0.9557522123893806
         },
         "focal": {
           "n": 68,
@@ -270,15 +270,15 @@
           "n_found": 898,
           "share_found": 1.0,
           "bands": {
-            "A": 580,
-            "B": 82,
-            "C": 18,
-            "fail": 218,
+            "A": 638,
+            "B": 83,
+            "C": 19,
+            "fail": 158,
             "not_found": 0,
             "abstained": 36
           },
-          "share_a": 0.6458797327394209,
-          "share_ab": 0.7371937639198218
+          "share_a": 0.7104677060133631,
+          "share_ab": 0.8028953229398663
         },
         "headline": {
           "n": 226,
@@ -286,15 +286,15 @@
           "n_found": 226,
           "share_found": 1.0,
           "bands": {
-            "A": 123,
-            "B": 21,
-            "C": 0,
-            "fail": 82,
+            "A": 180,
+            "B": 22,
+            "C": 1,
+            "fail": 23,
             "not_found": 0,
             "abstained": 0
           },
-          "share_a": 0.5442477876106194,
-          "share_ab": 0.6371681415929203
+          "share_a": 0.7964601769911505,
+          "share_ab": 0.8938053097345132
         },
         "focal": {
           "n": 68,
@@ -353,15 +353,15 @@
           "n_found": 905,
           "share_found": 1.0,
           "bands": {
-            "A": 750,
+            "A": 786,
             "B": 52,
             "C": 4,
-            "fail": 99,
+            "fail": 63,
             "not_found": 0,
             "abstained": 29
           },
-          "share_a": 0.8287292817679558,
-          "share_ab": 0.8861878453038674
+          "share_a": 0.8685082872928177,
+          "share_ab": 0.9259668508287293
         },
         "headline": {
           "n": 226,
@@ -369,15 +369,15 @@
           "n_found": 226,
           "share_found": 1.0,
           "bands": {
-            "A": 168,
+            "A": 202,
             "B": 20,
             "C": 0,
-            "fail": 38,
+            "fail": 4,
             "not_found": 0,
             "abstained": 0
           },
-          "share_a": 0.7433628318584071,
-          "share_ab": 0.831858407079646
+          "share_a": 0.8938053097345132,
+          "share_ab": 0.9823008849557522
         },
         "focal": {
           "n": 68,
@@ -436,15 +436,15 @@
           "n_found": 452,
           "share_found": 1.0,
           "bands": {
-            "A": 354,
+            "A": 389,
             "B": 30,
             "C": 2,
-            "fail": 66,
+            "fail": 31,
             "not_found": 0,
             "abstained": 15
           },
-          "share_a": 0.7831858407079646,
-          "share_ab": 0.8495575221238938
+          "share_a": 0.8606194690265486,
+          "share_ab": 0.9269911504424779
         },
         "headline": {
           "n": 113,
@@ -452,15 +452,15 @@
           "n_found": 113,
           "share_found": 1.0,
           "bands": {
-            "A": 66,
+            "A": 101,
             "B": 10,
             "C": 0,
-            "fail": 37,
+            "fail": 2,
             "not_found": 0,
             "abstained": 0
           },
-          "share_a": 0.584070796460177,
-          "share_ab": 0.672566371681416
+          "share_a": 0.8938053097345132,
+          "share_ab": 0.9823008849557522
         },
         "focal": {
           "n": 34,
@@ -521,15 +521,15 @@
           "n_found": 2717,
           "share_found": 1.0,
           "bands": {
-            "A": 2064,
-            "B": 190,
-            "C": 26,
-            "fail": 437,
+            "A": 2211,
+            "B": 191,
+            "C": 27,
+            "fail": 288,
             "not_found": 0,
             "abstained": 85
           },
-          "share_a": 0.7596613912403386,
-          "share_ab": 0.8295914611704085
+          "share_a": 0.8137651821862348,
+          "share_ab": 0.8840633051159367
         },
         "headline": {
           "n": 678,
@@ -537,15 +537,15 @@
           "n_found": 678,
           "share_found": 1.0,
           "bands": {
-            "A": 441,
-            "B": 61,
-            "C": 0,
-            "fail": 176,
+            "A": 584,
+            "B": 62,
+            "C": 1,
+            "fail": 31,
             "not_found": 0,
             "abstained": 0
           },
-          "share_a": 0.6504424778761062,
-          "share_ab": 0.7404129793510325
+          "share_a": 0.8613569321533924,
+          "share_ab": 0.9528023598820059
         },
         "focal": {
           "n": 204,
@@ -594,62 +594,62 @@
     {
       "label": "cheap",
       "launched": 20,
-      "ran": 18,
-      "failed": 2,
+      "ran": 20,
+      "failed": 0,
       "no_trace": 0,
       "match": {
         "all": {
-          "n": 1634,
-          "n_abstained": 27,
-          "n_found": 1607,
+          "n": 1868,
+          "n_abstained": 47,
+          "n_found": 1821,
           "share_found": 1.0,
           "bands": {
-            "A": 1190,
-            "B": 98,
-            "C": 13,
-            "fail": 306,
+            "A": 1440,
+            "B": 108,
+            "C": 14,
+            "fail": 259,
             "not_found": 0,
-            "abstained": 27
+            "abstained": 47
           },
-          "share_a": 0.7405102675793404,
-          "share_ab": 0.8014934660858744
+          "share_a": 0.7907742998352554,
+          "share_ab": 0.8500823723228995
         },
         "headline": {
-          "n": 360,
+          "n": 452,
           "n_abstained": 0,
-          "n_found": 360,
+          "n_found": 452,
           "share_found": 1.0,
           "bands": {
-            "A": 230,
-            "B": 36,
-            "C": 1,
-            "fail": 93,
+            "A": 377,
+            "B": 43,
+            "C": 2,
+            "fail": 30,
             "not_found": 0,
             "abstained": 0
           },
-          "share_a": 0.6388888888888888,
-          "share_ab": 0.7388888888888889
+          "share_a": 0.834070796460177,
+          "share_ab": 0.9292035398230089
         },
         "focal": {
-          "n": 106,
+          "n": 136,
           "n_abstained": 1,
-          "n_found": 105,
+          "n_found": 135,
           "share_found": 1.0,
           "bands": {
-            "A": 77,
-            "B": 18,
+            "A": 99,
+            "B": 22,
             "C": 1,
-            "fail": 9,
+            "fail": 13,
             "not_found": 0,
             "abstained": 1
           },
           "share_a": 0.7333333333333333,
-          "share_ab": 0.9047619047619048
+          "share_ab": 0.8962962962962963
         }
       },
       "fixes": {
-        "total": 55,
-        "minor": 51,
+        "total": 53,
+        "minor": 49,
         "major": 2,
         "critical": 0,
         "unrated": 2
@@ -693,15 +693,15 @@
               "n_found": 92,
               "share_found": 1.0,
               "bands": {
-                "A": 64,
-                "B": 12,
-                "C": 0,
-                "fail": 16,
+                "A": 75,
+                "B": 13,
+                "C": 1,
+                "fail": 3,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6956521739130435,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.8152173913043478,
+              "share_ab": 0.9565217391304348
             },
             "headline": {
               "n": 56,
@@ -709,15 +709,15 @@
               "n_found": 56,
               "share_found": 1.0,
               "bands": {
-                "A": 34,
-                "B": 6,
-                "C": 0,
-                "fail": 16,
+                "A": 45,
+                "B": 7,
+                "C": 1,
+                "fail": 3,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.8035714285714286,
+              "share_ab": 0.9285714285714286
             },
             "focal": {
               "n": 2,
@@ -776,15 +776,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 29,
+                "A": 36,
                 "B": 9,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6304347826086957,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.782608695652174,
+              "share_ab": 0.9782608695652174
             },
             "headline": {
               "n": 28,
@@ -792,15 +792,15 @@
               "n_found": 28,
               "share_found": 1.0,
               "bands": {
-                "A": 17,
+                "A": 24,
                 "B": 3,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.8571428571428571,
+              "share_ab": 0.9642857142857143
             },
             "focal": {
               "n": 1,
@@ -859,15 +859,15 @@
               "n_found": 92,
               "share_found": 1.0,
               "bands": {
-                "A": 56,
+                "A": 70,
                 "B": 17,
                 "C": 0,
-                "fail": 19,
+                "fail": 5,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6086956521739131,
-              "share_ab": 0.7934782608695652
+              "share_a": 0.7608695652173914,
+              "share_ab": 0.9456521739130435
             },
             "headline": {
               "n": 56,
@@ -875,15 +875,15 @@
               "n_found": 56,
               "share_found": 1.0,
               "bands": {
-                "A": 32,
+                "A": 46,
                 "B": 5,
                 "C": 0,
-                "fail": 19,
+                "fail": 5,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.5714285714285714,
-              "share_ab": 0.6607142857142857
+              "share_a": 0.8214285714285714,
+              "share_ab": 0.9107142857142857
             },
             "focal": {
               "n": 2,
@@ -942,15 +942,15 @@
               "n_found": 92,
               "share_found": 1.0,
               "bands": {
-                "A": 58,
-                "B": 18,
-                "C": 0,
-                "fail": 16,
+                "A": 69,
+                "B": 19,
+                "C": 1,
+                "fail": 3,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6304347826086957,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.75,
+              "share_ab": 0.9565217391304348
             },
             "headline": {
               "n": 56,
@@ -958,15 +958,15 @@
               "n_found": 56,
               "share_found": 1.0,
               "bands": {
-                "A": 34,
-                "B": 6,
-                "C": 0,
-                "fail": 16,
+                "A": 45,
+                "B": 7,
+                "C": 1,
+                "fail": 3,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.8035714285714286,
+              "share_ab": 0.9285714285714286
             },
             "focal": {
               "n": 2,
@@ -1025,15 +1025,15 @@
               "n_found": 92,
               "share_found": 1.0,
               "bands": {
-                "A": 58,
+                "A": 72,
                 "B": 18,
                 "C": 0,
-                "fail": 16,
+                "fail": 2,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6304347826086957,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.782608695652174,
+              "share_ab": 0.9782608695652174
             },
             "headline": {
               "n": 56,
@@ -1041,15 +1041,15 @@
               "n_found": 56,
               "share_found": 1.0,
               "bands": {
-                "A": 34,
+                "A": 48,
                 "B": 6,
                 "C": 0,
-                "fail": 16,
+                "fail": 2,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.8571428571428571,
+              "share_ab": 0.9642857142857143
             },
             "focal": {
               "n": 2,
@@ -1108,15 +1108,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 29,
+                "A": 36,
                 "B": 9,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6304347826086957,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.782608695652174,
+              "share_ab": 0.9782608695652174
             },
             "headline": {
               "n": 28,
@@ -1124,15 +1124,15 @@
               "n_found": 28,
               "share_found": 1.0,
               "bands": {
-                "A": 17,
+                "A": 24,
                 "B": 3,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.8571428571428571,
+              "share_ab": 0.9642857142857143
             },
             "focal": {
               "n": 1,
@@ -1179,7 +1179,7 @@
           }
         }
       ],
-      "decision_agreement_mean": 0.77,
+      "decision_agreement_mean": 0.91,
       "numeric_cv_median": 2.8590466994374556e-07,
       "focal": {
         "source": "stage3/focal.json",
@@ -1279,10 +1279,10 @@
         "meta": {
           "artifact": "TargetedReconstruction",
           "version": "0.1",
-          "created": "2026-09-03T18:33:02.218787+00:00",
+          "created": "2026-09-03T21:42:09.928669+00:00",
           "stage": "1",
           "inputs": {
-            "match": "be34dbc6e9cefebc31e422e22b8aa9e530fbf8de18453df6a361e891be7fe3cb"
+            "match": "2bbdffea8a03bcd1f2effb71922dd4e6655df22a701e5fcfe91e4cea7f853aa6"
           },
           "prompt_versions": {
             "stage1_targeted": "dd243b39e5b4"
@@ -1307,19 +1307,19 @@
           "cost_usd_equiv": 21.442426000000005
         },
         "1": {
-          "calls": 453,
-          "cost_usd": 0.8471582384240004,
-          "cost_usd_equiv": 13.2956935
+          "calls": 456,
+          "cost_usd": 0.8504523384240004,
+          "cost_usd_equiv": 13.560449
         },
         "2": {
-          "calls": 14,
+          "calls": 15,
           "cost_usd": 0.01352325,
-          "cost_usd_equiv": 8.008595999999999
+          "cost_usd_equiv": 9.084856499999999
         },
         "3": {
-          "calls": 25,
-          "cost_usd": 0.3097462007,
-          "cost_usd_equiv": 1.894828
+          "calls": 33,
+          "cost_usd": 0.3643152207,
+          "cost_usd_equiv": 2.436151
         }
       },
       "replicas": [
@@ -1370,15 +1370,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 29,
+                "A": 36,
                 "B": 9,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6304347826086957,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.782608695652174,
+              "share_ab": 0.9782608695652174
             },
             "headline": {
               "n": 28,
@@ -1386,15 +1386,15 @@
               "n_found": 28,
               "share_found": 1.0,
               "bands": {
-                "A": 17,
+                "A": 24,
                 "B": 3,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.8571428571428571,
+              "share_ab": 0.9642857142857143
             },
             "focal": {
               "n": 1,
@@ -1441,15 +1441,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 35,
-                "B": 3,
-                "C": 0,
-                "fail": 8,
+                "A": 39,
+                "B": 4,
+                "C": 1,
+                "fail": 2,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.7608695652173914,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.8478260869565217,
+              "share_ab": 0.9347826086956522
             },
             "headline": {
               "n": 28,
@@ -1457,15 +1457,15 @@
               "n_found": 28,
               "share_found": 1.0,
               "bands": {
-                "A": 17,
-                "B": 3,
-                "C": 0,
-                "fail": 8,
+                "A": 21,
+                "B": 4,
+                "C": 1,
+                "fail": 2,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.75,
+              "share_ab": 0.8928571428571429
             },
             "focal": {
               "n": 1,
@@ -1518,15 +1518,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 29,
+                "A": 36,
                 "B": 9,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6304347826086957,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.782608695652174,
+              "share_ab": 0.9782608695652174
             },
             "headline": {
               "n": 28,
@@ -1534,15 +1534,15 @@
               "n_found": 28,
               "share_found": 1.0,
               "bands": {
-                "A": 17,
+                "A": 24,
                 "B": 3,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.8571428571428571,
+              "share_ab": 0.9642857142857143
             },
             "focal": {
               "n": 1,
@@ -1604,15 +1604,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 29,
+                "A": 36,
                 "B": 9,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6304347826086957,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.782608695652174,
+              "share_ab": 0.9782608695652174
             },
             "headline": {
               "n": 28,
@@ -1620,15 +1620,15 @@
               "n_found": 28,
               "share_found": 1.0,
               "bands": {
-                "A": 17,
+                "A": 24,
                 "B": 3,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.8571428571428571,
+              "share_ab": 0.9642857142857143
             },
             "focal": {
               "n": 1,
@@ -1696,15 +1696,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 27,
+                "A": 34,
                 "B": 8,
                 "C": 0,
-                "fail": 11,
+                "fail": 4,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.5869565217391305,
-              "share_ab": 0.7608695652173914
+              "share_a": 0.7391304347826086,
+              "share_ab": 0.9130434782608695
             },
             "headline": {
               "n": 28,
@@ -1712,15 +1712,15 @@
               "n_found": 28,
               "share_found": 1.0,
               "bands": {
-                "A": 15,
+                "A": 22,
                 "B": 2,
                 "C": 0,
-                "fail": 11,
+                "fail": 4,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.5357142857142857,
-              "share_ab": 0.6071428571428571
+              "share_a": 0.7857142857142857,
+              "share_ab": 0.8571428571428571
             },
             "focal": {
               "n": 1,
@@ -1767,15 +1767,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 29,
-                "B": 9,
-                "C": 0,
-                "fail": 8,
+                "A": 33,
+                "B": 10,
+                "C": 1,
+                "fail": 2,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6304347826086957,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.717391304347826,
+              "share_ab": 0.9347826086956522
             },
             "headline": {
               "n": 28,
@@ -1783,15 +1783,15 @@
               "n_found": 28,
               "share_found": 1.0,
               "bands": {
-                "A": 17,
-                "B": 3,
-                "C": 0,
-                "fail": 8,
+                "A": 21,
+                "B": 4,
+                "C": 1,
+                "fail": 2,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.75,
+              "share_ab": 0.8928571428571429
             },
             "focal": {
               "n": 1,
@@ -1846,15 +1846,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 29,
+                "A": 36,
                 "B": 9,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6304347826086957,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.782608695652174,
+              "share_ab": 0.9782608695652174
             },
             "headline": {
               "n": 28,
@@ -1862,15 +1862,15 @@
               "n_found": 28,
               "share_found": 1.0,
               "bands": {
-                "A": 17,
+                "A": 24,
                 "B": 3,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.8571428571428571,
+              "share_ab": 0.9642857142857143
             },
             "focal": {
               "n": 1,
@@ -1917,15 +1917,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 29,
+                "A": 36,
                 "B": 9,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6304347826086957,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.782608695652174,
+              "share_ab": 0.9782608695652174
             },
             "headline": {
               "n": 28,
@@ -1933,15 +1933,15 @@
               "n_found": 28,
               "share_found": 1.0,
               "bands": {
-                "A": 17,
+                "A": 24,
                 "B": 3,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.8571428571428571,
+              "share_ab": 0.9642857142857143
             },
             "focal": {
               "n": 1,
@@ -2010,15 +2010,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 29,
+                "A": 36,
                 "B": 9,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6304347826086957,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.782608695652174,
+              "share_ab": 0.9782608695652174
             },
             "headline": {
               "n": 28,
@@ -2026,15 +2026,15 @@
               "n_found": 28,
               "share_found": 1.0,
               "bands": {
-                "A": 17,
+                "A": 24,
                 "B": 3,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.8571428571428571,
+              "share_ab": 0.9642857142857143
             },
             "focal": {
               "n": 1,
@@ -2081,15 +2081,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 29,
+                "A": 36,
                 "B": 9,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6304347826086957,
-              "share_ab": 0.8260869565217391
+              "share_a": 0.782608695652174,
+              "share_ab": 0.9782608695652174
             },
             "headline": {
               "n": 28,
@@ -2097,15 +2097,15 @@
               "n_found": 28,
               "share_found": 1.0,
               "bands": {
-                "A": 17,
+                "A": 24,
                 "B": 3,
                 "C": 0,
-                "fail": 8,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6071428571428571,
-              "share_ab": 0.7142857142857143
+              "share_a": 0.8571428571428571,
+              "share_ab": 0.9642857142857143
             },
             "focal": {
               "n": 1,
@@ -2736,10 +2736,10 @@
         "meta": {
           "artifact": "TargetedReconstruction",
           "version": "0.1",
-          "created": "2026-09-03T17:20:43.742491+00:00",
+          "created": "2026-09-03T20:56:12.962891+00:00",
           "stage": "1",
           "inputs": {
-            "match": "da4a5174cdd4e8da05240b88c8042b94e1e3cb68abfbe8f74d326584ad0d5822"
+            "match": "c6a4518eac3ab7c3fe196b2bae31c0da0ec79f9f688197724d6eb811566c90f0"
           },
           "prompt_versions": {
             "stage1_targeted": "dd243b39e5b4"
@@ -2764,19 +2764,19 @@
           "cost_usd_equiv": 7.424061
         },
         "1": {
-          "calls": 263,
+          "calls": 264,
           "cost_usd": 0.605121867276,
-          "cost_usd_equiv": 12.572925
+          "cost_usd_equiv": 12.8271705
         },
         "2": {
-          "calls": 13,
+          "calls": 14,
           "cost_usd": 0.02441735,
-          "cost_usd_equiv": 7.362301999999999
+          "cost_usd_equiv": 8.868948999999999
         },
         "3": {
-          "calls": 19,
-          "cost_usd": 0.19895125219,
-          "cost_usd_equiv": 0.9953835000000001
+          "calls": 27,
+          "cost_usd": 0.34306881219,
+          "cost_usd_equiv": 1.6151495
         }
       },
       "replicas": [
@@ -4250,10 +4250,10 @@
         "meta": {
           "artifact": "TargetedReconstruction",
           "version": "0.1",
-          "created": "2026-09-03T17:50:12.350491+00:00",
+          "created": "2026-09-03T21:27:19.696237+00:00",
           "stage": "1",
           "inputs": {
-            "match": "4f2e4016b9e4e35d72c04a7b092a3e8b47f15e039f1cc9fe4ed72451e1e7d04f"
+            "match": "6a9aad837d5f04a862f5f8f15658edad53bec952d63ed390456402367c5b5e1a"
           },
           "prompt_versions": {
             "stage1_targeted": "dd243b39e5b4"
@@ -4278,19 +4278,19 @@
           "cost_usd_equiv": 13.003987500000001
         },
         "1": {
-          "calls": 2397,
+          "calls": 2398,
           "cost_usd": 0.79754051324,
-          "cost_usd_equiv": 21.7276675
+          "cost_usd_equiv": 22.043160999999998
         },
         "2": {
-          "calls": 13,
+          "calls": 14,
           "cost_usd": 0.01558225,
-          "cost_usd_equiv": 12.016907499999999
+          "cost_usd_equiv": 13.563316999999998
         },
         "3": {
-          "calls": 19,
-          "cost_usd": 0.11558049499999999,
-          "cost_usd_equiv": 0.9592125
+          "calls": 27,
+          "cost_usd": 0.17042736,
+          "cost_usd_equiv": 1.6986895
         }
       },
       "replicas": [
@@ -5805,17 +5805,17 @@
         "meta": {
           "artifact": "TargetedReconstruction",
           "version": "0.1",
-          "created": "2026-09-03T19:26:22.184777+00:00",
+          "created": "2026-09-03T20:36:22.525042+00:00",
           "stage": "1",
           "inputs": {
-            "match": "f269e978837749a04c2d4fd4456ce9c4fdfb036170bb075e4279bad84a0705b1"
+            "match": "a6a0c14a881031fa1bb2b24aae8f9a3c60d455611a3da90004ca27cb43be563a"
           },
           "prompt_versions": {
             "stage1_targeted": "dd243b39e5b4"
           },
           "model_calls": [
-            "0895664a95fa",
-            "d8578ed797a2"
+            "4db30f2199e6",
+            "b0aa91f89543"
           ]
         },
         "state": "complete",
@@ -5825,21 +5825,46 @@
         "triggered": true,
         "outcome": "reachable",
         "added_choices": [
-          "The identity of the excluded participant: ID 20. The methods state that one participant was excluded for suspecting the deceptive procedure, but the data file has 30 records and no suspicion variable, so which record to drop is not recoverable from the data. It is recovered here from the paper's own reporting: of the 30 single-record drops, 5 reproduce the methods' sample description (10 males, 19 females, Mage +/- SD = 19.3 +/- 0.89), of which IDs 14 and 20 reproduce all seven a20 quantities, and only ID 20 also reproduces the other Study 2a statistics (friendship t27 = 1.04, p = .306; r27 = .38, p = .045).",
-          "Cohen's d from the pooled SD with no small-sample correction (the d formula is not stated).",
-          "Student t with pooled variance rather than the Welch correction (not stated; with n = 15 vs 14 the two differ only in the third decimal, and only the pooled version gives the reported df of 27).",
-          "Intimacy as the mean of the four items rather than their sum (not stated; the sum is ruled out by the reported means of 4.58 and 2.82 on a seven-point scale)."
+          "Identity of the excluded participant: the data file has 30 records and no suspicion variable, so the one participant the paper excluded for suspecting deception cannot be identified from the data. The reported participant description (n = 29, 10 males, 19 females, Mage 19.3, SD 0.89) narrows it to five male 19-year-olds (IDs 5, 23, 25, 14, 20); only the two in the no attention condition (IDs 14 and 20, both with intimacy 2.25) reproduce the reported statistics. Restricting to the no attention arm is the added choice.",
+          "Student t with pooled variance rather than Welch (the paper does not say which; both give t = 5.91 here).",
+          "Intimacy as the mean of the four items rather than their sum (fixes the scale of the reported means and SDs; the workbook's own Intimacy column uses the mean).",
+          "Cohen's d from the raw mean difference over the pooled SD, with no small-sample correction."
         ],
         "attempts": 6,
-        "notes": "The whole gap is the one exclusion the methods state. The closest analyst applied every other choice as the paper made it - item-mean intimacy that matches the workbook's own aggregate, pooled-variance Student t, pooled-SD d - but analysed all 30 records because the data file gives no way to find the excluded case, which yields t(28) = 6.20 and d = 2.26. Dropping the right record moves every one of the seven quantities onto the reported value at once, including the reported df of 27; the attention condition's mean and SD are already exact on the full 30 records, which places the excluded participant in the no attention condition. Attempt 4 (Hedges-corrected d on all 30 records) also lands on d = 2.20, but it is a coincidence: it leaves t, df and the no attention mean and SD wrong, so it is not the route. Two records, ID 14 and ID 20, are interchangeable for this analysis - both give identical a20 values - and ID 20 is picked because it also fits the study's other reported statistics. Every choice used is either stated in the methods or listed as open in the contract; the only thing added is which record the stated exclusion removes.",
-        "diagnosis": "*Unblinded conjecture \u2014 I have seen the reported values; this grades nothing.*\n\nThe blind analysts and the paper differ on exactly one thing: sample size. Everything else the analysts chose was right.\n\n`closest_replica.R` got every open choice the way the paper made it. Intimacy as the item mean of r1, r6, r7 and the reverse-coded 8 \u2212 r4 is confirmed by the workbook's own precomputed \"Intimacy\" column, which the script checks to 1e-10. The pooled-variance Student t, the two-tailed p, and Cohen's d from the pooled SD all match. My attempts 2 and 3 confirm the alternatives are dead ends: Welch leaves d untouched and gives df = 27.92, and summing the items puts the means at 18.3 and 11.3 against reported 4.58 and 2.82.\n\nThe script also states the problem plainly in its own comments: the paper reports 29 after excluding one suspicious participant, the file has 30 records, and no suspicion variable exists. The analyst analysed all 30 and flagged the discrepancy. That is the correct blind decision, and it is the entire source of the gap.\n\nThe signature that this is the whole story: on all 30 records the attention condition already reproduces 4.58 and .82 exactly. Only the no-attention side is off. The excluded participant is therefore in the no-attention condition, which is also what the paper's own one-sample tests say \u2014 t<sub>13</sub> against t<sub>14</sub>.\n\nSo this is not analytical divergence. It is an unrecoverable exclusion. The suspicion flag existed on the authors' side and never made it into the shared file. Any blind analyst would land on d = 2.26 and be unable to do better, because the information needed to pick the right record is not in the data \u2014 I recovered it only by reading the paper's results back into the search.",
+        "notes": "All seven quantities of analysis a20 are reproduced. The only change from the closest replica is dropping one of the two no-attention records with intimacy 2.25; every other choice in that script was already correct. Attempts 1-4 show the discrepancy is not an estimator choice: Welch, Hedges and d-from-t all leave the attention-group mean and SD and the df at their 30-record values. Attempt 5 shows the paper's own participant description already forces a 29-record sample and rules out 25 of the 30 possible exclusions. The residual gap is that the shared data file omits the suspicion variable, so three of the five description-consistent candidates are in the attention arm and do not reproduce the reported means.",
+        "diagnosis": "*Unblinded conjecture \u2014 written after seeing the reported values; it grades nothing.*\n\nThe difference is one participant, not one method. The shared workbook (`Sheet3`) holds 30 records; the paper analysed 29, having dropped a participant who suspected the deception. No column in the file flags suspicion \u2014 `mc2` is zero for everyone, `mc1` only records signal counts, and there is no missingness anywhere. So a blind analyst had nothing to act on. `glm_1` saw this exactly, said so in a comment, analysed all 30, and reported the caveat on every claim. Every other choice in that script was right: item-mean intimacy over `r1`, `r6`, `r7`, `8 - r4` (verified against the workbook's own `Intimacy` column), pooled-variance t, two-tailed, Cohen's d on the pooled SD. Nothing in attempts 1\u20134 \u2014 Welch, Hedges, d-from-t \u2014 moves the estimate toward the paper, because the gap is in the sample, not the estimator.\n\nThe paper's own participant description was the usable signal and went unused. Requiring 10 males, 19 females, mean age 19.3 and age SD 0.89 forces exactly 29 records and eliminates 25 of the 30 candidate exclusions in one step. That is a methods-section fact, available blind. It leaves five male 19-year-olds; the two in the no-attention arm reproduce all seven values to the decimal.\n\nThe evidence favours a data-sharing gap over an analytic disagreement or an error in the paper. Reported df of 27, sex counts, age SD and all four descriptives are mutually consistent with one dropped no-attention case, which is what a genuine suspicion exclusion looks like. The authors published a file one column short of their own analysis sample. A blind analyst could have narrowed to five candidates and stated the range (d = 2.20\u20132.30); reaching 2.20 uniquely still needs the withheld suspicion variable.",
         "trigger_reasons": [
           "c093: no replica reached band A"
         ],
         "started_from": "glm_1",
-        "closest_distance": "exact to the reported precision: all 7 quantities match (focal d = 2.1956, reported 2.20; t(27) = 5.9083 vs 5.91; M = 4.5833/2.8214 vs 4.58/2.82; SD = 0.8165/0.7871 vs .82/.79; p = 2.69e-06 < .001)",
+        "closest_distance": "exact at reported precision: d = 2.1956 (reported 2.20), t(27) = 5.9083 (reported 5.91), attention M = 4.5833 SD = 0.8165 (4.58, .82), no attention M = 2.8214 SD = 0.7871 (2.82, .79), p = 2.69e-06 (reported < .001)",
         "hardcoding_audit": {
-          "hits": [],
+          "hits": [
+            {
+              "line": 48,
+              "literal": "19.3",
+              "used_as": "method-section reported Mage used as exclusion-selection criterion (round(mean(age),1)==19.3); not fed into results.json but copied from paper rather than computed",
+              "severity": "suspicious"
+            },
+            {
+              "line": 48,
+              "literal": "0.89",
+              "used_as": "method-section reported age SD used as exclusion-selection criterion (round(sd(age),2)==0.89)",
+              "severity": "suspicious"
+            },
+            {
+              "line": 47,
+              "literal": "10",
+              "used_as": "method-section male count used as exclusion-selection criterion (sum(sex==0)==10)",
+              "severity": "suspicious"
+            },
+            {
+              "line": 47,
+              "literal": "19",
+              "used_as": "method-section female count used as exclusion-selection criterion (sum(sex==1)==19)",
+              "severity": "suspicious"
+            }
+          ],
           "verdict": "clean",
           "prompt_version": "bc70c4fa43ec"
         },
@@ -5853,19 +5878,19 @@
           "cost_usd_equiv": 16.584253999999998
         },
         "1": {
-          "calls": 762,
-          "cost_usd": 1.0376733376670002,
-          "cost_usd_equiv": 27.443076249999997
+          "calls": 764,
+          "cost_usd": 1.038236187667,
+          "cost_usd_equiv": 28.895907749999996
         },
         "2": {
-          "calls": 17,
+          "calls": 18,
           "cost_usd": 0.00919355,
-          "cost_usd_equiv": 14.069542
+          "cost_usd_equiv": 15.601777
         },
         "3": {
-          "calls": 25,
-          "cost_usd": 0.14350820662000002,
-          "cost_usd_equiv": 1.1842605000000002
+          "calls": 33,
+          "cost_usd": 0.21824312162000004,
+          "cost_usd_equiv": 1.8501835000000002
         }
       },
       "replicas": [
@@ -6743,62 +6768,62 @@
         {
           "label": "deepseek",
           "launched": 2,
-          "ran": 0,
-          "failed": 2,
+          "ran": 2,
+          "failed": 0,
           "no_trace": 0,
           "match": {
             "all": {
-              "n": 0,
-              "n_abstained": 0,
-              "n_found": null,
-              "share_found": null,
+              "n": 234,
+              "n_abstained": 20,
+              "n_found": 214,
+              "share_found": 1.0,
               "bands": {
-                "A": 0,
-                "B": 0,
+                "A": 186,
+                "B": 9,
                 "C": 0,
-                "fail": 0,
+                "fail": 19,
                 "not_found": 0,
-                "abstained": 0
+                "abstained": 20
               },
-              "share_a": null,
-              "share_ab": null
+              "share_a": 0.8691588785046729,
+              "share_ab": 0.9112149532710281
             },
             "headline": {
-              "n": 0,
+              "n": 92,
               "n_abstained": 0,
-              "n_found": null,
-              "share_found": null,
+              "n_found": 92,
+              "share_found": 1.0,
               "bands": {
-                "A": 0,
-                "B": 0,
+                "A": 84,
+                "B": 6,
                 "C": 0,
-                "fail": 0,
+                "fail": 2,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": null,
-              "share_ab": null
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
-              "n": 0,
+              "n": 30,
               "n_abstained": 0,
-              "n_found": null,
-              "share_found": null,
+              "n_found": 30,
+              "share_found": 1.0,
               "bands": {
-                "A": 0,
-                "B": 0,
+                "A": 22,
+                "B": 4,
                 "C": 0,
-                "fail": 0,
+                "fail": 4,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": null,
-              "share_ab": null
+              "share_a": 0.7333333333333333,
+              "share_ab": 0.8666666666666667
             }
           },
           "fixes": {
-            "total": 3,
-            "minor": 3,
+            "total": 1,
+            "minor": 1,
             "major": 0,
             "critical": 0,
             "unrated": 0
@@ -6836,15 +6861,15 @@
               "n_found": 116,
               "share_found": 1.0,
               "bands": {
-                "A": 93,
+                "A": 104,
                 "B": 4,
                 "C": 0,
-                "fail": 19,
+                "fail": 8,
                 "not_found": 0,
                 "abstained": 1
               },
-              "share_a": 0.8017241379310345,
-              "share_ab": 0.8362068965517241
+              "share_a": 0.896551724137931,
+              "share_ab": 0.9310344827586207
             },
             "headline": {
               "n": 46,
@@ -6852,15 +6877,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 32,
+                "A": 42,
                 "B": 3,
                 "C": 0,
-                "fail": 11,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6956521739130435,
-              "share_ab": 0.7608695652173914
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 15,
@@ -6919,15 +6944,15 @@
               "n_found": 216,
               "share_found": 1.0,
               "bands": {
-                "A": 153,
+                "A": 192,
                 "B": 8,
                 "C": 0,
-                "fail": 55,
+                "fail": 16,
                 "not_found": 0,
                 "abstained": 18
               },
-              "share_a": 0.7083333333333334,
-              "share_ab": 0.7453703703703703
+              "share_a": 0.8888888888888888,
+              "share_ab": 0.9259259259259259
             },
             "headline": {
               "n": 92,
@@ -6935,15 +6960,15 @@
               "n_found": 92,
               "share_found": 1.0,
               "bands": {
-                "A": 46,
+                "A": 84,
                 "B": 6,
                 "C": 0,
-                "fail": 40,
+                "fail": 2,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.5,
-              "share_ab": 0.5652173913043478
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 30,
@@ -7002,15 +7027,15 @@
               "n_found": 210,
               "share_found": 1.0,
               "bands": {
-                "A": 139,
+                "A": 186,
                 "B": 8,
                 "C": 0,
-                "fail": 63,
+                "fail": 16,
                 "not_found": 0,
                 "abstained": 24
               },
-              "share_a": 0.6619047619047619,
-              "share_ab": 0.7
+              "share_a": 0.8857142857142857,
+              "share_ab": 0.9238095238095239
             },
             "headline": {
               "n": 92,
@@ -7018,15 +7043,15 @@
               "n_found": 92,
               "share_found": 1.0,
               "bands": {
-                "A": 38,
+                "A": 84,
                 "B": 6,
                 "C": 0,
-                "fail": 48,
+                "fail": 2,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.41304347826086957,
-              "share_ab": 0.4782608695652174
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 30,
@@ -7085,15 +7110,15 @@
               "n_found": 213,
               "share_found": 1.0,
               "bands": {
-                "A": 171,
+                "A": 193,
                 "B": 8,
                 "C": 0,
-                "fail": 34,
+                "fail": 12,
                 "not_found": 0,
                 "abstained": 21
               },
-              "share_a": 0.8028169014084507,
-              "share_ab": 0.8403755868544601
+              "share_a": 0.9061032863849765,
+              "share_ab": 0.9436619718309859
             },
             "headline": {
               "n": 92,
@@ -7101,15 +7126,15 @@
               "n_found": 92,
               "share_found": 1.0,
               "bands": {
-                "A": 64,
+                "A": 84,
                 "B": 6,
                 "C": 0,
-                "fail": 22,
+                "fail": 2,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6956521739130435,
-              "share_ab": 0.7608695652173914
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 30,
@@ -7168,15 +7193,15 @@
               "n_found": 105,
               "share_found": 1.0,
               "bands": {
-                "A": 65,
+                "A": 93,
                 "B": 4,
                 "C": 0,
-                "fail": 36,
+                "fail": 8,
                 "not_found": 0,
                 "abstained": 12
               },
-              "share_a": 0.6190476190476191,
-              "share_ab": 0.6571428571428571
+              "share_a": 0.8857142857142857,
+              "share_ab": 0.9238095238095239
             },
             "headline": {
               "n": 46,
@@ -7184,15 +7209,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 14,
+                "A": 42,
                 "B": 3,
                 "C": 0,
-                "fail": 29,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.30434782608695654,
-              "share_ab": 0.3695652173913043
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 15,
@@ -7239,8 +7264,8 @@
           }
         }
       ],
-      "decision_agreement_mean": 0.43,
-      "numeric_cv_median": 2.358540828602385e-05,
+      "decision_agreement_mean": 0.8,
+      "numeric_cv_median": 0.00010345118076838486,
       "focal": {
         "source": "stage3/focal.json",
         "quantity": {
@@ -7269,6 +7294,8 @@
           "c110"
         ],
         "values": {
+          "deepseek_1": 0.8897051202413641,
+          "deepseek_2": 0.89,
           "fable_1": 0.889705120241364,
           "glm_1": 0.889705120241364,
           "glm_2": 0.889705120241364,
@@ -7280,6 +7307,7 @@
         },
         "scale": "d",
         "family_means": {
+          "deepseek": 0.889852560120682,
           "fable": 0.889705120241364,
           "glm": 0.889705120241364,
           "luna": 0.889702560120682,
@@ -7287,6 +7315,14 @@
           "sol": 0.8897051202413641
         },
         "within_family": {
+          "deepseek": {
+            "n": 2,
+            "values": [
+              0.8897051202413641,
+              0.89
+            ],
+            "max_abs_diff": 0.0002948797586359575
+          },
           "glm": {
             "n": 2,
             "values": [
@@ -7312,13 +7348,15 @@
             "max_abs_diff": 3.608224830031759e-14
           }
         },
-        "between_family_range": 2.5601206998793202e-06
+        "between_family_range": 0.00014999999999998348
       },
       "focal_d": {
         "source": "reported d claim",
         "note": null,
         "reported": 0.89,
         "replicas": {
+          "deepseek_1": 0.8897051202413641,
+          "deepseek_2": 0.89,
           "fable_1": 0.889705120241364,
           "glm_1": 0.889705120241364,
           "glm_2": 0.889705120241364,
@@ -7351,10 +7389,10 @@
         "meta": {
           "artifact": "TargetedReconstruction",
           "version": "0.1",
-          "created": "2026-09-03T18:32:09.559723+00:00",
+          "created": "2026-09-03T21:59:40.870777+00:00",
           "stage": "1",
           "inputs": {
-            "match": "500c23cefa13c2dd47abbde4933c6608261611a9d68dd8ed6888a28d3fbc9d1b"
+            "match": "4bc2db9f07406f01b14bf6aac07e7d4f45e84a6e54adf682dc47bf0b5167f9aa"
           },
           "prompt_versions": {
             "stage1_targeted": "dd243b39e5b4"
@@ -7379,19 +7417,19 @@
           "cost_usd_equiv": 10.955705000000002
         },
         "1": {
-          "calls": 1055,
-          "cost_usd": 0.8360400611949996,
-          "cost_usd_equiv": 10.869241249999998
+          "calls": 1060,
+          "cost_usd": 0.8463483111949996,
+          "cost_usd_equiv": 11.157805749999998
         },
         "2": {
-          "calls": 6,
-          "cost_usd": 0.00733055,
-          "cost_usd_equiv": 1.5427765
+          "calls": 9,
+          "cost_usd": 0.013151900000000001,
+          "cost_usd_equiv": 3.6777450000000003
         },
         "3": {
-          "calls": 12,
-          "cost_usd": 0.092536784075,
-          "cost_usd_equiv": 0.369046
+          "calls": 21,
+          "cost_usd": 0.150427969075,
+          "cost_usd_equiv": 0.890015
         }
       },
       "replicas": [
@@ -7401,15 +7439,15 @@
           "route": "opencode",
           "model": "deepseek/deepseek-v4-flash",
           "has_trace": true,
-          "ran": false,
-          "exit_code": 1,
+          "ran": true,
+          "exit_code": 0,
           "fixes": [
             {
               "description": "to_float() crashed on numeric values from pandas to_dict() because it called .strip() on non-strings; fixed with isinstance check",
               "severity": "minor",
               "file": "out/analysis.py",
               "location": "to_float function",
-              "reason": "A type-coercion bug fix (isinstance check before .strip()) that preserves the numeric values; no analytical choice, sample, or estimate is changed."
+              "reason": "Pure type-handling fix in code plumbing (isinstance check on strings); does not alter any data value, model, or sample, so the analysis is unchanged."
             }
           ],
           "hardcoding_verdict": "clean",
@@ -7424,55 +7462,55 @@
           "tier": "cheap",
           "match": {
             "all": {
-              "n": 0,
-              "n_abstained": 0,
-              "n_found": null,
-              "share_found": null,
+              "n": 117,
+              "n_abstained": 11,
+              "n_found": 106,
+              "share_found": 1.0,
               "bands": {
-                "A": 0,
-                "B": 0,
+                "A": 91,
+                "B": 4,
                 "C": 0,
-                "fail": 0,
+                "fail": 11,
                 "not_found": 0,
-                "abstained": 0
+                "abstained": 11
               },
-              "share_a": null,
-              "share_ab": null
+              "share_a": 0.8584905660377359,
+              "share_ab": 0.8962264150943396
             },
             "headline": {
-              "n": 0,
+              "n": 46,
               "n_abstained": 0,
-              "n_found": null,
-              "share_found": null,
+              "n_found": 46,
+              "share_found": 1.0,
               "bands": {
-                "A": 0,
-                "B": 0,
+                "A": 42,
+                "B": 3,
                 "C": 0,
-                "fail": 0,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": null,
-              "share_ab": null
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
-              "n": 0,
+              "n": 15,
               "n_abstained": 0,
-              "n_found": null,
-              "share_found": null,
+              "n_found": 15,
+              "share_found": 1.0,
               "bands": {
-                "A": 0,
-                "B": 0,
+                "A": 11,
+                "B": 2,
                 "C": 0,
-                "fail": 0,
+                "fail": 2,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": null,
-              "share_ab": null
+              "share_a": 0.7333333333333333,
+              "share_ab": 0.8666666666666667
             }
           },
-          "focal_value": null
+          "focal_value": 0.8897051202413641
         },
         {
           "replica_id": "deepseek_2",
@@ -7480,28 +7518,9 @@
           "route": "opencode",
           "model": "deepseek/deepseek-v4-flash",
           "has_trace": true,
-          "ran": false,
-          "exit_code": 1,
-          "fixes": [
-            {
-              "description": "Added .lstrip('\\ufeff') to the field-name cleaning step in read_csv()",
-              "severity": "minor",
-              "step": "1st run failed",
-              "issue": "KeyError: 'ID' at parse_exp1 line \u2014 CSV file had BOM byte (\\ufeff) prefix on the first column name",
-              "fix": "Added .lstrip('\\ufeff') to the field-name cleaning step in read_csv()",
-              "location": "read_csv() function",
-              "reason": "Stripping a byte-order mark from field names only fixes data reading; values and analysis are unchanged."
-            },
-            {
-              "description": "Renamed loop variables to 'cl' and 'ctr' to avoid conflict",
-              "severity": "minor",
-              "step": "2nd run failed",
-              "issue": "NameError: variable 'c' was used in a generator expression where the loop variable was named 'contract' but referenced as 'c'",
-              "fix": "Renamed loop variables to 'cl' and 'ctr' to avoid conflict",
-              "location": "end-of-script claim-coverage check",
-              "reason": "Renaming loop variables avoids a name conflict without altering any computation or result."
-            }
-          ],
+          "ran": true,
+          "exit_code": 0,
+          "fixes": [],
           "hardcoding_verdict": "suspicious",
           "blind_hits": 0,
           "tokens_in": 182796.0,
@@ -7514,55 +7533,55 @@
           "tier": "cheap",
           "match": {
             "all": {
-              "n": 0,
-              "n_abstained": 0,
-              "n_found": null,
-              "share_found": null,
+              "n": 117,
+              "n_abstained": 9,
+              "n_found": 108,
+              "share_found": 1.0,
               "bands": {
-                "A": 0,
-                "B": 0,
+                "A": 95,
+                "B": 5,
                 "C": 0,
-                "fail": 0,
+                "fail": 8,
                 "not_found": 0,
-                "abstained": 0
+                "abstained": 9
               },
-              "share_a": null,
-              "share_ab": null
+              "share_a": 0.8796296296296297,
+              "share_ab": 0.9259259259259259
             },
             "headline": {
-              "n": 0,
+              "n": 46,
               "n_abstained": 0,
-              "n_found": null,
-              "share_found": null,
+              "n_found": 46,
+              "share_found": 1.0,
               "bands": {
-                "A": 0,
-                "B": 0,
+                "A": 42,
+                "B": 3,
                 "C": 0,
-                "fail": 0,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": null,
-              "share_ab": null
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
-              "n": 0,
+              "n": 15,
               "n_abstained": 0,
-              "n_found": null,
-              "share_found": null,
+              "n_found": 15,
+              "share_found": 1.0,
               "bands": {
-                "A": 0,
-                "B": 0,
+                "A": 11,
+                "B": 2,
                 "C": 0,
-                "fail": 0,
+                "fail": 2,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": null,
-              "share_ab": null
+              "share_a": 0.7333333333333333,
+              "share_ab": 0.8666666666666667
             }
           },
-          "focal_value": null
+          "focal_value": 0.89
         },
         {
           "replica_id": "fable_1",
@@ -7598,15 +7617,15 @@
               "n_found": 116,
               "share_found": 1.0,
               "bands": {
-                "A": 93,
+                "A": 104,
                 "B": 4,
                 "C": 0,
-                "fail": 19,
+                "fail": 8,
                 "not_found": 0,
                 "abstained": 1
               },
-              "share_a": 0.8017241379310345,
-              "share_ab": 0.8362068965517241
+              "share_a": 0.896551724137931,
+              "share_ab": 0.9310344827586207
             },
             "headline": {
               "n": 46,
@@ -7614,15 +7633,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 32,
+                "A": 42,
                 "B": 3,
                 "C": 0,
-                "fail": 11,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6956521739130435,
-              "share_ab": 0.7608695652173914
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 15,
@@ -7678,15 +7697,15 @@
               "n_found": 108,
               "share_found": 1.0,
               "bands": {
-                "A": 85,
+                "A": 96,
                 "B": 4,
                 "C": 0,
-                "fail": 19,
+                "fail": 8,
                 "not_found": 0,
                 "abstained": 9
               },
-              "share_a": 0.7870370370370371,
-              "share_ab": 0.8240740740740741
+              "share_a": 0.8888888888888888,
+              "share_ab": 0.9259259259259259
             },
             "headline": {
               "n": 46,
@@ -7694,15 +7713,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 32,
+                "A": 42,
                 "B": 3,
                 "C": 0,
-                "fail": 11,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6956521739130435,
-              "share_ab": 0.7608695652173914
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 15,
@@ -7766,15 +7785,15 @@
               "n_found": 108,
               "share_found": 1.0,
               "bands": {
-                "A": 68,
+                "A": 96,
                 "B": 4,
                 "C": 0,
-                "fail": 36,
+                "fail": 8,
                 "not_found": 0,
                 "abstained": 9
               },
-              "share_a": 0.6296296296296297,
-              "share_ab": 0.6666666666666666
+              "share_a": 0.8888888888888888,
+              "share_ab": 0.9259259259259259
             },
             "headline": {
               "n": 46,
@@ -7782,15 +7801,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 14,
+                "A": 42,
                 "B": 3,
                 "C": 0,
-                "fail": 29,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.30434782608695654,
-              "share_ab": 0.3695652173913043
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 15,
@@ -7853,15 +7872,15 @@
               "n_found": 105,
               "share_found": 1.0,
               "bands": {
-                "A": 65,
+                "A": 93,
                 "B": 4,
                 "C": 0,
-                "fail": 36,
+                "fail": 8,
                 "not_found": 0,
                 "abstained": 12
               },
-              "share_a": 0.6190476190476191,
-              "share_ab": 0.6571428571428571
+              "share_a": 0.8857142857142857,
+              "share_ab": 0.9238095238095239
             },
             "headline": {
               "n": 46,
@@ -7869,15 +7888,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 14,
+                "A": 42,
                 "B": 3,
                 "C": 0,
-                "fail": 29,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.30434782608695654,
-              "share_ab": 0.3695652173913043
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 15,
@@ -7940,15 +7959,15 @@
               "n_found": 105,
               "share_found": 1.0,
               "bands": {
-                "A": 74,
+                "A": 93,
                 "B": 4,
                 "C": 0,
-                "fail": 27,
+                "fail": 8,
                 "not_found": 0,
                 "abstained": 12
               },
-              "share_a": 0.7047619047619048,
-              "share_ab": 0.7428571428571429
+              "share_a": 0.8857142857142857,
+              "share_ab": 0.9238095238095239
             },
             "headline": {
               "n": 46,
@@ -7956,15 +7975,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 24,
+                "A": 42,
                 "B": 3,
                 "C": 0,
-                "fail": 19,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.5217391304347826,
-              "share_ab": 0.5869565217391305
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 15,
@@ -8034,15 +8053,15 @@
               "n_found": 110,
               "share_found": 1.0,
               "bands": {
-                "A": 91,
+                "A": 102,
                 "B": 4,
                 "C": 0,
-                "fail": 15,
+                "fail": 4,
                 "not_found": 0,
                 "abstained": 7
               },
-              "share_a": 0.8272727272727273,
-              "share_ab": 0.8636363636363636
+              "share_a": 0.9272727272727272,
+              "share_ab": 0.9636363636363636
             },
             "headline": {
               "n": 46,
@@ -8050,15 +8069,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 32,
+                "A": 42,
                 "B": 3,
                 "C": 0,
-                "fail": 11,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6956521739130435,
-              "share_ab": 0.7608695652173914
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 15,
@@ -8113,15 +8132,15 @@
               "n_found": 103,
               "share_found": 1.0,
               "bands": {
-                "A": 80,
+                "A": 91,
                 "B": 4,
                 "C": 0,
-                "fail": 19,
+                "fail": 8,
                 "not_found": 0,
                 "abstained": 14
               },
-              "share_a": 0.7766990291262136,
-              "share_ab": 0.8155339805825242
+              "share_a": 0.883495145631068,
+              "share_ab": 0.9223300970873787
             },
             "headline": {
               "n": 46,
@@ -8129,15 +8148,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 32,
+                "A": 42,
                 "B": 3,
                 "C": 0,
-                "fail": 11,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.6956521739130435,
-              "share_ab": 0.7608695652173914
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 15,
@@ -8193,15 +8212,15 @@
               "n_found": 105,
               "share_found": 1.0,
               "bands": {
-                "A": 65,
+                "A": 93,
                 "B": 4,
                 "C": 0,
-                "fail": 36,
+                "fail": 8,
                 "not_found": 0,
                 "abstained": 12
               },
-              "share_a": 0.6190476190476191,
-              "share_ab": 0.6571428571428571
+              "share_a": 0.8857142857142857,
+              "share_ab": 0.9238095238095239
             },
             "headline": {
               "n": 46,
@@ -8209,15 +8228,15 @@
               "n_found": 46,
               "share_found": 1.0,
               "bands": {
-                "A": 14,
+                "A": 42,
                 "B": 3,
                 "C": 0,
-                "fail": 29,
+                "fail": 1,
                 "not_found": 0,
                 "abstained": 0
               },
-              "share_a": 0.30434782608695654,
-              "share_ab": 0.3695652173913043
+              "share_a": 0.9130434782608695,
+              "share_ab": 0.9782608695652174
             },
             "focal": {
               "n": 15,

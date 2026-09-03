@@ -1,6 +1,6 @@
 # reproscope v0 pilot — replica evaluation
 
-Generated 2026-09-03T19:29:09.960936+00:00. Papers: Axt_JournExpSocPsych_2018_zK2, Hertel_ClinPsychSci_2018_YabW, Hurst_EvoHumanBehavior_2017_yypJ, Ohtsubo_EvoHumanBehavior_2014_zlm2, Petersen_Cognition_2017_yJwG.
+Generated 2026-09-03T22:58:59.682889+00:00. Papers: Axt_JournExpSocPsych_2018_zK2, Hertel_ClinPsychSci_2018_YabW, Hurst_EvoHumanBehavior_2017_yypJ, Ohtsubo_EvoHumanBehavior_2014_zlm2, Petersen_Cognition_2017_yJwG.
 
 Match shares are over every claim × replica pair that Stage 1 scored in `match.json`, restricted to replicas that ran. A pair whose replica produced no value for the claim, or whose link step failed, is *abstained* and left out of the denominators. `n/a` means the metric could not be computed from the files present.
 
@@ -8,14 +8,14 @@ Match shares are over every claim × replica pair that Stage 1 scored in `match.
 
 | family | launched | ran | failed | no trace | pairs scored | found | A | A+B | headline A+B | focal A+B |
 |---|---|---|---|---|---|---|---|---|---|---|
-| deepseek | 10 | 8 | 2 | 0 | 700 | 100% | 66% | 73% | 76% | 89% |
-| fable | 5 | 5 | 0 | 0 | 467 | 100% | 82% | 88% | 83% | 88% |
-| glm | 10 | 10 | 0 | 0 | 934 | 100% | 80% | 86% | 73% | 91% |
-| luna | 10 | 10 | 0 | 0 | 934 | 100% | 65% | 74% | 64% | 88% |
-| opus | 10 | 10 | 0 | 0 | 934 | 100% | 83% | 89% | 83% | 91% |
-| sol | 5 | 5 | 0 | 0 | 467 | 100% | 78% | 85% | 67% | 88% |
-| frontier | 30 | 30 | 0 | 0 | 2,802 | 100% | 76% | 83% | 74% | 89% |
-| cheap | 20 | 18 | 2 | 0 | 1,634 | 100% | 74% | 80% | 74% | 90% |
+| deepseek | 10 | 10 | 0 | 0 | 934 | 100% | 72% | 78% | 90% | 88% |
+| fable | 5 | 5 | 0 | 0 | 467 | 100% | 86% | 92% | 98% | 88% |
+| glm | 10 | 10 | 0 | 0 | 934 | 100% | 86% | 92% | 96% | 91% |
+| luna | 10 | 10 | 0 | 0 | 934 | 100% | 71% | 80% | 89% | 88% |
+| opus | 10 | 10 | 0 | 0 | 934 | 100% | 87% | 93% | 98% | 91% |
+| sol | 5 | 5 | 0 | 0 | 467 | 100% | 86% | 93% | 98% | 88% |
+| frontier | 30 | 30 | 0 | 0 | 2,802 | 100% | 81% | 88% | 95% | 89% |
+| cheap | 20 | 20 | 0 | 0 | 1,868 | 100% | 79% | 85% | 93% | 90% |
 
 The last rows pool every replica in the tier (frontier = claude_p / codex subscription routes, cheap = opencode via OpenRouter); they are not averages of the family rates above. *no trace* is a replica directory without a `trace.json` — launched but not finished, distinct from *failed* (trace written, `ran` false).
 
@@ -23,27 +23,27 @@ The last rows pool every replica in the tier (frontier = claude_p / codex subscr
 
 | family | A | B | C | fail | not found | abstained |
 |---|---|---|---|---|---|---|
-| deepseek | 461 | 43 | 9 | 182 | 0 | 5 |
-| fable | 380 | 26 | 2 | 54 | 0 | 5 |
-| glm | 729 | 55 | 4 | 124 | 0 | 22 |
-| luna | 580 | 82 | 18 | 218 | 0 | 36 |
-| opus | 750 | 52 | 4 | 99 | 0 | 29 |
-| sol | 354 | 30 | 2 | 66 | 0 | 15 |
-| frontier | 2064 | 190 | 26 | 437 | 0 | 85 |
-| cheap | 1190 | 98 | 13 | 306 | 0 | 27 |
+| deepseek | 658 | 53 | 10 | 188 | 0 | 25 |
+| fable | 398 | 26 | 2 | 36 | 0 | 5 |
+| glm | 782 | 55 | 4 | 71 | 0 | 22 |
+| luna | 638 | 83 | 19 | 158 | 0 | 36 |
+| opus | 786 | 52 | 4 | 63 | 0 | 29 |
+| sol | 389 | 30 | 2 | 31 | 0 | 15 |
+| frontier | 2211 | 191 | 27 | 288 | 0 | 85 |
+| cheap | 1440 | 108 | 14 | 259 | 0 | 47 |
 
 ## Fixes, hardcoding audit, blinding
 
 | family | fixes | minor | major | critical | unrated | clean | suspicious | hardcoded | audit n/r | blind hits |
 |---|---|---|---|---|---|---|---|---|---|---|
-| deepseek | 20 | 19 | 0 | 0 | 1 | 5 | 3 | 2 | 0 | 20 (10/10) |
+| deepseek | 18 | 17 | 0 | 0 | 1 | 5 | 3 | 2 | 0 | 20 (10/10) |
 | fable | 4 | 4 | 0 | 0 | 0 | 3 | 2 | 0 | 0 | 2 (5/5) |
 | glm | 35 | 32 | 2 | 0 | 1 | 6 | 2 | 2 | 0 | 7 (10/10) |
 | luna | 18 | 17 | 1 | 0 | 0 | 5 | 2 | 3 | 0 | 0 (10/10) |
 | opus | 21 | 19 | 1 | 1 | 0 | 6 | 3 | 0 | 1 | 1 (10/10) |
 | sol | 3 | 3 | 0 | 0 | 0 | 3 | 0 | 2 | 0 | 0 (5/5) |
 | frontier | 46 | 43 | 2 | 1 | 0 | 17 | 7 | 5 | 1 | 3 (30/30) |
-| cheap | 55 | 51 | 2 | 0 | 2 | 11 | 5 | 4 | 0 | 27 (20/20) |
+| cheap | 53 | 49 | 2 | 0 | 2 | 11 | 5 | 4 | 0 | 27 (20/20) |
 
 Hardcoding columns count replicas by audit verdict. *blind hits* is the total of `run_checks.blind_transcript_hits` with the number of replicas reporting the field in brackets; traces written before the check existed do not report it.
 
@@ -68,15 +68,15 @@ Hardcoding columns count replicas by audit verdict. *blind hits* is the total of
 
 | family | launched | ran | failed | no trace | pairs scored | found | A | A+B | headline A+B | focal A+B |
 |---|---|---|---|---|---|---|---|---|---|---|
-| deepseek | 2 | 2 | 0 | 0 | 92 | 100% | 70% | 83% | 71% | 100% |
-| fable | 1 | 1 | 0 | 0 | 46 | 100% | 63% | 83% | 71% | 100% |
-| glm | 2 | 2 | 0 | 0 | 92 | 100% | 61% | 79% | 66% | 100% |
-| luna | 2 | 2 | 0 | 0 | 92 | 100% | 63% | 83% | 71% | 100% |
-| opus | 2 | 2 | 0 | 0 | 92 | 100% | 63% | 83% | 71% | 100% |
-| sol | 1 | 1 | 0 | 0 | 46 | 100% | 63% | 83% | 71% | 100% |
+| deepseek | 2 | 2 | 0 | 0 | 92 | 100% | 82% | 96% | 93% | 100% |
+| fable | 1 | 1 | 0 | 0 | 46 | 100% | 78% | 98% | 96% | 100% |
+| glm | 2 | 2 | 0 | 0 | 92 | 100% | 76% | 95% | 91% | 100% |
+| luna | 2 | 2 | 0 | 0 | 92 | 100% | 75% | 96% | 93% | 100% |
+| opus | 2 | 2 | 0 | 0 | 92 | 100% | 78% | 98% | 96% | 100% |
+| sol | 1 | 1 | 0 | 0 | 46 | 100% | 78% | 98% | 96% | 100% |
 
 - Claims scored: 46
-- Decision agreement (mean over claims): 0.770
+- Decision agreement (mean over claims): 0.910
 - Numeric CV (median over claims): 0.000
 - Focal quantity: mean = -0.120 (claim c221, stage3/focal.json)
   - focal claim set (the *focal A+B* column above pools these): c221
@@ -93,10 +93,10 @@ Hardcoding columns count replicas by audit verdict. *blind hits* is the total of
 | stage | calls | cost $ (API) | list-price equiv $ |
 |---|---|---|---|
 | 0 | 28 | 0.2329 | 21.4424 |
-| 1 | 453 | 0.8472 | 13.2957 |
-| 2 | 14 | 0.0135 | 8.0086 |
-| 3 | 25 | 0.3097 | 1.8948 |
-| total | 520 | 1.4033 | 44.6415 |
+| 1 | 456 | 0.8505 | 13.5604 |
+| 2 | 15 | 0.0135 | 9.0849 |
+| 3 | 33 | 0.3643 | 2.4362 |
+| total | 532 | 1.4612 | 46.5239 |
 
 ### Hertel_ClinPsychSci_2018_YabW
 
@@ -127,10 +127,10 @@ Hardcoding columns count replicas by audit verdict. *blind hits* is the total of
 | stage | calls | cost $ (API) | list-price equiv $ |
 |---|---|---|---|
 | 0 | 14 | 0.0365 | 7.4241 |
-| 1 | 263 | 0.6051 | 12.5729 |
-| 2 | 13 | 0.0244 | 7.3623 |
-| 3 | 19 | 0.1990 | 0.9954 |
-| total | 309 | 0.8650 | 28.3547 |
+| 1 | 264 | 0.6051 | 12.8272 |
+| 2 | 14 | 0.0244 | 8.8689 |
+| 3 | 27 | 0.3431 | 1.6151 |
+| total | 319 | 1.0091 | 30.7353 |
 
 ### Hurst_EvoHumanBehavior_2017_yypJ
 
@@ -161,10 +161,10 @@ Hardcoding columns count replicas by audit verdict. *blind hits* is the total of
 | stage | calls | cost $ (API) | list-price equiv $ |
 |---|---|---|---|
 | 0 | 14 | 0.0596 | 13.0040 |
-| 1 | 2397 | 0.7975 | 21.7277 |
-| 2 | 13 | 0.0156 | 12.0169 |
-| 3 | 19 | 0.1156 | 0.9592 |
-| total | 2443 | 0.9883 | 47.7078 |
+| 1 | 2398 | 0.7975 | 22.0432 |
+| 2 | 14 | 0.0156 | 13.5633 |
+| 3 | 27 | 0.1704 | 1.6987 |
+| total | 2453 | 1.0432 | 50.3092 |
 
 ### Ohtsubo_EvoHumanBehavior_2014_zlm2
 
@@ -190,45 +190,46 @@ Hardcoding columns count replicas by audit verdict. *blind hits* is the total of
   - between-family range of family means: 0.1281
 - Focal d — reported 2.200; replicas: deepseek_1 2.264, deepseek_2 2.008, fable_1 2.264, glm_1 2.264, glm_2 2.264, luna_1 2.264, luna_2 2.264, opus_1 2.264, opus_2 2.264, sol_1 2.264
   - Multi100 analysts (n = 6): min 1.142, median 2.007, max 3.106
-- Targeted reconstruction: reachable — The whole gap is the one exclusion the methods state. The closest analyst applied every other choice as the paper made it - item-mean intimacy that matches the workbook's own aggregate, pooled-variance Student t, pooled-SD d - but analysed all 30 records because the data file gives no way to find the excluded case, which yields t(28) = 6.20 and d = 2.26. Dropping the right record moves every one of the seven quantities onto the reported value at once, including the reported df of 27; the attention condition's mean and SD are already exact on the full 30 records, which places the excluded participant in the no attention condition. Attempt 4 (Hedges-corrected d on all 30 records) also lands on d = 2.20, but it is a coincidence: it leaves t, df and the no attention mean and SD wrong, so it is not the route. Two records, ID 14 and ID 20, are interchangeable for this analysis - both give identical a20 values - and ID 20 is picked because it also fits the study's other reported statistics. Every choice used is either stated in the methods or listed as open in the contract; the only thing added is which record the stated exclusion removes.
+- Targeted reconstruction: reachable — All seven quantities of analysis a20 are reproduced. The only change from the closest replica is dropping one of the two no-attention records with intimacy 2.25; every other choice in that script was already correct. Attempts 1-4 show the discrepancy is not an estimator choice: Welch, Hedges and d-from-t all leave the attention-group mean and SD and the df at their 30-record values. Attempt 5 shows the paper's own participant description already forces a 29-record sample and rules out 25 of the 30 possible exclusions. The residual gap is that the shared data file omits the suspicion variable, so three of the five description-consistent candidates are in the attention arm and do not reproduce the reported means.
 
 | stage | calls | cost $ (API) | list-price equiv $ |
 |---|---|---|---|
 | 0 | 26 | 0.0781 | 16.5843 |
-| 1 | 762 | 1.0377 | 27.4431 |
-| 2 | 17 | 0.0092 | 14.0695 |
-| 3 | 25 | 0.1435 | 1.1843 |
-| total | 830 | 1.2685 | 59.2811 |
+| 1 | 764 | 1.0382 | 28.8959 |
+| 2 | 18 | 0.0092 | 15.6018 |
+| 3 | 33 | 0.2182 | 1.8502 |
+| total | 841 | 1.3438 | 62.9321 |
 
 ### Petersen_Cognition_2017_yJwG
 
 | family | launched | ran | failed | no trace | pairs scored | found | A | A+B | headline A+B | focal A+B |
 |---|---|---|---|---|---|---|---|---|---|---|
-| deepseek | 2 | 0 | 2 | 0 | n/a | n/a | n/a | n/a | n/a | n/a |
-| fable | 1 | 1 | 0 | 0 | 117 | 100% | 80% | 84% | 76% | 87% |
-| glm | 2 | 2 | 0 | 0 | 234 | 100% | 71% | 75% | 57% | 87% |
-| luna | 2 | 2 | 0 | 0 | 234 | 100% | 66% | 70% | 48% | 87% |
-| opus | 2 | 2 | 0 | 0 | 234 | 100% | 80% | 84% | 76% | 90% |
-| sol | 1 | 1 | 0 | 0 | 117 | 100% | 62% | 66% | 37% | 87% |
+| deepseek | 2 | 2 | 0 | 0 | 234 | 100% | 87% | 91% | 98% | 87% |
+| fable | 1 | 1 | 0 | 0 | 117 | 100% | 90% | 93% | 98% | 87% |
+| glm | 2 | 2 | 0 | 0 | 234 | 100% | 89% | 93% | 98% | 87% |
+| luna | 2 | 2 | 0 | 0 | 234 | 100% | 89% | 92% | 98% | 87% |
+| opus | 2 | 2 | 0 | 0 | 234 | 100% | 91% | 94% | 98% | 90% |
+| sol | 1 | 1 | 0 | 0 | 117 | 100% | 89% | 92% | 98% | 87% |
 
 - Claims scored: 117
-- Decision agreement (mean over claims): 0.430
+- Decision agreement (mean over claims): 0.800
 - Numeric CV (median over claims): 0.000
 - Focal quantity: d = 0.890 (claim c008, stage3/focal.json)
   - focal claim set (the *focal A+B* column above pools these): c006, c007, c008, c024, c030, c033, c050, c056, c070, c072, c078, c093, c098, c105, c110
   - replica values are on the d scale, as the claim was reported
+  - within deepseek (2 runs): 0.8897, 0.8900 — spread 0.0003
   - within glm (2 runs): 0.8897, 0.8897 — spread 0.0000
   - within luna (2 runs): 0.8897, 0.8897 — spread 0.0000
   - within opus (2 runs): 0.8897, 0.8897 — spread 0.0000
-  - between-family range of family means: 0.0000
-- Focal d — reported 0.890; replicas: fable_1 0.890, glm_1 0.890, glm_2 0.890, luna_1 0.890, luna_2 0.890, opus_1 0.890, opus_2 0.890, sol_1 0.890
+  - between-family range of family means: 0.0001
+- Focal d — reported 0.890; replicas: deepseek_1 0.890, deepseek_2 0.890, fable_1 0.890, glm_1 0.890, glm_2 0.890, luna_1 0.890, luna_2 0.890, opus_1 0.890, opus_2 0.890, sol_1 0.890
   - Multi100 analysts (n = 5): min 1.812, median 1.812, max 2.279
 - Targeted reconstruction: not_triggered — The focal claim had at least half the usable replica rows in band A or B, at least one in band A, and a numeric CV of 0.2 or less.
 
 | stage | calls | cost $ (API) | list-price equiv $ |
 |---|---|---|---|
 | 0 | 17 | 0.0391 | 10.9557 |
-| 1 | 1055 | 0.8360 | 10.8692 |
-| 2 | 6 | 0.0073 | 1.5428 |
-| 3 | 12 | 0.0925 | 0.3690 |
-| total | 1090 | 0.9750 | 23.7368 |
+| 1 | 1060 | 0.8463 | 11.1578 |
+| 2 | 9 | 0.0132 | 3.6777 |
+| 3 | 21 | 0.1504 | 0.8900 |
+| total | 1107 | 1.0490 | 26.6813 |
