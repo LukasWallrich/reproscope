@@ -37,7 +37,7 @@ def test_family_from_replica_id():
 
 def test_tier_from_models_toml():
     assert evaluate.tier_of("opus") == "frontier"
-    assert evaluate.tier_of("sol") == "frontier"
+    assert evaluate.tier_of("luna") == "frontier"
     assert evaluate.tier_of("glm") == "cheap"
     assert evaluate.tier_of("deepseek") == "cheap"
 

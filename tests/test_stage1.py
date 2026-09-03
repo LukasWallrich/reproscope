@@ -241,7 +241,7 @@ def test_full_lineup_is_the_whole_models_toml_regardless_of_env(monkeypatch):
     monkeypatch.setenv("REPROSCOPE_FAMILIES", "glm")
     monkeypatch.setenv("REPROSCOPE_RUNS", "1")
     lineup = stage1.full_lineup()
-    assert "opus_2" in lineup and "deepseek_2" in lineup
+    assert "opus_1" in lineup and "deepseek_2" in lineup
     assert [rid for _, rid, _ in replicas.replica_ids()] == ["glm_1"]
 
 
