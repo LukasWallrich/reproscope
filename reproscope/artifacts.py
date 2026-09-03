@@ -408,6 +408,30 @@ def sha256_files(paths_: dict[str, Path | str]) -> dict[str, str]:
     return {name: sha256_file(p) for name, p in paths_.items()}
 
 
+def content_hash(model_or_list: BaseModel | list[BaseModel]) -> str:
+    """sha256 of the analytical payload: every field except `meta`.
+
+    Cache keys built from this survive a rewrite that only changes timestamps,
+    call ids or prompt versions in `meta`.
+    """
+    items = model_or_list if isinstance(model_or_list, list) else [model_or_list]
+    h = hashlib.sha256()
+    for m in items:
+        h.update(m.model_dump_json(exclude={"meta"}).encode())
+        h.update(b"\x00")
+    return h.hexdigest()
+
+
+def prompt_stale(artifact: Artifact, prompt_names: list[str] | tuple[str, ...]) -> bool:
+    """Whether an artifact on disk was produced by prompts that have since changed.
+
+    A step that reuses an existing output must check this, otherwise the stage marker
+    asserts freshness the artifact does not have.
+    """
+    recorded = (artifact.meta.prompt_versions if artifact.meta else {}) or {}
+    return any(recorded.get(n) != prompt_version(n) for n in prompt_names)
+
+
 # --- prompts --------------------------------------------------------------
 
 

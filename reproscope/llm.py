@@ -437,7 +437,13 @@ def call(
     timeout_s: int = 1800,
     log_path: Path | None = None,
     extra: dict[str, Any] | None = None,
+    max_turns: int | None = None,
+    large_context: bool = False,
+    reasoning_max_tokens: int | None = 512,
 ) -> LLMResult:
+    """Route one call. `max_turns` caps agentic claude_p sessions; `large_context`
+    opts a non-agentic call out of the input-size refusal; `reasoning_max_tokens`
+    caps hidden reasoning on OpenRouter structured calls (None = provider default)."""
     if tier is not None:
         spec = config.tier(tier)
         route, model = route or spec.route, model or spec.model
