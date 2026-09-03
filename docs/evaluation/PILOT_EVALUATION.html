@@ -19,7 +19,7 @@ a{color:var(--acc)}
 </head><body><main>
 <h1>reproscope v0 pilot — evaluation</h1>
 <p class="meta">Five Multi100 papers; replica runs 2026-09-02, everything downstream rebuilt 2026-09-03 after the efficiency
-fixes. Evaluation tables generated 2026-09-03T19:15:06 UTC.</p>
+fixes. Evaluation tables generated 2026-09-03T19:29:09 UTC.</p>
 <nav><a href="#summary">Summary</a><a href="#lineup">Corpus and lineup</a><a href="#families">By family</a>
 <a href="#papers">Per paper</a><a href="#cases">Cases</a><a href="#cost">Cost</a><a href="#bugs">Bugs</a>
 <a href="#limits">Limits</a><a href="#refs">Sources</a></nav>
@@ -80,7 +80,7 @@ Luna's lower A share comes almost entirely from Hurst, where it disagreed with t
 table's supporting cells; on the focal claims it matches the others.</p>
 <h2 id="papers">Match tables per paper</h2>
 <h3 id="paper-ohtsubo">Ohtsubo <small>Ohtsubo_EvoHumanBehavior_2014_zlm2</small></h3>
-<p>Claims scored: 20. Decision agreement across replicas: n/a;
+<p>Claims scored: 20. Decision agreement across replicas: 0.75;
 median numeric CV: 0.133.</p>
 <div class="tbl"><table class=""><thead><tr><th>family</th><th>launched</th><th>ran</th><th>failed</th><th>pairs</th><th>abstained</th><th>A</th><th>A+B</th><th>headline A+B</th><th>focal A+B</th></tr></thead><tbody><tr><td>opus</td><td>2</td><td>2</td><td>0</td><td>40</td><td>0</td><td>48%</td><td>62%</td><td>100%</td><td>100%</td></tr>
 <tr><td>fable</td><td>1</td><td>1</td><td>0</td><td>20</td><td>0</td><td>45%</td><td>60%</td><td>100%</td><td>100%</td></tr>
@@ -88,7 +88,7 @@ median numeric CV: 0.133.</p>
 <tr><td>luna</td><td>2</td><td>2</td><td>0</td><td>40</td><td>0</td><td>45%</td><td>57%</td><td>93%</td><td>94%</td></tr>
 <tr><td>glm</td><td>2</td><td>2</td><td>0</td><td>40</td><td>0</td><td>48%</td><td>72%</td><td>100%</td><td>100%</td></tr>
 <tr><td>deepseek</td><td>2</td><td>2</td><td>0</td><td>40</td><td>0</td><td>35%</td><td>57%</td><td>93%</td><td>94%</td></tr></tbody></table></div>
-<p><b>Focal quantity</b> d = 2.200 (claim c093). Replicas: deepseek_1 2.264, deepseek_2 2.008, fable_1 2.264, glm_1 2.264, glm_2 2.264, luna_1 2.264, luna_2 2.264, opus_1 2.264, opus_2 2.264, sol_1 2.264.</p><p><b>Multi100 analysts</b> (n = 6): d from 1.14 to 3.11, median 2.01.</p><p><b>Targeted reconstruction</b> reachable: The whole gap between the blind analysts and the paper is the sample size, not the model. The closest replica&#x27;s analytical choices (item-mean intimacy, Student t, pooled-SD Cohen&#x27;s d) were already the paper&#x27;s; it kept all 30 records because the deception-suspicion exclusion cannot be coded from the file, giving t(28) = 6.20 and d = 2.26. Attempts 2-5 varied every ambiguity the contract flags (Welch, d-from-t, Hedges g, sum vs mean aggregation) and none of them reached d = 2.20: Welch and d-from-t leave d at 2.264 (the two groups have near-equal variance and n), Hedges gives 2.203 but leaves t </p>
+<p><b>Focal quantity</b> d = 2.200 (claim c093). Replicas: deepseek_1 2.264, deepseek_2 2.008, fable_1 2.264, glm_1 2.264, glm_2 2.264, luna_1 2.264, luna_2 2.264, opus_1 2.264, opus_2 2.264, sol_1 2.264.</p><p><b>Multi100 analysts</b> (n = 6): d from 1.14 to 3.11, median 2.01.</p><p><b>Targeted reconstruction</b> reachable: The whole gap is the one exclusion the methods state. The closest analyst applied every other choice as the paper made it - item-mean intimacy that matches the workbook&#x27;s own aggregate, pooled-variance Student t, pooled-SD d - but analysed all 30 records because the data file gives no way to find the excluded case, which yields t(28) = 6.20 and d = 2.26. Dropping the right record moves every one of the seven quantities onto the reported value at once, including the reported df of 27; the attention condition&#x27;s mean and SD are already exact on the full 30 records, which places the excluded parti</p>
 
 <h3 id="paper-hurst">Hurst <small>Hurst_EvoHumanBehavior_2017_yypJ</small></h3>
 <p>Claims scored: 258. Decision agreement across replicas: 0.78;
@@ -174,7 +174,8 @@ reproduction failure; the paper's numbers are all reached.</p>
 Opus and GLM's first run are at 100% band A, most others at 83–92%, and GLM's second run at 73%: its model for the
 cue-type analysis diverged (F = 8.6 against the reported 24.9, with the matching p and partial eta-squared), while its
 focal analysis and the rest of the table matched. The two replicas the isolation-path bug had marked as failed
-(one Opus, one DeepSeek) re-execute cleanly once the checker runs the script from the directory it was written for.</p>
+(one Opus, one DeepSeek) re-execute cleanly once the checker runs the script inside the isolation copy the agent wrote
+it for.</p>
 
 <h2 id="cost">Cost per paper before and after the fixes</h2>
 <p>USD, from <code>runs/&lt;paper&gt;/ledger.jsonl</code>. <em>Metered</em> is OpenRouter spend; <em>list-equivalent</em>
@@ -184,7 +185,7 @@ rebuild, including retries and the repair cascade the audit describes. <em>Singl
 per step of the rebuilt Stages 1 to 3 (matching, targeted arm, review, multiverse, report), which excludes the repeats
 caused by Opus overload retries and by trace changes during the rebuild. <em>Replica runs</em> are the eight-replica
 development lineup's agent runs from the pilot ledger. Stage 0 was not rerun; its post-fix cost is projected below.</p>
-<div class="tbl"><table class=""><thead><tr><th>paper</th><th>pilot as run: metered</th><th>list-equiv</th><th>single pass S1–3: metered</th><th>list-equiv</th><th>replica runs: metered</th><th>list-equiv</th><th>clean S1–3 total: metered</th><th>list-equiv</th></tr></thead><tbody><tr><td>Ohtsubo</td><td>1.17</td><td>48.5</td><td>0.05</td><td>4.0</td><td>0.18</td><td>2.9</td><td>0.24</td><td>6.9</td></tr>
+<div class="tbl"><table class=""><thead><tr><th>paper</th><th>pilot as run: metered</th><th>list-equiv</th><th>single pass S1–3: metered</th><th>list-equiv</th><th>replica runs: metered</th><th>list-equiv</th><th>clean S1–3 total: metered</th><th>list-equiv</th></tr></thead><tbody><tr><td>Ohtsubo</td><td>1.17</td><td>48.5</td><td>0.06</td><td>3.8</td><td>0.18</td><td>2.9</td><td>0.24</td><td>6.7</td></tr>
 <tr><td>Hurst</td><td>0.89</td><td>39.4</td><td>0.05</td><td>6.0</td><td>0.53</td><td>6.8</td><td>0.59</td><td>12.9</td></tr>
 <tr><td>Axt</td><td>1.24</td><td>38.9</td><td>0.08</td><td>2.4</td><td>0.21</td><td>3.7</td><td>0.28</td><td>6.1</td></tr>
 <tr><td>Petersen</td><td>0.92</td><td>20.4</td><td>0.05</td><td>3.3</td><td>0.28</td><td>6.3</td><td>0.33</td><td>9.6</td></tr>

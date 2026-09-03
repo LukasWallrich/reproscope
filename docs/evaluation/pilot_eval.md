@@ -1,6 +1,6 @@
 # reproscope v0 pilot — replica evaluation
 
-Generated 2026-09-03T19:15:06.743743+00:00. Papers: Axt_JournExpSocPsych_2018_zK2, Hertel_ClinPsychSci_2018_YabW, Hurst_EvoHumanBehavior_2017_yypJ, Ohtsubo_EvoHumanBehavior_2014_zlm2, Petersen_Cognition_2017_yJwG.
+Generated 2026-09-03T19:29:09.960936+00:00. Papers: Axt_JournExpSocPsych_2018_zK2, Hertel_ClinPsychSci_2018_YabW, Hurst_EvoHumanBehavior_2017_yypJ, Ohtsubo_EvoHumanBehavior_2014_zlm2, Petersen_Cognition_2017_yJwG.
 
 Match shares are over every claim × replica pair that Stage 1 scored in `match.json`, restricted to replicas that ran. A pair whose replica produced no value for the claim, or whose link step failed, is *abstained* and left out of the denominators. `n/a` means the metric could not be computed from the files present.
 
@@ -178,7 +178,7 @@ Hardcoding columns count replicas by audit verdict. *blind hits* is the total of
 | sol | 1 | 1 | 0 | 0 | 20 | 100% | 50% | 85% | 100% | 100% |
 
 - Claims scored: 20
-- Decision agreement (mean over claims): n/a
+- Decision agreement (mean over claims): 0.750
 - Numeric CV (median over claims): 0.133
 - Focal quantity: d = 2.200 (claim c093, stage3/focal.json)
   - focal claim set (the *focal A+B* column above pools these): c024, c040, c043, c049, c051, c052, c054, c076, c078, c081, c087, c088, c089, c090, c091, c092, c093, c099, c112, c116, c125, c130, c153
@@ -190,15 +190,15 @@ Hardcoding columns count replicas by audit verdict. *blind hits* is the total of
   - between-family range of family means: 0.1281
 - Focal d — reported 2.200; replicas: deepseek_1 2.264, deepseek_2 2.008, fable_1 2.264, glm_1 2.264, glm_2 2.264, luna_1 2.264, luna_2 2.264, opus_1 2.264, opus_2 2.264, sol_1 2.264
   - Multi100 analysts (n = 6): min 1.142, median 2.007, max 3.106
-- Targeted reconstruction: reachable — The whole gap between the blind analysts and the paper is the sample size, not the model. The closest replica's analytical choices (item-mean intimacy, Student t, pooled-SD Cohen's d) were already the paper's; it kept all 30 records because the deception-suspicion exclusion cannot be coded from the file, giving t(28) = 6.20 and d = 2.26. Attempts 2-5 varied every ambiguity the contract flags (Welch, d-from-t, Hedges g, sum vs mean aggregation) and none of them reached d = 2.20: Welch and d-from-t leave d at 2.264 (the two groups have near-equal variance and n), Hedges gives 2.203 but leaves t at 6.20 with df = 28, and the sum aggregation destroys the reported means. Only dropping one no-attention record reproduces t, df, both means, both SDs and d at once. The attention condition's mean and SD (4.583, 0.816) are identical in the file and in the paper, which independently confirms the excluded participant is in the no attention condition. Attempt 6 shows the search was not fitted to the target: the Method section, without any results, narrows the exclusion to five records, and three of those five (the attention-condition candidates) miss the reported values. Attempt 7 stops at a full match, one attempt inside the budget of eight.
+- Targeted reconstruction: reachable — The whole gap is the one exclusion the methods state. The closest analyst applied every other choice as the paper made it - item-mean intimacy that matches the workbook's own aggregate, pooled-variance Student t, pooled-SD d - but analysed all 30 records because the data file gives no way to find the excluded case, which yields t(28) = 6.20 and d = 2.26. Dropping the right record moves every one of the seven quantities onto the reported value at once, including the reported df of 27; the attention condition's mean and SD are already exact on the full 30 records, which places the excluded participant in the no attention condition. Attempt 4 (Hedges-corrected d on all 30 records) also lands on d = 2.20, but it is a coincidence: it leaves t, df and the no attention mean and SD wrong, so it is not the route. Two records, ID 14 and ID 20, are interchangeable for this analysis - both give identical a20 values - and ID 20 is picked because it also fits the study's other reported statistics. Every choice used is either stated in the methods or listed as open in the contract; the only thing added is which record the stated exclusion removes.
 
 | stage | calls | cost $ (API) | list-price equiv $ |
 |---|---|---|---|
 | 0 | 26 | 0.0781 | 16.5843 |
-| 1 | 759 | 1.0328 | 25.6307 |
-| 2 | 16 | 0.0092 | 12.6584 |
+| 1 | 762 | 1.0377 | 27.4431 |
+| 2 | 17 | 0.0092 | 14.0695 |
 | 3 | 25 | 0.1435 | 1.1843 |
-| total | 826 | 1.2636 | 56.0576 |
+| total | 830 | 1.2685 | 59.2811 |
 
 ### Petersen_Cognition_2017_yJwG
 

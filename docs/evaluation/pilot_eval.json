@@ -1,5 +1,5 @@
 {
-  "generated": "2026-09-03T19:15:06.743743+00:00",
+  "generated": "2026-09-03T19:29:09.960936+00:00",
   "papers": [
     "Axt_JournExpSocPsych_2018_zK2",
     "Hertel_ClinPsychSci_2018_YabW",
@@ -5672,7 +5672,7 @@
           }
         }
       ],
-      "decision_agreement_mean": null,
+      "decision_agreement_mean": 0.75,
       "numeric_cv_median": 0.13311014893016768,
       "focal": {
         "source": "stage3/focal.json",
@@ -5805,17 +5805,17 @@
         "meta": {
           "artifact": "TargetedReconstruction",
           "version": "0.1",
-          "created": "2026-09-03T18:12:21.882877+00:00",
+          "created": "2026-09-03T19:26:22.184777+00:00",
           "stage": "1",
           "inputs": {
-            "match": "97456fb3621280f48b4bd08732a6be0d698dff5aa75e71c00b23f234edf345b9"
+            "match": "f269e978837749a04c2d4fd4456ce9c4fdfb036170bb075e4279bad84a0705b1"
           },
           "prompt_versions": {
             "stage1_targeted": "dd243b39e5b4"
           },
           "model_calls": [
-            "b8323a2f0e64",
-            "9c419f108bc5"
+            "0895664a95fa",
+            "d8578ed797a2"
           ]
         },
         "state": "complete",
@@ -5825,20 +5825,19 @@
         "triggered": true,
         "outcome": "reachable",
         "added_choices": [
-          "Exclude exactly one record to reach the stated n = 29. The paper excludes 'one participant who suspected the use of deceptive procedures'; the data file holds 30 records and no suspicion variable, so the exclusion is not operationalizable from the data and must be added.",
-          "Identify the excluded record as ID 20 (19-year-old male, no attention condition). The Method section's sample description (10 males, 19 females, Mage = 19.3, SD = 0.89) narrows 30 records to five 19-year-old males (IDs 5, 23, 25, 14, 20); the condition sizes implied by the paper's own degrees of freedom (attention 15, no attention 14, against a 15/15 file) narrow those to IDs 14 and 20, which have identical intimacy scores and give identical values for every quantity of a20; ID 20 alone also reproduces the other Study 2a statistics (interest in friendship t = 1.04, p = .306; intimacy-friendship r = .38, p = .045). The final step from five candidates to one uses reported values, so a blind analyst could not have arrived at ID 20 with certainty.",
-          "Student t with pooled variance rather than Welch, two-tailed (df = 27, as the paper prints).",
-          "Aggregate the four intimacy items as their mean, not their sum (the sum gives 18.33 / 11.29, not 4.58 / 2.82).",
-          "Cohen's d from the pooled SD, without the Hedges small-sample correction."
+          "The identity of the excluded participant: ID 20. The methods state that one participant was excluded for suspecting the deceptive procedure, but the data file has 30 records and no suspicion variable, so which record to drop is not recoverable from the data. It is recovered here from the paper's own reporting: of the 30 single-record drops, 5 reproduce the methods' sample description (10 males, 19 females, Mage +/- SD = 19.3 +/- 0.89), of which IDs 14 and 20 reproduce all seven a20 quantities, and only ID 20 also reproduces the other Study 2a statistics (friendship t27 = 1.04, p = .306; r27 = .38, p = .045).",
+          "Cohen's d from the pooled SD with no small-sample correction (the d formula is not stated).",
+          "Student t with pooled variance rather than the Welch correction (not stated; with n = 15 vs 14 the two differ only in the third decimal, and only the pooled version gives the reported df of 27).",
+          "Intimacy as the mean of the four items rather than their sum (not stated; the sum is ruled out by the reported means of 4.58 and 2.82 on a seven-point scale)."
         ],
-        "attempts": 7,
-        "notes": "The whole gap between the blind analysts and the paper is the sample size, not the model. The closest replica's analytical choices (item-mean intimacy, Student t, pooled-SD Cohen's d) were already the paper's; it kept all 30 records because the deception-suspicion exclusion cannot be coded from the file, giving t(28) = 6.20 and d = 2.26. Attempts 2-5 varied every ambiguity the contract flags (Welch, d-from-t, Hedges g, sum vs mean aggregation) and none of them reached d = 2.20: Welch and d-from-t leave d at 2.264 (the two groups have near-equal variance and n), Hedges gives 2.203 but leaves t at 6.20 with df = 28, and the sum aggregation destroys the reported means. Only dropping one no-attention record reproduces t, df, both means, both SDs and d at once. The attention condition's mean and SD (4.583, 0.816) are identical in the file and in the paper, which independently confirms the excluded participant is in the no attention condition. Attempt 6 shows the search was not fitted to the target: the Method section, without any results, narrows the exclusion to five records, and three of those five (the attention-condition candidates) miss the reported values. Attempt 7 stops at a full match, one attempt inside the budget of eight.",
-        "diagnosis": "*Unblinded conjecture \u2014 written after seeing the reported values; it grades nothing.*\n\nThe blind analysts and the paper differ on the sample, not on the analysis. The closest replica had already made every modelling choice the paper made: item-mean intimacy over r1, r6, r7 and reverse-coded r4 (which reproduces the workbook's own `Intimacy` column exactly), Student t with pooled variance, Cohen's d from the pooled SD. Its note says so plainly \u2014 the exclusion \"cannot be operationalized\" because no suspicion variable exists \u2014 and it analysed all 30 records, reaching t(28) = 6.20, d = 2.26.\n\nMy attempts 2\u20135 tested every alternative the contract flags as unstated. None moved the results toward the paper. Welch and d-from-t leave d at 2.264, because the two groups have almost equal variance and equal n. Hedges' correction gets d to 2.203, close to the reported 2.20, but it cannot produce t = 5.91 or df = 27 \u2014 so it is a coincidence, not the route. The sum aggregation changes the means to 18.33 and 11.13, away from 4.58 and 2.82.\n\nOnly removing one no-attention participant reproduces t, df, both means, both SDs and d simultaneously. The attention condition's mean and SD are byte-identical between the file and the paper (4.583, 0.816), which pins the removed case to the no-attention group independently of any effect-size fitting. The shared data file is the pre-exclusion file; the paper's analysis file was the post-exclusion one, and the two were never reconciled when the data were archived.\n\nThe evidence favours a plain data-provenance mismatch over any analytical divergence. Nothing here suggests the analysts erred; the file they were given was not the file the paper analysed, and it carries no field that would let anyone know which row to drop.",
+        "attempts": 6,
+        "notes": "The whole gap is the one exclusion the methods state. The closest analyst applied every other choice as the paper made it - item-mean intimacy that matches the workbook's own aggregate, pooled-variance Student t, pooled-SD d - but analysed all 30 records because the data file gives no way to find the excluded case, which yields t(28) = 6.20 and d = 2.26. Dropping the right record moves every one of the seven quantities onto the reported value at once, including the reported df of 27; the attention condition's mean and SD are already exact on the full 30 records, which places the excluded participant in the no attention condition. Attempt 4 (Hedges-corrected d on all 30 records) also lands on d = 2.20, but it is a coincidence: it leaves t, df and the no attention mean and SD wrong, so it is not the route. Two records, ID 14 and ID 20, are interchangeable for this analysis - both give identical a20 values - and ID 20 is picked because it also fits the study's other reported statistics. Every choice used is either stated in the methods or listed as open in the contract; the only thing added is which record the stated exclusion removes.",
+        "diagnosis": "*Unblinded conjecture \u2014 I have seen the reported values; this grades nothing.*\n\nThe blind analysts and the paper differ on exactly one thing: sample size. Everything else the analysts chose was right.\n\n`closest_replica.R` got every open choice the way the paper made it. Intimacy as the item mean of r1, r6, r7 and the reverse-coded 8 \u2212 r4 is confirmed by the workbook's own precomputed \"Intimacy\" column, which the script checks to 1e-10. The pooled-variance Student t, the two-tailed p, and Cohen's d from the pooled SD all match. My attempts 2 and 3 confirm the alternatives are dead ends: Welch leaves d untouched and gives df = 27.92, and summing the items puts the means at 18.3 and 11.3 against reported 4.58 and 2.82.\n\nThe script also states the problem plainly in its own comments: the paper reports 29 after excluding one suspicious participant, the file has 30 records, and no suspicion variable exists. The analyst analysed all 30 and flagged the discrepancy. That is the correct blind decision, and it is the entire source of the gap.\n\nThe signature that this is the whole story: on all 30 records the attention condition already reproduces 4.58 and .82 exactly. Only the no-attention side is off. The excluded participant is therefore in the no-attention condition, which is also what the paper's own one-sample tests say \u2014 t<sub>13</sub> against t<sub>14</sub>.\n\nSo this is not analytical divergence. It is an unrecoverable exclusion. The suspicion flag existed on the authors' side and never made it into the shared file. Any blind analyst would land on d = 2.26 and be unable to do better, because the information needed to pick the right record is not in the data \u2014 I recovered it only by reading the paper's results back into the search.",
         "trigger_reasons": [
           "c093: no replica reached band A"
         ],
         "started_from": "glm_1",
-        "closest_distance": "exact on all seven quantities at reported precision: c087 4.583 -> 4.58, c088 0.816 -> 0.82, c089 2.821 -> 2.82, c090 0.787 -> 0.79, c091 t(27) = 5.908 -> 5.91, c092 p = 2.69e-06 (reported p < .001), c093 d = 2.196 -> 2.20 (focal, |diff| = 0.004)",
+        "closest_distance": "exact to the reported precision: all 7 quantities match (focal d = 2.1956, reported 2.20; t(27) = 5.9083 vs 5.91; M = 4.5833/2.8214 vs 4.58/2.82; SD = 0.8165/0.7871 vs .82/.79; p = 2.69e-06 < .001)",
         "hardcoding_audit": {
           "hits": [],
           "verdict": "clean",
@@ -5854,14 +5853,14 @@
           "cost_usd_equiv": 16.584253999999998
         },
         "1": {
-          "calls": 759,
-          "cost_usd": 1.0327678876670003,
-          "cost_usd_equiv": 25.630712749999997
+          "calls": 762,
+          "cost_usd": 1.0376733376670002,
+          "cost_usd_equiv": 27.443076249999997
         },
         "2": {
-          "calls": 16,
+          "calls": 17,
           "cost_usd": 0.00919355,
-          "cost_usd_equiv": 12.6584045
+          "cost_usd_equiv": 14.069542
         },
         "3": {
           "calls": 25,

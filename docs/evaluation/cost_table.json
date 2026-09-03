@@ -43,26 +43,26 @@
       },
       "rerun": {
         "total": {
-          "calls": 39,
-          "ok": 24,
-          "tokens": 4312913,
-          "cash": 0.0896,
-          "equiv": 7.5966
+          "calls": 43,
+          "ok": 28,
+          "tokens": 5810669,
+          "cash": 0.0945,
+          "equiv": 10.8201
         },
         "by_stage": {
           "1": {
-            "calls": 16,
-            "ok": 9,
-            "tokens": 1816336,
-            "cash": 0.0052,
-            "equiv": 3.3195
+            "calls": 19,
+            "ok": 12,
+            "tokens": 3188328,
+            "cash": 0.0101,
+            "equiv": 5.1319
           },
           "2": {
-            "calls": 11,
-            "ok": 5,
-            "tokens": 548465,
+            "calls": 12,
+            "ok": 6,
+            "tokens": 674229,
             "cash": 0.0092,
-            "equiv": 3.6662
+            "equiv": 5.0774
           },
           "3": {
             "calls": 12,
@@ -95,24 +95,24 @@
             "equiv": 0.0
           },
           "1:targeted": {
-            "calls": 5,
-            "ok": 2,
-            "tokens": 1751585,
+            "calls": 6,
+            "ok": 3,
+            "tokens": 3106953,
             "cash": 0.0,
-            "equiv": 3.0185
+            "equiv": 4.8308
           },
           "1:targeted_hardcoding_audit": {
-            "calls": 2,
-            "ok": 2,
-            "tokens": 6364,
-            "cash": 0.0012,
+            "calls": 3,
+            "ok": 3,
+            "tokens": 13894,
+            "cash": 0.0041,
             "equiv": 0.0
           },
           "1:trace_choices": {
-            "calls": 2,
-            "ok": 1,
-            "tokens": 8664,
-            "cash": 0.0017,
+            "calls": 3,
+            "ok": 2,
+            "tokens": 17758,
+            "cash": 0.0037,
             "equiv": 0.0
           },
           "2:alignment": {
@@ -123,11 +123,11 @@
             "equiv": 0.0
           },
           "2:broad": {
-            "calls": 8,
-            "ok": 2,
-            "tokens": 502829,
+            "calls": 9,
+            "ok": 3,
+            "tokens": 628593,
             "cash": 0.0,
-            "equiv": 3.6662
+            "equiv": 5.0774
           },
           "2:causal_language": {
             "calls": 1,
@@ -183,13 +183,13 @@
       "rerun_single_pass": {
         "calls": 14,
         "ok": 14,
-        "tokens": 2354923,
-        "cash": 0.0545,
-        "equiv": 3.9758
+        "tokens": 2532460,
+        "cash": 0.0572,
+        "equiv": 3.8181
       },
       "clean_v01_stages123": {
-        "cash": 0.2355,
-        "equiv": 6.86
+        "cash": 0.2382,
+        "equiv": 6.7023
       }
     },
     "Hurst_EvoHumanBehavior_2017_yypJ": {
