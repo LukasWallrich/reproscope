@@ -531,6 +531,7 @@ def _stage3(base: Path) -> dict[str, Any] | None:
     n_converged = sum(1 for r in runs if r.get("converged"))
     return {
         "space": space,
+        "abstained": False,
         "factors": factors,
         "runs": runs,
         "grid_size": space.get("grid_size"),
