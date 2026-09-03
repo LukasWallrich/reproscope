@@ -392,6 +392,10 @@ def test_assemble_work_picks_the_best_matching_replica_and_withholds_the_value(s
     # which is how a generated script would otherwise drop the paper's own level.
     levels = [lv for f in executor_grid["factors"] for lv in f["levels"]]
     assert levels and all(set(lv) == {"value", "how"} for lv in levels)
+    # The specifications are enumerated for the executor, not left for it to derive.
+    assert [s["spec_id"] for s in executor_grid["specs"]] == [
+        f"spec_{i:03d}" for i in range(1, 13)
+    ]
 
     contract = json.loads((work / "CONTRACT.json").read_text())
     assert contract["focal_claim"]["quantity"]["kind"] == "d"
@@ -405,37 +409,99 @@ def test_assemble_work_picks_the_best_matching_replica_and_withholds_the_value(s
     assert info["value_scan"]["clean"] is True
 
 
-def test_verification_flags_rows_that_do_not_match_the_grid(sandbox, monkeypatch):
-    """Twelve rows of the wrong combinations must not pass as twelve correct ones."""
+def test_verification_flags_spec_ids_that_do_not_match_the_grid(sandbox, monkeypatch):
+    """Twelve rows carrying the wrong ids must not pass as twelve correct ones."""
+    grid = mv.build_grid(PROPOSED, SCREEN)
+    ids = [s["spec_id"] for s in mv.enumerate_specs(grid)]
+    work = sandbox / "work"
+    (work / "out").mkdir(parents=True)
+
+    def write(spec_ids):
+        with (work / "out" / "specs.csv").open("w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=list(mv.RESULT_COLUMNS))
+            w.writeheader()
+            for i, sid in enumerate(spec_ids):
+                w.writerow({"spec_id": sid, "estimate": 0.1 * i, "se": 0.2, "p": 0.01,
+                            "n": 72, "converged": "TRUE", "error": ""})
+
+    monkeypatch.setattr(mv, "hardcoding_audit", lambda *a, **k: {"verdict": "clean", "hits": []})
+
+    write(ids)
+    ok = mv.verify_execution(work, grid, "_fixture3")
+    assert ok["checks"]["matched_by"] == "spec_id"
+    assert ok["checks"]["specs_match_grid"] is True
+    # no multiverse.R was written, so that is the only complaint
+    assert ok["problems"] == ["no out/multiverse.R or out/multiverse.py to re-run"]
+
+    write(ids[:10] + [ids[0], "spec_999"])   # right count, one duplicated, one invented
+    bad = mv.verify_execution(work, grid, "_fixture3")
+    assert bad["checks"]["row_count_matches"] is True
+    assert bad["checks"]["duplicate_spec_ids"] == [ids[0]]
+    assert bad["checks"]["missing_spec_ids"] == [ids[10], ids[11]]
+    assert bad["checks"]["unexpected_spec_ids"] == ["spec_999"]
+    assert any("spec ids do not match the grid" in p for p in bad["problems"])
+
+
+def test_verification_falls_back_to_factor_columns_without_spec_ids(sandbox, monkeypatch):
+    """Old-format output still verifies, and says it was matched the weaker way."""
     grid = mv.build_grid(PROPOSED, SCREEN)
     specs = mv.grid_specs(grid)
     names = [f["name"] for f in grid["factors"]]
     work = sandbox / "work"
     (work / "out").mkdir(parents=True)
-
-    def write(rows):
-        with (work / "out" / "specs.csv").open("w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=names + ["estimate", "se", "p", "n",
-                                                      "converged", "error"])
-            w.writeheader()
-            for i, s in enumerate(rows):
-                w.writerow({**s, "estimate": 0.1 * i, "se": 0.2, "p": 0.01, "n": 72,
-                            "converged": "TRUE", "error": ""})
+    with (work / "out" / "specs.csv").open("w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=[mv._norm_name(n) for n in names]
+                           + ["estimate", "se", "p", "n", "converged", "error"])
+        w.writeheader()
+        for i, s in enumerate(specs):
+            w.writerow({**{mv._norm_name(k): v for k, v in s.items()},
+                        "estimate": 0.1 * i, "se": 0.2, "p": 0.01, "n": 72,
+                        "converged": "TRUE", "error": ""})
 
     monkeypatch.setattr(mv, "hardcoding_audit", lambda *a, **k: {"verdict": "clean", "hits": []})
+    report = mv.verify_execution(work, grid, "_fixture3")
 
-    write(specs)
-    ok = mv.verify_execution(work, grid, "_fixture3")
-    assert ok["checks"]["specs_match_grid"] is True
-    # no multiverse.R was written, so that is the only complaint
-    assert ok["problems"] == ["no out/multiverse.R or out/multiverse.py to re-run"]
+    assert report["checks"]["matched_by"] == "factor_columns"
+    # `se` must not be read as a shortened "Sex covariate set": the result columns are
+    # never factor columns.
+    assert report["checks"]["specs_match_grid"] is True
+    assert any("no spec_id column" in p for p in report["problems"])
 
-    write(specs[:11] + [specs[0]])          # right count, one spec duplicated
-    bad = mv.verify_execution(work, grid, "_fixture3")
-    assert bad["checks"]["row_count_matches"] is True
-    assert bad["checks"]["duplicate_rows"] == 1
-    assert bad["checks"]["missing_specs"] == 1
-    assert any("do not match the grid" in p for p in bad["problems"])
+
+def test_enumerated_specs_are_stable_and_mark_the_paper_s_own(sandbox):
+    grid = mv.build_grid(PROPOSED, SCREEN)
+    specs = mv.enumerate_specs(grid)
+
+    assert len(specs) == grid["grid_size"] == 12
+    assert [s["spec_id"] for s in specs] == [f"spec_{i:03d}" for i in range(1, 13)]
+    # enumerator order, last factor varying fastest
+    assert specs[0]["levels"] == {"attention check": "exclude failures",
+                                  "covariate": "unadjusted", "outliers": "keep",
+                                  "estimator": "welch"}
+    assert specs[1]["levels"]["estimator"] == "pooled"
+    assert mv.enumerate_specs(grid) == specs
+    paper = [s for s in specs if s.get("is_paper_level")]
+    assert [s["spec_id"] for s in paper] == ["spec_001"]
+
+
+def test_read_specs_joins_the_grid_levels_onto_spec_ids(tmp_path):
+    """The executor may write ids alone; the level strings come from the grid."""
+    grid = mv.build_grid(PROPOSED, SCREEN)
+    p = tmp_path / "specs.csv"
+    p.write_text("spec_id,estimate,se,p,n,converged,error\n"
+                 "spec_003,0.41,0.2,0.03,72,TRUE,\n"
+                 "spec_001,0.63,0.24,0.01,72,TRUE,\n"
+                 "spec_404,,,,,FALSE,unknown spec\n")
+    rows = mv.read_specs(p, grid)
+
+    assert [r["_spec_id"] for r in rows] == ["spec_003", "spec_001", "spec_404"]
+    assert rows[1]["attention check"] == "exclude failures"   # the grid's exact string
+    assert rows[0]["outliers"] == "3 SD trim"
+    assert "outliers" not in rows[2]                          # no id, nothing joined
+
+    ranked = mv.rank_reported(rows, 0.63, grid, precision=2)
+    assert ranked["paper_level_spec_id"] == "spec_001"
+    assert ranked["paper_level_estimate"] == 0.63
 
 
 # --- step 2b: the paper's own levels --------------------------------------

@@ -24,6 +24,7 @@ import math
 import re
 import shutil
 import subprocess
+from collections import Counter
 from itertools import product
 from pathlib import Path
 from typing import Any, Literal
@@ -549,6 +550,32 @@ def grid_specs(grid: dict[str, Any]) -> list[dict[str, str]]:
     return out
 
 
+def enumerate_specs(grid: dict[str, Any]) -> list[dict[str, Any]]:
+    """The numbered specification list both the executor and the reader work from.
+
+    The order is the enumerator's factor order with the last factor varying fastest,
+    incompatible combinations removed. Ids are `spec_001`, `spec_002`, ... — a pure
+    function of the grid, so the same grid always yields the same id for the same
+    combination of levels and no side of the pipeline has to store the mapping.
+
+    `is_paper_level` marks the one specification that uses the paper's own level on
+    every factor. It is absent when the screen or the size cap left any factor without
+    a paper level, because then the paper's own specification is not fully determined.
+    """
+    combos = grid_specs(grid)
+    width = max(3, len(str(len(combos))))
+    factors = grid.get("factors", [])
+    paper = {f["name"]: f.get("paper_level") for f in factors}
+    complete = bool(factors) and all(paper.values())
+    out = []
+    for i, levels in enumerate(combos, start=1):
+        spec: dict[str, Any] = {"spec_id": f"spec_{i:0{width}d}", "levels": levels}
+        if complete and all(_norm(levels[k]) == _norm(v) for k, v in paper.items()):
+            spec["is_paper_level"] = True
+        out.append(spec)
+    return out
+
+
 # --- step 5: rank ---------------------------------------------------------
 
 
@@ -556,18 +583,40 @@ def _norm_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", str(name).lower()).strip("_")
 
 
+RESULT_COLUMNS = ("spec_id", "estimate", "se", "p", "n", "converged", "error")
+
+
 def read_specs(path: Path, grid: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """Rows of specs.csv; factor columns are renamed to the grid's factor names when the
-    executor wrote them in a normalised form (snake_case, punctuation dropped)."""
+    """Rows of specs.csv, carrying one column per factor with the grid's exact level string.
+
+    The executor is asked for a `spec_id` column and the levels are joined back from
+    `enumerate_specs(grid)`, so a row's levels are the grid's own strings whatever the
+    executor wrote next to them. A row whose id is not in the grid keeps its own columns
+    and is left for `verify_execution` to report.
+
+    Without a `spec_id` column the factor columns themselves are matched, allowing for
+    the normalised names (snake_case, punctuation dropped) an executor tends to write.
+    """
     rows = list(csv.DictReader(io.StringIO(Path(path).read_text())))
     if grid is None:
         grid_path = Path(path).parents[2] / "grid.json"
         grid = json.loads(grid_path.read_text()) if grid_path.exists() else None
-    if grid and rows:
+
+    if rows and "spec_id" in rows[0]:
+        by_id = {s["spec_id"]: s["levels"] for s in enumerate_specs(grid or {})}
+        for r in rows:
+            sid = (r.get("spec_id") or "").strip()
+            r["_spec_id"] = sid
+            levels = by_id.get(sid)
+            if levels:
+                r.update(levels)
+    elif grid and rows:
         by_norm = {_norm_name(f["name"]): f["name"] for f in grid.get("factors", [])}
         rename = {}
         for c in rows[0]:
-            if c in by_norm.values():
+            # The result columns are never factor columns; without this an `se` column
+            # matches a factor called "Sex covariate set" on the prefix rule below.
+            if c in by_norm.values() or c in RESULT_COLUMNS:
                 continue
             n = _norm_name(c)
             exact = by_norm.get(n)
@@ -651,7 +700,14 @@ def rank_reported(
                  if f.get("paper_level")}
         out["paper_level_spec"] = paper or None
         if paper and len(paper) == len(grid.get("factors", [])):
+            paper_spec = next(
+                (s for s in enumerate_specs(grid) if s.get("is_paper_level")), None
+            )
+            out["paper_level_spec_id"] = paper_spec["spec_id"] if paper_spec else None
             hit = next(
+                (r for r in ok if paper_spec and r.get("_spec_id") == paper_spec["spec_id"]),
+                None,
+            ) or next(
                 (r for r in ok
                  if all(_norm(r.get(k, "")) == _norm(v) for k, v in paper.items())), None
             )
@@ -797,7 +853,12 @@ def assemble_work(paper_id: str, focal: dict[str, Any], grid: dict[str, Any]) ->
 
 
 def executor_grid(grid: dict[str, Any]) -> dict[str, Any]:
-    """The executor's view of the grid: every level listed is a level to run.
+    """The executor's view of the grid: the specifications to run, and how to run them.
+
+    `specs` is the whole job — one entry per specification, already pruned of
+    incompatible combinations — so the executor loops over a list instead of building
+    its own factorial and paraphrasing the level strings on the way. `factors` says what
+    each level means and how to implement it.
 
     `grid.json` labels levels `defensible` or `paper` for the reader. Handing those
     labels to the executor invites its script to filter on them and quietly drop the
@@ -810,6 +871,8 @@ def executor_grid(grid: dict[str, Any]) -> dict[str, Any]:
              "levels": [{"value": lv["value"], "how": lv.get("how", "")} for lv in f["levels"]]}
             for f in grid.get("factors", [])
         ],
+        # The executor gets ids and levels only; which spec is the paper's stays out of its view.
+        "specs": [{k: v for k, v in s.items() if k != "is_paper_level"} for s in enumerate_specs(grid)],
         "incompatible": grid.get("incompatible", []),
         "grid_size": grid.get("grid_size"),
         "cap": grid.get("cap"),
@@ -883,7 +946,8 @@ def verify_execution(work: Path, grid: dict[str, Any], paper_id: str) -> dict[st
         report["ok"] = False
         return report
 
-    rows = read_specs(specs_path)
+    rows = read_specs(specs_path, grid)
+    specs = enumerate_specs(grid)
     expected = grid.get("grid_size", 0)
     report["checks"]["n_rows"] = len(rows)
     report["checks"]["n_expected"] = expected
@@ -892,31 +956,57 @@ def verify_execution(work: Path, grid: dict[str, Any], paper_id: str) -> dict[st
         report["problems"].append(f"specs.csv has {len(rows)} rows, grid expects {expected}")
 
     factor_names = [f["name"] for f in grid.get("factors", [])]
-    missing_cols = [n for n in factor_names if rows and n not in rows[0]]
-    report["checks"]["factor_columns_present"] = not missing_cols
-    if missing_cols:
-        report["problems"].append(f"specs.csv is missing factor columns: {missing_cols}")
+    by_spec_id = "_spec_id" in (rows[0] if rows else {})
+    report["checks"]["matched_by"] = "spec_id" if by_spec_id else "factor_columns"
 
-    # Row identity, not just row count: an executor that loops over the wrong thing
-    # can still produce the right number of rows.
-    def key(spec: dict[str, Any]) -> tuple:
-        return tuple(sorted((_norm(k), _norm(spec.get(k, ""))) for k in factor_names))
-
-    if factor_names and not missing_cols:
-        want = {key(s) for s in grid_specs(grid)}
-        got = [key(r) for r in rows]
-        report["checks"]["missing_specs"] = len(want - set(got))
-        report["checks"]["extra_specs"] = len(set(got) - want)
-        report["checks"]["duplicate_rows"] = len(got) - len(set(got))
-        report["checks"]["specs_match_grid"] = (
-            set(got) == want and len(got) == len(set(got))
-        )
+    if by_spec_id:
+        want = [s["spec_id"] for s in specs]
+        got = [r["_spec_id"] for r in rows]
+        counts = Counter(got)
+        missing = [s for s in want if s not in counts]
+        unexpected = sorted(g for g in counts if g not in set(want))
+        duplicated = sorted(g for g, c in counts.items() if c > 1)
+        report["checks"].update({
+            "missing_spec_ids": missing, "unexpected_spec_ids": unexpected,
+            "duplicate_spec_ids": duplicated,
+            "missing_specs": len(missing), "extra_specs": len(unexpected),
+            "duplicate_rows": len(got) - len(set(got)),
+        })
+        report["checks"]["specs_match_grid"] = not (missing or unexpected or duplicated)
+        report["checks"]["factor_columns_present"] = True
         if not report["checks"]["specs_match_grid"]:
             report["problems"].append(
-                f"specs.csv rows do not match the grid: {report['checks']['missing_specs']} "
-                f"missing, {report['checks']['extra_specs']} unexpected, "
-                f"{report['checks']['duplicate_rows']} duplicated"
+                f"specs.csv spec ids do not match the grid: {len(missing)} missing "
+                f"({missing[:5]}), {len(unexpected)} unexpected ({unexpected[:5]}), "
+                f"{len(duplicated)} duplicated ({duplicated[:5]})"
             )
+    else:
+        report["problems"].append("specs.csv has no spec_id column; matched on factor columns")
+        missing_cols = [n for n in factor_names if rows and n not in rows[0]]
+        report["checks"]["factor_columns_present"] = not missing_cols
+        if missing_cols:
+            report["problems"].append(f"specs.csv is missing factor columns: {missing_cols}")
+
+        # Row identity, not just row count: an executor that loops over the wrong thing
+        # can still produce the right number of rows.
+        def key(spec: dict[str, Any]) -> tuple:
+            return tuple(sorted((_norm(k), _norm(spec.get(k, ""))) for k in factor_names))
+
+        if factor_names and not missing_cols:
+            want_keys = {key(s["levels"]) for s in specs}
+            got_keys = [key(r) for r in rows]
+            report["checks"]["missing_specs"] = len(want_keys - set(got_keys))
+            report["checks"]["extra_specs"] = len(set(got_keys) - want_keys)
+            report["checks"]["duplicate_rows"] = len(got_keys) - len(set(got_keys))
+            report["checks"]["specs_match_grid"] = (
+                set(got_keys) == want_keys and len(got_keys) == len(set(got_keys))
+            )
+            if not report["checks"]["specs_match_grid"]:
+                report["problems"].append(
+                    f"specs.csv rows do not match the grid: {report['checks']['missing_specs']} "
+                    f"missing, {report['checks']['extra_specs']} unexpected, "
+                    f"{report['checks']['duplicate_rows']} duplicated"
+                )
 
     conv = [r for r in rows if r["_converged"]]
     bad = [i for i, r in enumerate(conv) if r["_estimate"] is None]
@@ -941,13 +1031,22 @@ def verify_execution(work: Path, grid: dict[str, Any], paper_id: str) -> dict[st
             proc = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=1800)
             (out / "rerun.log").write_text((proc.stdout or "") + "\n[stderr]\n" + (proc.stderr or ""))
             report["checks"]["rerun_exit_code"] = proc.returncode
-            new = read_specs(specs_path) if specs_path.exists() else []
-            old = read_specs(kept)
-            same = len(new) == len(old) and all(
+            new = read_specs(specs_path, grid) if specs_path.exists() else []
+            old = read_specs(kept, grid)
+            if by_spec_id:
+                # Pair the two runs by spec id: a script that reorders its rows still
+                # reproduces the same specifications.
+                new_by_id = {r["_spec_id"]: r for r in new}
+                pairs = [(a, new_by_id.get(a["_spec_id"])) for a in old]
+                same = len(new) == len(old) and all(b is not None for _, b in pairs)
+            else:
+                pairs = list(zip(old, new))
+                same = len(new) == len(old)
+            same = same and all(
                 (a["_estimate"] is None and b["_estimate"] is None)
                 or (a["_estimate"] is not None and b["_estimate"] is not None
                     and abs(a["_estimate"] - b["_estimate"]) < 1e-6)
-                for a, b in zip(old, new)
+                for a, b in pairs if b is not None
             )
             report["checks"]["rerun_reproduces"] = bool(proc.returncode == 0 and same)
             if not report["checks"]["rerun_reproduces"]:

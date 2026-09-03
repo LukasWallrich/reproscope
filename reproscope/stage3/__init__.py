@@ -234,7 +234,7 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     specs_path = Path(execute["specs_csv"])
     if not specs_path.exists():
         raise RuntimeError(f"stage 3: no specs.csv at {specs_path}; see {stage3 / 'logs'}")
-    rows = mv.read_specs(specs_path)
+    rows = mv.read_specs(specs_path, grid)
 
     # --- 5. rank ----------------------------------------------------------
     # A rerun of the executor makes any earlier ranking and reading of the curve stale.
