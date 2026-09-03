@@ -196,6 +196,14 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     # Rerun the executor when there is no report, no specs.csv to rank, or when the grid
     # has changed under a specs.csv produced from an older one.
     grid_sha = artifacts.sha256_file(grid_path)
+    specs_existing = stage3 / "work" / "out" / "specs.csv"
+    if not execute_path.exists() and specs_existing.exists() and not force:
+        # Execution happened but its report is gone (or was discarded to re-verify):
+        # verify the existing specs.csv against the current grid without paying for a rerun.
+        report = mv.verify_execution(stage3 / "work", grid, paper_id)
+        report.update({"work": str(stage3 / "work"), "specs_csv": str(specs_existing),
+                       "grid_sha": grid_sha, "executor": {"note": "re-verified existing output"}})
+        mv._write_json(execute_path, report)
     executed_now = executor_stale(stage3, grid_sha, force=force)
     if executed_now and execute_path.exists():
         print("stage 3: the last execution no longer matches the grid; rerunning the executor",

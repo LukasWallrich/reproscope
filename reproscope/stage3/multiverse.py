@@ -552,8 +552,32 @@ def grid_specs(grid: dict[str, Any]) -> list[dict[str, str]]:
 # --- step 5: rank ---------------------------------------------------------
 
 
-def read_specs(path: Path) -> list[dict[str, Any]]:
+def _norm_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(name).lower()).strip("_")
+
+
+def read_specs(path: Path, grid: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Rows of specs.csv; factor columns are renamed to the grid's factor names when the
+    executor wrote them in a normalised form (snake_case, punctuation dropped)."""
     rows = list(csv.DictReader(io.StringIO(Path(path).read_text())))
+    if grid is None:
+        grid_path = Path(path).parents[2] / "grid.json"
+        grid = json.loads(grid_path.read_text()) if grid_path.exists() else None
+    if grid and rows:
+        by_norm = {_norm_name(f["name"]): f["name"] for f in grid.get("factors", [])}
+        rename = {}
+        for c in rows[0]:
+            if c in by_norm.values():
+                continue
+            n = _norm_name(c)
+            exact = by_norm.get(n)
+            prefix = [v for k, v in by_norm.items() if k.startswith(n) or n.startswith(k)]
+            if exact:
+                rename[c] = exact
+            elif len(prefix) == 1:  # the executor shortened the name
+                rename[c] = prefix[0]
+        if rename:
+            rows = [{rename.get(k, k): v for k, v in r.items()} for r in rows]
     for r in rows:
         r["_estimate"] = _as_float(r.get("estimate"))
         r["_se"] = _as_float(r.get("se"))
