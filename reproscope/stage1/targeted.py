@@ -176,9 +176,12 @@ def run(
             state="abstained", abstain_reason=f"focal binding failed: {exc}",
         )
 
-    focal_ids = set(binding["claim_ids"])
+    # Only the focal quantity itself can trigger the arm. `binding["claim_ids"]` also
+    # holds every claim that shares a number with the focal sentence (sample sizes,
+    # p-values, neighbouring cells), and a miss on one of those is not a focal miss.
+    focal_ids = {binding["focal_quantity"]["claim_id"]}
     comparable = any(s.n_ran for s in result.summaries if s.claim_id in focal_ids)
-    triggered, reasons = match.targeted_trigger(result, binding["claim_ids"])
+    triggered, reasons = match.targeted_trigger(result, sorted(focal_ids))
     if not triggered and not comparable:
         return _record(
             out_path, key,
