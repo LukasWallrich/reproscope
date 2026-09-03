@@ -1,8 +1,8 @@
 """Minimum detectable effect for the focal analysis.
 
-Deterministic where the design is one of the common cases: the power curve and the
-80%-power MDE come from R (`power.t.test`, `pwr::pwr.r.test`), not from a model.
-Anything else falls through to the agentic prompt in review.py.
+The power curve and the 80%-power MDE come from R (`power.t.test`, `pwr::pwr.r.test`)
+for the designs listed below. Any other design is outside what this module can state
+assumptions for, and `check_mde` abstains with the reason.
 """
 
 from __future__ import annotations
@@ -68,10 +68,10 @@ def classify_design(
     n_covariates: int = 0,
     formula: str | None = None,
 ) -> str | None:
-    """Map a contract's model_type onto a deterministic power case, or None.
+    """Map a contract's model_type onto one of the covered power cases, or None.
 
-    None means "not one of the covered designs" and sends the caller to the
-    agentic fallback. Guessing a design would put a wrong number in the report.
+    None means "not one of the covered designs" and makes the caller abstain. Guessing
+    a design would put a wrong number in the report.
     """
     text = " ".join(x for x in (model_type, formula) if x)
     if not text.strip():
@@ -79,7 +79,7 @@ def classify_design(
     if _PAIRED.search(text):
         return PAIRED
     if _TWO_GROUP.search(text):
-        # A two-group test with covariates is no longer power.t.test's design.
+        # power.t.test covers a two-group test only without covariates.
         return TWO_GROUP if n_covariates == 0 else None
     if _CORRELATION.search(text) and n_predictors <= 1 and n_covariates == 0:
         return CORRELATION

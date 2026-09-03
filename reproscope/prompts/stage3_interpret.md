@@ -5,3 +5,4 @@ Specifications:
 
 Reported estimate: {{reported}}. Of the {{n}} converged specifications, a share of {{share_below}} give a lower estimate, {{share_above}} a higher one, and {{share_tied}} match it once every estimate is rounded to the precision the paper reported. The two-sided extremeness is the smaller of the lower and higher shares: {{extremeness}}. Its rank from lowest to highest is {{rank}}. An extremeness near 0 means the reported estimate sits at or beyond one end of the curve; near 0.5 means it sits in the middle.
 Factors: {{factors}}
+Coverage: {{coverage}}

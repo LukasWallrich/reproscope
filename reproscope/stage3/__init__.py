@@ -181,7 +181,7 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
 
     grid_path = stage3 / "grid.json"
     if _step(grid_path, force):
-        mv._write_json(grid_path, mv.build_grid(proposed, screen,
+        mv._write_json(grid_path, mv.build_grid(proposed, screen, paper_id=paper_id,
                                                 paper_levels=paper.get("levels")))
     grid = mv._read_json(grid_path)
     n_rejected = len(grid.get("rejected_levels", []))
@@ -189,6 +189,10 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     print(f"stage 3: grid of {grid['grid_size']} specifications over "
           f"{len(grid['factors'])} factors ({n_rejected} levels rejected, "
           f"{n_flagged} paper levels kept over the screen)", flush=True)
+    if grid.get("sampled"):
+        print(f"stage 3: executing {grid['n_specs']} of them "
+              f"({grid['sample_fraction']:.2%}) as a stratified sample seeded from the "
+              f"paper id", flush=True)
 
     # --- 4. execute + verify ---------------------------------------------
     execute_path = stage3 / "execute.json"
@@ -267,6 +271,14 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
             factors=json.dumps(
                 [{"name": f["name"], "levels": [lv["value"] for lv in f["levels"]]}
                  for f in grid["factors"]], indent=2),
+            coverage=(
+                f"the {grid['n_specs']} specifications below are a stratified "
+                f"{grid['sample_fraction']:.1%} sample of the full grid of "
+                f"{grid['grid_size']}; describe them as a sample of the multiverse, "
+                f"not as the whole of it"
+                if grid.get("sampled") else
+                f"the {grid['n_specs']} specifications below are the whole grid"
+            ),
         )
         r = llm.call("interpret", prompt, paper_id=paper_id, stage="3", tier="strong",
                      log_path=stage3 / "logs" / "interpret.log")
@@ -286,6 +298,26 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     paths.mark_done(stage3, inputs)
     print(f"stage 3: wrote {space_path}", flush=True)
     return space
+
+
+# A binding note that starts with one of these describes a determinate binding: the
+# manifest fixed the claim, or the curve quantity was converted from a test statistic.
+# Anything else is a fallback the reader should weigh, so the stage reports medium
+# confidence. Matching what is known-good rather than what is known-shaky means a new
+# fallback in focal.py reads as shaky until it is listed here.
+DETERMINATE_BINDING_NOTES = (
+    "focal claim fixed by the manifest",
+    "only a t statistic was reported",
+    "focal estimate stays on the",
+)
+
+
+def binding_is_determinate(notes: list[str]) -> bool:
+    """Whether the focal binding rests on the manifest override or an exact match."""
+    return all(
+        any(n.startswith(prefix) for prefix in DETERMINATE_BINDING_NOTES)
+        for n in notes
+    )
 
 
 def _assemble(
@@ -330,6 +362,12 @@ def _assemble(
     problems = list(execute.get("problems", []))
     ambiguities = (list(grid.get("notes", [])) + list(focal.get("notes", []))
                    + list(paper.get("notes", [])))
+    shaky_binding = not binding_is_determinate(list(focal.get("notes", [])))
+    if shaky_binding:
+        ambiguities.append(
+            "the focal claim was bound by a fallback rule, not by the manifest override "
+            "or an exact numeric match; the whole curve rests on that binding"
+        )
 
     return SpecificationSpace(
         meta=ArtifactMeta(
@@ -337,7 +375,7 @@ def _assemble(
             prompt_versions={n: artifacts.prompt_version(n) for n in PROMPTS},
             model_calls=[c for c in calls if c],
         ),
-        confidence="high" if not problems else "medium",
+        confidence="high" if not (problems or shaky_binding) else "medium",
         open_ambiguities=ambiguities,
         claim_id=focal["focal_quantity"]["claim_id"],
         factors=factors,
@@ -346,9 +384,14 @@ def _assemble(
         runs=runs,
         reported_estimate=focal["focal_quantity"].get("reported_value"),
         rank=ranking.get("rank"),
-        n_specs=ranking.get("n_converged"),
+        n_specs=grid.get("n_specs"),
         interpretation=interpretation_md,
         # extras (the artifact model allows them, and the report reads them)
+        sampled=bool(grid.get("sampled")),
+        sample_fraction=grid.get("sample_fraction"),
+        exec_cap=grid.get("exec_cap"),
+        n_converged=ranking.get("n_converged"),
+        focal_binding_notes=list(focal.get("notes", [])),
         focal_quantity=focal["focal_quantity"],
         analysis_id=focal["analysis_id"],
         ranking=ranking,

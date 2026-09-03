@@ -469,6 +469,75 @@ def test_verification_falls_back_to_factor_columns_without_spec_ids(sandbox, mon
     assert any("no spec_id column" in p for p in report["problems"])
 
 
+def _wide_grid(paper_id: str | None = "_fixture3"):
+    """A 4 x 5 x 5 x 2 = 200-specification grid, every level defensible."""
+    sizes = (4, 5, 5, 2)
+    proposed = {"factors": [
+        {"name": f"f{i}", "paper_level": "L0",
+         "levels": [{"value": f"L{j}", "how": ""} for j in range(n)]}
+        for i, n in enumerate(sizes)
+    ]}
+    screen = {"factors": [
+        {"name": f["name"], "levels": [{"value": lv["value"], "verdict": "defensible"}
+                                       for lv in f["levels"]]}
+        for f in proposed["factors"]
+    ]}
+    return mv.build_grid(proposed, screen, paper_id=paper_id)
+
+
+def test_a_grid_over_the_execution_cap_runs_a_stratified_sample():
+    grid = _wide_grid()
+
+    assert grid["grid_size"] == 200          # the full pruned grid is still reported
+    assert grid["n_specs"] == mv.EXEC_CAP == 64
+    assert grid["sampled"] is True
+    assert grid["sample_fraction"] == 0.32
+    assert any("stratified fractional sample" in n for n in grid["notes"])
+
+    specs = mv.enumerate_specs(grid)
+    assert len(specs) == 64
+    # the paper's own specification is in, and every level of every factor is covered
+    assert [s["spec_id"] for s in specs if s.get("is_paper_level")] == ["spec_001"]
+    for f in grid["factors"]:
+        covered = {s["levels"][f["name"]] for s in specs}
+        assert covered == {lv["value"] for lv in f["levels"]}, f["name"]
+    # ids keep their place in the full enumeration, so they are not renumbered 1..64
+    assert specs[-1]["spec_id"] != "spec_064"
+
+
+def test_the_sample_is_the_same_on_every_call_and_differs_by_paper():
+    assert _wide_grid()["sampled_spec_ids"] == _wide_grid()["sampled_spec_ids"]
+    assert _wide_grid("other_paper")["sampled_spec_ids"] != _wide_grid()["sampled_spec_ids"]
+
+
+def test_a_grid_under_the_execution_cap_runs_whole(sandbox):
+    grid = mv.build_grid(PROPOSED, SCREEN, paper_id="_fixture3")
+    assert grid["n_specs"] == grid["grid_size"] == 12
+    assert grid["sampled"] is False
+    assert "sampled_spec_ids" not in grid
+    assert len(mv.enumerate_specs(grid)) == 12
+
+
+def test_verification_expects_the_executed_count_not_the_grid_size(tmp_path):
+    grid = _wide_grid()
+    specs = mv.enumerate_specs(grid)
+    out = tmp_path / "out"
+    out.mkdir()
+    with (out / "specs.csv").open("w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["spec_id", "estimate", "se", "p", "n", "converged"])
+        for s in specs:
+            w.writerow([s["spec_id"], 0.4, 0.1, 0.01, 100, "TRUE"])
+
+    report = mv.verify_execution(tmp_path, grid, "_fixture3")
+    assert report["checks"]["n_expected"] == 64
+    assert report["checks"]["grid_size"] == 200
+    assert report["checks"]["sampled"] is True
+    assert report["checks"]["specs_match_grid"] is True
+    assert report["checks"]["row_count_matches"] is True
+    assert not any("rows" in p for p in report["problems"])
+
+
 def test_enumerated_specs_are_stable_and_mark_the_paper_s_own(sandbox):
     grid = mv.build_grid(PROPOSED, SCREEN)
     specs = mv.enumerate_specs(grid)
@@ -580,6 +649,35 @@ def test_a_changed_grid_forces_the_executor_to_rerun(tmp_path):
     execute.write_text(json.dumps({"grid_sha": "any"}))
     (stage_dir / "work" / "out" / "specs.csv").unlink()
     assert stage3.executor_stale(stage_dir, "any", force=False) is True
+
+
+def test_confidence_drops_when_the_focal_binding_used_a_fallback():
+    import reproscope.stage3 as stage3
+
+    grid = mv.build_grid(PROPOSED, SCREEN)
+    paper = {"source": "replica opus_1 (band A)", "evidence": {}, "notes": []}
+
+    def space_for(notes):
+        focal = {"claim_ids": ["c2"], "analysis_id": "a1", "notes": notes,
+                 "focal_quantity": {"claim_id": "c2", "kind": "d", "reported_value": 0.63}}
+        return stage3._assemble("_fixture3", focal, grid, [], {}, {"problems": []},
+                                "prose", {}, {}, [], paper)
+
+    # an exact numeric match leaves no note; the manifest override and the t -> d
+    # conversion are determinate too
+    assert space_for([]).confidence == "high"
+    assert space_for(["focal claim fixed by the manifest: c2"]).confidence == "high"
+    assert space_for([
+        "focal claim fixed by the manifest: c2",
+        "only a t statistic was reported for the focal estimate; converted with d = ...",
+    ]).confidence == "high"
+
+    shaky = space_for(["no numeric match; claims bound by description overlap with the "
+                       "focal sentence"])
+    assert shaky.confidence == "medium"
+    assert any("bound by a fallback rule" in a for a in shaky.open_ambiguities)
+    assert space_for(["bound by cheap model call (abc): it names the same outcome"]) \
+        .confidence == "medium"
 
 
 def test_the_paper_verdict_survives_into_the_artifact():

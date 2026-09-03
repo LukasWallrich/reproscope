@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -51,7 +52,7 @@ def test_classify_design():
     assert mde.classify_design("OLS regression", n_predictors=1) == mde.CORRELATION
     # a covariate takes it out of power.t.test's design
     assert mde.classify_design("independent-samples t test", n_covariates=1) is None
-    # multi-predictor regression and anything unrecognised go to the fallback
+    # multi-predictor regression and anything unrecognised make the check abstain
     assert mde.classify_design("OLS regression", n_predictors=3) is None
     assert mde.classify_design("linear mixed-effects model") is None
     assert mde.classify_design(None) is None
@@ -132,15 +133,60 @@ def test_verify_anchors():
 # --- inputs and focal selection ------------------------------------------
 
 
-def test_gather_and_focal_selection(fixture_root):
+def test_gather_binds_the_focal_claim_numerically(fixture_root):
     inp = review.gather("_fixture2")
-    assert inp.focal_claim is not None and inp.focal_claim.claim_id == "c1"
-    assert "manifest focal_claim" in inp.focal_rule
+    # every number in the manifest's reported statistic is a candidate; of the claims
+    # that match, the effect size outranks the test statistic as the curve quantity
+    assert inp.focal is not None and inp.focal["claim_ids"] == ["c1", "c2"]
+    assert inp.focal_claim is not None and inp.focal_claim.claim_id == "c2"
+    assert inp.focal_error is None
+    assert inp.focal_rule == "exact numeric match against the manifest's reported statistic"
     assert inp.focal_contract is not None and inp.focal_contract.analysis_id == "a1"
     assert [r.replica_id for r in inp.replicas] == ["glm_1", "opus_1"]
     assert all(r.script_text for r in inp.replicas)
     assert "paper.txt" in inp.hashes and "stage0/claims.json" in inp.hashes
-    assert not inp.paper_truncated
+
+
+def test_gather_honours_the_manifest_claim_id_override(fixture_root):
+    manifest_path = fixture_root / "corpus" / "_fixture2" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["focal_claim"]["claim_id"] = "c3"  # the table mean, which no number matches
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+
+    inp = review.gather("_fixture2")
+    assert inp.focal is not None and inp.focal["claim_ids"] == ["c3"]
+    assert inp.focal_claim is not None and inp.focal_claim.claim_id == "c3"
+    assert inp.focal_rule == "focal claim fixed by the manifest: c3"
+
+
+def test_gather_records_a_binding_failure_instead_of_guessing(fixture_root):
+    claims_path = fixture_root / "runs" / "_fixture2" / "stage0" / "claims.json"
+    claims = [c for c in json.loads(claims_path.read_text()) if c["claim_id"] == "c3"]
+    claims_path.write_text(json.dumps(claims, indent=2))  # nothing the manifest matches
+
+    inp = review.gather("_fixture2")
+    assert inp.focal is None
+    assert inp.focal_error and "could not bind" in inp.focal_error
+    assert inp.focal_rule.startswith("unbound:")
+
+
+def test_focal_dependent_checks_abstain_without_a_binding(fixture_root, monkeypatch):
+    claims_path = fixture_root / "runs" / "_fixture2" / "stage0" / "claims.json"
+    claims = [c for c in json.loads(claims_path.read_text()) if c["claim_id"] == "c3"]
+    claims_path.write_text(json.dumps(claims, indent=2))
+
+    def no_calls(*a, **k):
+        raise AssertionError("an unbound focal claim must not reach a model")
+
+    monkeypatch.setattr(review.llm, "call", no_calls)
+    inp = review.gather("_fixture2")
+    for check, fn in (("causal_language", review.check_causal_language),
+                      ("mde", review.check_mde),
+                      ("alignment", review.check_alignment),
+                      ("broad", review.check_broad)):
+        rec = fn(inp)
+        assert rec.state == "abstained", check
+        assert "focal claim not bound" in rec.abstain_reason
 
 
 def test_focal_n_prefers_replica_results(fixture_root):
@@ -163,6 +209,109 @@ def test_check_mde_deterministic_on_fixture(fixture_root):
     # a second call reuses the record rather than recomputing
     again = review.check_mde(inp)
     assert again.meta.created == rec.meta.created
+
+
+def test_check_mde_abstains_on_an_uncovered_design(fixture_root, monkeypatch):
+    contracts_path = fixture_root / "runs" / "_fixture2" / "stage0" / "contracts.json"
+    contracts = json.loads(contracts_path.read_text())
+    contracts[0]["model_type"] = "linear mixed-effects model"
+    contracts_path.write_text(json.dumps(contracts, indent=2))
+
+    def no_calls(*a, **k):
+        raise AssertionError("an uncovered design must abstain, not call a model")
+
+    monkeypatch.setattr(review.llm, "call", no_calls)
+    inp = review.gather("_fixture2")
+    rec = review.check_mde(inp)
+    assert rec.state == "abstained"
+    assert "not one of the designs" in rec.abstain_reason
+    assert rec.meta.model_calls == []
+
+
+# --- passages and the broad prompt ----------------------------------------
+
+
+def test_methods_and_abstract_sections(fixture_root):
+    inp = review.gather("_fixture2")
+    methods = review.methods_section(inp.paper_text)
+    assert methods is not None
+    assert methods.startswith("METHOD")
+    assert "independent-samples" in methods
+    assert "RESULTS" not in methods
+
+    abstract = review.abstract_section(inp.paper_text)
+    assert "Being attended to by an interaction partner" in abstract
+    assert "INTRODUCTION" not in abstract
+
+
+def test_focal_passages_window(fixture_root):
+    inp = review.gather("_fixture2")
+    passages = review.focal_passages(inp.paper_text, inp.focal_claim)
+    joined = "\n\n".join(passages)
+    assert len(passages) == 2  # the abstract restatement and the results paragraph
+    assert "The difference in contributions was significant" in joined
+    assert "Attention       29    6.14 (2.02)" in joined  # the paragraph before
+    assert "Cooperation between strangers is fragile" not in joined
+
+
+def test_broad_prompt_carries_one_script_and_diffs(fixture_root):
+    inp = review.gather("_fixture2")
+    material, provenance = review.broad_material(inp)
+    # opus_1 reproduces the focal claim exactly; glm_1 is off by 0.01
+    assert provenance["canonical_replica"] == "opus_1"
+    assert provenance["diffed_replicas"] == ["glm_1"]
+    assert "pooled_sd <- sqrt" in material          # the canonical script in full
+    assert "## Canonical replica script — opus_1 / analysis.R" in material
+    # glm_1 arrives as a diff, not as a second full script
+    assert "## Replica glm_1 — unified diff against opus_1" in material
+    assert "## Canonical replica script — glm_1" not in material
+    assert "+fit <- t.test(contribution ~ condition, data = d)" in material
+    # the paper's methods and focal passages, not the whole paper
+    assert "independent-samples" in material
+    assert "Cooperation between strangers is fragile" not in material
+    assert "Limitations. The sample was a student sample" not in material
+    # the schema arrives as one line per column, not as the raw profile
+    assert "- attn_check_pass | integer | levels=[0, 1]" in material
+    assert '"n_missing"' not in material
+
+
+def test_run_calls_each_check_once_on_the_tier_it_belongs_on(fixture_root, monkeypatch):
+    """The whole stage, end to end, with every model call mocked."""
+    import reproscope.stage2 as stage2
+
+    seen = []
+    responses = {
+        "causal_language": review.CausalLanguageResponse(
+            language_strength="strong", design_inference_strength="moderate",
+            verdict="overstated",
+            focal_claim_quote="Attention increases cooperation.",
+            abstract_quotes=[], design_basis=[], reasoning="."),
+        "alignment": review.AlignmentResponse(verdict="aligned", reasoning="."),
+        "broad": review.BroadResponse(findings=[], summary="No findings."),
+    }
+
+    def fake_call(step, prompt, **kw):
+        seen.append((step, kw.get("tier"), kw.get("reasoning_max_tokens"), prompt))
+        return SimpleNamespace(parsed=responses[step], ok=True, error=None,
+                               ledger_id=f"call-{step}", text="", duration_s=0.0)
+
+    monkeypatch.setattr(review.llm, "call", fake_call)
+    out = stage2.run("_fixture2")
+
+    assert [s[0] for s in seen] == ["causal_language", "alignment", "broad"]  # no mde call
+    tiers = {step: (tier, cap) for step, tier, cap, _ in seen}
+    assert tiers["causal_language"] == ("cheap", review.CHEAP_REASONING_CAP)
+    assert tiers["alignment"] == ("cheap", review.CHEAP_REASONING_CAP)
+    assert tiers["broad"][0] == "strong"
+    # no prompt carries the paper body: the introduction reaches none of them
+    assert not any("Cooperation between strangers is fragile" in prompt
+                   for *_, prompt in seen)
+
+    review_json = json.loads(Path(out["review"]).read_text())
+    assert review_json["claim_id"] == "c2"
+    assert review_json["focal_claim_rule"] == (
+        "exact numeric match against the manifest's reported statistic"
+    )
 
 
 # --- assembly and markdown ------------------------------------------------
@@ -229,7 +378,7 @@ def test_assemble_and_render_with_one_abstained_check(fixture_root):
     out = review.assemble(inp, records)
 
     assert out.state == "complete"
-    assert out.claim_id == "c1"
+    assert out.claim_id == "c2"
     assert out.narrow.mde is None
     assert out.narrow.causal_language.rating == (
         "language=strong; design_supports=moderate; verdict=overstated"
