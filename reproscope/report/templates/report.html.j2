@@ -308,6 +308,7 @@ standardised differences.</p>
 <div class="legend">
   <span class="band-A">A — within 2%</span><span class="band-B">B — within 20%</span>
   <span class="band-C">C — within 40%</span><span class="fail">fail / sign mismatch</span>
+  <span class="cell">sign flipped — graded on the reversed contrast</span>
   <span class="notfound">claim not found by this replica</span>
   <span class="cell abstained">abstained — no evidence either way</span>
   <span class="failed">replica failed to run</span>
@@ -326,7 +327,7 @@ standardised differences.</p>
     <td>{{ r.quantity_kind or '—' }}</td>
     <td class="n">{{ r.reported }}</td>
     {% for c in r.cells %}
-    <td class="cell {{ c.state }}" title="{{ c.detail }}">{{ c.label }}{% if c.band %}<br><span class="small">{{ c.band }}</span>{% endif %}</td>
+    <td class="cell {{ c.state }}" title="{{ c.detail }}">{{ c.label }}{% if c.band %}<br><span class="small">{{ c.band }}{% if c.flipped %} · sign flipped{% endif %}</span>{% endif %}</td>
     {% endfor %}
     <td class="n">{{ r.fraction_matched|pct }}</td>
     <td class="n">{{ r.numeric_cv|num }}</td>

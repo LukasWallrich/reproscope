@@ -27,6 +27,11 @@ SMALL = 0.001  # |reported| below this uses the absolute rule
 SMALL_TOL = 0.002
 LOG_KINDS = {"OR", "HR"}
 UNSIGNED_KINDS = {"sd", "n", "F", "chi2", "p_value", "se", "eta2", "percent"}
+# Quantities of a two-group contrast, whose sign records which group was subtracted from
+# which. That order is a coding choice, so a replica that reversed it produces the same
+# magnitude with the opposite sign. Coefficients, correlations and ratios carry a
+# substantive sign and keep the sign gate.
+FLIPPABLE_KINDS = {"t", "d"}
 BLIND_CLAIM_FIELDS = {"value", "precision", "uncertainty"}
 PROMPTS = ("stage1_link_results", "stage1_trace_choices")
 
@@ -121,10 +126,15 @@ def grade(
     se: float | None = None,
     comparator: str | None = None,
 ) -> dict[str, Any]:
-    """Band one claim x replica pair. Returns band, diffs, sign and sigma rule."""
+    """Band one claim x replica pair. Returns band, diffs, sign and sigma rule.
+
+    `replicated_used` is the value the band was computed on, which is the sign-flipped
+    value for a two-group contrast the replica coded the other way round.
+    """
     out: dict[str, Any] = {
         "band": None, "raw_diff": None, "std_diff": None,
         "sign_match": None, "sigma_rule": "na", "rule": None,
+        "replicated_used": replicated, "direction_flipped": False,
     }
     if reported is None or replicated is None:
         out["band"] = "fail" if replicated is None else None
@@ -161,6 +171,15 @@ def grade(
     if kind not in UNSIGNED_KINDS and abs(reported) >= SMALL:
         out["sign_match"] = (rounded >= 0) == (reported >= 0)
         if not out["sign_match"]:
+            if kind in FLIPPABLE_KINDS:
+                flipped = grade(kind, reported, -replicated,
+                                precision=precision, se=se, comparator=comparator)
+                if flipped["band"] != "fail":
+                    flipped.update(
+                        sign_match=False, direction_flipped=True,
+                        rule=f"sign flipped (group order is a coding choice); {flipped['rule']}",
+                    )
+                    return flipped
             out.update(band="fail", rule="sign gate: opposite signs")
             return out
 
@@ -206,7 +225,6 @@ def grade_with_unit_check(
     base = grade(quantity_kind, reported, replicated,
                  precision=precision, se=se, comparator=comparator)
     base["unit_check"] = unit_note or "none"
-    base["replicated_used"] = replicated
     flagged = bool(unit_note) and unit_note.strip().lower() not in {"none", "n/a", "no", ""}
     if not flagged or replicated is None or reported is None:
         return base
@@ -216,7 +234,6 @@ def grade_with_unit_check(
                     precision=precision, se=se, comparator=comparator)
         if BAND_ORDER[alt["band"]] < BAND_ORDER[best["band"]]:
             alt["unit_check"] = f"{unit_note}; {label}"
-            alt["replicated_used"] = candidate
             best = alt
     return best
 
@@ -373,6 +390,66 @@ def closest_replicas(
     return [rid for _, rid in scored[:n]]
 
 
+def mirror_ci_bounds(
+    rows: list[artifacts.ComparableRow],
+    links: dict[tuple[str, str], LinkResult],
+    claims_by_id: dict[str, artifacts.ClaimRecord],
+    analysis_of: dict[str, str | None],
+) -> None:
+    """Regrade the CI bounds of a direction-flipped contrast on the mirrored interval.
+
+    An estimate that came out with the opposite sign brings its confidence interval with
+    it: the replica's lower bound is minus the reported upper bound, and its upper bound
+    minus the reported lower bound. Each `ci_bound` row of an analysis and replica whose
+    estimate row flipped is therefore regraded on the mirrored value — the negation of
+    the replica's other bound where the estimate's link recorded the pair, and the
+    negation of the row's own value otherwise. The new grade is kept only when it lands
+    in a better band, so a bound that mirroring does not explain stays as it was.
+    """
+    groups: dict[tuple[str | None, str], list[artifacts.ComparableRow]] = {}
+    for row in rows:
+        groups.setdefault((analysis_of.get(row.claim_id), row.replica_id), []).append(row)
+
+    for group in groups.values():
+        flipped = [r for r in group
+                   if r.direction_flipped and r.quantity_kind != "ci_bound"]
+        if not flipped:
+            continue
+        intervals = []
+        for r in flipped:
+            link = links.get((r.claim_id, r.replica_id))
+            if link and link.ci_lower is not None and link.ci_upper is not None:
+                intervals.append((link.ci_lower, link.ci_upper))
+        for row in group:
+            if row.quantity_kind != "ci_bound" or row.replicated is None:
+                continue
+            mirrored = -row.replicated
+            for lower, upper in intervals:
+                if math.isclose(row.replicated, lower, rel_tol=1e-9):
+                    mirrored = -upper
+                    break
+                if math.isclose(row.replicated, upper, rel_tol=1e-9):
+                    mirrored = -lower
+                    break
+            claim = claims_by_id[row.claim_id]
+            link = links.get((row.claim_id, row.replica_id))
+            graded = grade_with_unit_check(
+                row.quantity_kind, row.reported, mirrored,
+                precision=claim.precision, se=link.se if link else None,
+                comparator=getattr(row, "comparator", None),
+            )
+            if BAND_ORDER[graded["band"]] >= BAND_ORDER[row.band]:
+                continue
+            row.replicated = graded["replicated_used"]
+            row.raw_diff = graded["raw_diff"]
+            row.std_diff = graded["std_diff"]
+            row.sign_match = False
+            row.direction_flipped = True
+            row.band = graded["band"]
+            row.sigma_rule = graded["sigma_rule"]
+            row.rule = f"CI mirrored about zero with the flipped estimate; {graded['rule']}"
+
+
 def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
     out_path = paths.run_dir(paper_id, 1) / "match.json"
     claims = blind.claims(paper_id)
@@ -409,37 +486,27 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
     linkable = [c for c in claims if c.claim_id in bound_ids]
     futures = {(c.claim_id, t.replica_id): pool.submit(_link, c, t) for c in linkable for t in traces}
 
+    # Grade every claim x replica pair first. The CI-mirroring pass below needs a whole
+    # analysis's rows, and the per-claim summaries are counted from the rows it leaves.
     rows: list[artifacts.ComparableRow] = []
-    summaries: list[artifacts.MatchSummary] = []
+    links: dict[tuple[str, str], LinkResult] = {}
+    claims_by_id = {c.claim_id: c for c in claims}
     for claim in claims:
         reported, comparator = parse_reported(claim.value)
         comparator = comparator or getattr(claim, "comparator", None)
         if comparator == "=":
             comparator = None
-        values: list[float] = []
-        matched = 0
-        matched_a = 0
-        found = 0
-        abstained = 0
         if claim.claim_id not in bound_ids:
-            summaries.append(
-                artifacts.MatchSummary(
-                    claim_id=claim.claim_id, n_ran=0, n_found=0, n_matched=0,
-                    importance=claim.importance, analysis_id=analysis_of.get(claim.claim_id),
-                    state="abstained",
-                    abstain_reason="analysis abstained at intake: no data file covers it",
-                )
-            )
             continue
         for trace in traces:
             linked, call = futures[(claim.claim_id, trace.replica_id)].result()
+            links[(claim.claim_id, trace.replica_id)] = linked
             if call:
                 call_ids.append(call)
             # A failed link call and a replica that simply produced no value for this
             # claim carry the same evidential weight: none. Both abstain rather than
             # grading a missing value as band "fail".
             if linked.error or not linked.found:
-                abstained += 1
                 rows.append(
                     artifacts.ComparableRow(
                         claim_id=claim.claim_id,
@@ -455,20 +522,12 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                     )
                 )
                 continue
-            if linked.found and linked.value is not None:
-                found += 1
             graded = grade_with_unit_check(
                 claim.quantity_kind, reported,
                 linked.value if linked.found else None,
                 precision=claim.precision, se=linked.se, comparator=comparator,
                 unit_note=linked.unit_note,
             )
-            if graded["band"] in {"A", "B"}:
-                matched += 1
-            if graded["band"] == "A":
-                matched_a += 1
-            if linked.found and linked.value is not None:
-                values.append(graded["replicated_used"])
             rows.append(
                 artifacts.ComparableRow(
                     claim_id=claim.claim_id,
@@ -480,6 +539,7 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                     raw_diff=graded["raw_diff"],
                     std_diff=graded["std_diff"],
                     sign_match=graded["sign_match"],
+                    direction_flipped=graded["direction_flipped"],
                     band=graded["band"],
                     sigma_rule=graded["sigma_rule"],
                     comparator=comparator,
@@ -489,7 +549,30 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                     link_note=linked.note,
                 )
             )
-        n_ran = len(traces) - abstained  # replicas that produced a usable row
+    mirror_ci_bounds(rows, links, claims_by_id, analysis_of)
+
+    summaries: list[artifacts.MatchSummary] = []
+    rows_by_claim: dict[str, list[artifacts.ComparableRow]] = {}
+    for row in rows:
+        rows_by_claim.setdefault(row.claim_id, []).append(row)
+    for claim in claims:
+        if claim.claim_id not in bound_ids:
+            summaries.append(
+                artifacts.MatchSummary(
+                    claim_id=claim.claim_id, n_ran=0, n_found=0, n_matched=0,
+                    importance=claim.importance, analysis_id=analysis_of.get(claim.claim_id),
+                    state="abstained",
+                    abstain_reason="analysis abstained at intake: no data file covers it",
+                )
+            )
+            continue
+        claim_rows = rows_by_claim.get(claim.claim_id, [])
+        graded_rows = [r for r in claim_rows if r.state != "abstained"]
+        abstained = len(claim_rows) - len(graded_rows)
+        n_ran = len(graded_rows)  # replicas that produced a usable row
+        matched = sum(1 for r in graded_rows if r.band in {"A", "B"})
+        matched_a = sum(1 for r in graded_rows if r.band == "A")
+        values = [r.replicated for r in graded_rows if r.replicated is not None]
         cv = None
         if len(values) > 1 and statistics.fmean(values):
             cv = statistics.stdev(values) / abs(statistics.fmean(values))
@@ -498,7 +581,7 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                 claim_id=claim.claim_id,
                 n_ran=n_ran,
                 n_abstained=abstained,
-                n_found=found,
+                n_found=n_ran,
                 n_matched=matched,
                 fraction_matched=(matched / n_ran) if n_ran else None,
                 fraction_a=(matched_a / n_ran) if n_ran else None,

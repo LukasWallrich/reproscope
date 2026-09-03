@@ -238,6 +238,10 @@ class ComparableRow(BaseModel):
     raw_diff: float | None = None
     std_diff: float | None = None
     sign_match: bool | None = None
+    # True when the two-group contrast was graded on the sign-flipped value: the replica
+    # coded the groups the other way round, so the magnitude is comparable and the sign
+    # is not. `sign_match` stays False, and `replicated` holds the flipped value.
+    direction_flipped: bool = False
     band: Band | None = None
     sigma_rule: Literal["within", "outside", "na"] = "na"
     # A row whose link step could not produce a value carries no evidence either way:

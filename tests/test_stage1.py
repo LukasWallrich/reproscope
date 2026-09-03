@@ -44,8 +44,26 @@ def test_relative_bands(replicated, band):
 
 
 def test_sign_gate_fails_before_bands():
-    g = match.grade("d", 1.21, -1.209)
+    g = match.grade("coefficient", 1.21, -1.209)
     assert g["band"] == "fail" and g["sign_match"] is False
+    assert g["direction_flipped"] is False
+
+
+def test_a_two_group_contrast_is_graded_on_the_flipped_value():
+    """t and d record which group was subtracted from which, which is a coding choice."""
+    g = match.grade("t", 25.19, -25.189506378, precision=2)
+    assert g["band"] == "A"
+    assert g["direction_flipped"] is True and g["sign_match"] is False
+    assert g["replicated_used"] == pytest.approx(25.189506378)
+
+    d = match.grade("d", 1.21, -1.209, precision=2)
+    assert d["band"] == "A" and d["direction_flipped"] is True
+
+
+def test_a_flipped_contrast_that_still_misses_keeps_the_sign_gate_verdict():
+    g = match.grade("d", 1.21, -0.4)
+    assert g["band"] == "fail" and g["direction_flipped"] is False
+    assert g["rule"] == "sign gate: opposite signs"
 
 
 def test_unsigned_kinds_have_no_sign_gate():
@@ -130,8 +148,64 @@ def test_unit_rescale_is_tried_only_when_flagged():
 
 
 def test_sign_flip_rescale_recovers_a_reversed_contrast():
-    g = match.grade_with_unit_check("d", 1.21, -1.21, unit_note="contrast coded control - attention")
+    """A coefficient keeps the sign gate, so only a flagged unit note can flip it."""
+    g = match.grade_with_unit_check("coefficient", 1.21, -1.21,
+                                    unit_note="contrast coded control - attention")
     assert g["band"] == "A" and "sign flipped" in g["unit_check"]
+    assert g["replicated_used"] == pytest.approx(1.21)
+
+
+def _ci_case(reported_lower, reported_upper, replicated_lower, replicated_upper):
+    """One analysis on one replica: a flipped d and the two bounds of its interval."""
+    claims = [
+        artifacts.ClaimRecord(claim_id="d1", quantity_kind="d", value=0.45, precision=2,
+                              description="Cohen's d"),
+        artifacts.ClaimRecord(claim_id="lo", quantity_kind="ci_bound",
+                              value=reported_lower, precision=2, description="CI lower"),
+        artifacts.ClaimRecord(claim_id="hi", quantity_kind="ci_bound",
+                              value=reported_upper, precision=2, description="CI upper"),
+    ]
+    links = {
+        ("d1", "glm_1"): match.LinkResult(found=True, value=-0.45,
+                                          ci_lower=replicated_lower, ci_upper=replicated_upper),
+        ("lo", "glm_1"): match.LinkResult(found=True, value=replicated_lower),
+        ("hi", "glm_1"): match.LinkResult(found=True, value=replicated_upper),
+    }
+    rows = []
+    for claim in claims:
+        linked = links[(claim.claim_id, "glm_1")]
+        graded = match.grade_with_unit_check(claim.quantity_kind, claim.value, linked.value,
+                                             precision=claim.precision)
+        rows.append(artifacts.ComparableRow(
+            claim_id=claim.claim_id, replica_id="glm_1", quantity_kind=claim.quantity_kind,
+            reported=claim.value, replicated=graded["replicated_used"], band=graded["band"],
+            sign_match=graded["sign_match"], direction_flipped=graded["direction_flipped"],
+        ))
+    analysis_of = {c.claim_id: "a1" for c in claims}
+    match.mirror_ci_bounds(rows, links, {c.claim_id: c for c in claims}, analysis_of)
+    return {r.claim_id: r for r in rows}
+
+
+def test_ci_bounds_of_a_flipped_contrast_are_graded_on_the_mirrored_interval():
+    by_id = _ci_case(0.42, 0.93, -0.93, -0.42)
+    assert by_id["d1"].direction_flipped is True
+    for cid, value in (("lo", 0.42), ("hi", 0.93)):
+        assert by_id[cid].band == "A"
+        assert by_id[cid].direction_flipped is True
+        assert by_id[cid].replicated == pytest.approx(value)
+
+
+def test_mirroring_pairs_each_bound_with_the_other_end_of_the_interval():
+    """The replica's lower bound answers the reported upper bound, and the other way."""
+    by_id = _ci_case(0.35, 0.55, -0.5497926155, -0.3511951204)
+    assert by_id["lo"].band == "A" and by_id["lo"].replicated == pytest.approx(0.3511951204)
+    assert by_id["hi"].band == "A" and by_id["hi"].replicated == pytest.approx(0.5497926155)
+
+
+def test_a_bound_mirroring_cannot_explain_keeps_its_own_grade():
+    by_id = _ci_case(0.42, 0.93, -0.4866738134, -0.4155786250)
+    assert by_id["lo"].band == "A" and by_id["lo"].direction_flipped is True
+    assert by_id["hi"].band == "fail" and by_id["hi"].direction_flipped is False
 
 
 def test_missing_replicated_value_fails():

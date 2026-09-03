@@ -306,7 +306,10 @@ def _stage1(base: Path, claims: list[dict[str, Any]], ledger_rows: list[dict]) -
                 )
                 continue
             band = row.get("band")
-            state = "fail" if (row.get("sign_match") is False or band == "fail") else f"band-{band}" if band else "notfound"
+            # The sign gate is already folded into the band: a row whose signs disagree
+            # bands "fail" unless it was graded on the flipped value, which the cell
+            # marks rather than treats as a mismatch.
+            state = "fail" if band == "fail" else f"band-{band}" if band else "notfound"
             tier = tier_by_rid.get(rid, "cheap")
             tier_counts.setdefault(tier, [0, 0])
             tier_counts[tier][1] += 1
@@ -316,11 +319,13 @@ def _stage1(base: Path, claims: list[dict[str, Any]], ledger_rows: list[dict]) -
                 {
                     "state": state,
                     "band": band,
+                    "flipped": bool(row.get("direction_flipped")),
                     "label": num(row.get("replicated"), nd),
                     "row": row,
                     "detail": " · ".join(
                         x
                         for x in (
+                            row.get("rule") or "",
                             f"raw diff {num(row.get('raw_diff'), 3)}" if row.get("raw_diff") is not None else "",
                             f"std diff {num(row.get('std_diff'), 3)}" if row.get("std_diff") is not None else "",
                             f"σ-rule {row.get('sigma_rule')}" if row.get("sigma_rule") not in (None, "na") else "",
