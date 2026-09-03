@@ -137,7 +137,9 @@ def forbidden_strings(
             )
             continue
 
-        min_digits = HEADLINE_MIN_DIGITS if headline else SUPPORTING_MIN_DIGITS
+        # A printed p-value rarely carries three significant digits (".03", "< .25"),
+        # so the supporting-claim threshold would exempt almost every one of them.
+        min_digits = HEADLINE_MIN_DIGITS if headline or "p_value" in kinds else SUPPORTING_MIN_DIGITS
         numbers = [(value, precision if isinstance(precision, int) else None)]
         numbers += [(u, None) for u in _uncertainty_numbers(_claim_field(claim, "uncertainty"))]
         for num, prec in numbers:
