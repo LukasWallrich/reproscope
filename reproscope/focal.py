@@ -29,7 +29,12 @@ def _norm(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(s).lower())
 
 
+_LEADING_COMPARATOR = re.compile(r"^\s*[<>]=?\s*")
+
+
 def _as_float(x: Any) -> float | None:
+    if isinstance(x, str):
+        x = _LEADING_COMPARATOR.sub("", x)
     try:
         return float(x)
     except (TypeError, ValueError):
@@ -45,7 +50,7 @@ class BindOut(BaseModel):
 
 
 def _numbers_in(text: str) -> list[float]:
-    return [float(m) for m in re.findall(r"-?\d+\.?\d*", text or "")]
+    return [float(m) for m in re.findall(r"-?(?:\d+\.?\d*|\.\d+)", text or "")]
 
 
 

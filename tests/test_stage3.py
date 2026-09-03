@@ -45,6 +45,19 @@ def sandbox(tmp_path, monkeypatch):
     return tmp_path
 
 
+# --- number parsing --------------------------------------------------------
+
+
+def test_numbers_in_reads_a_leading_decimal_point_as_a_fraction():
+    assert focal_mod._numbers_in("d = .42, t(27) = 5.91") == [0.42, 27.0, 5.91]
+
+
+def test_as_float_strips_a_leading_comparator():
+    assert focal_mod._as_float("< .001") == pytest.approx(0.001)
+    assert focal_mod._as_float(">=2.5") == pytest.approx(2.5)
+    assert focal_mod._as_float("3.2") == pytest.approx(3.2)
+
+
 # --- step 1: focal-claim binding -----------------------------------------
 
 
