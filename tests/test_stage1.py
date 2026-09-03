@@ -155,22 +155,36 @@ def test_sign_flip_rescale_recovers_a_reversed_contrast():
     assert g["replicated_used"] == pytest.approx(1.21)
 
 
-def _ci_case(reported_lower, reported_upper, replicated_lower, replicated_upper):
-    """One analysis on one replica: a flipped d and the two bounds of its interval."""
+def _interval(prefix, estimate, bounds, replicated, *, estimate_ci, n):
+    """One reported d with its two CI bounds, and what the replica computed for each.
+
+    `estimate_ci` says whether the replica recorded the interval on the estimate itself;
+    when it did not, the bounds can only be paired through the sample size they report.
+    """
+    lo, hi = bounds
+    rlo, rhi = replicated
     claims = [
-        artifacts.ClaimRecord(claim_id="d1", quantity_kind="d", value=0.45, precision=2,
-                              description="Cohen's d"),
-        artifacts.ClaimRecord(claim_id="lo", quantity_kind="ci_bound",
-                              value=reported_lower, precision=2, description="CI lower"),
-        artifacts.ClaimRecord(claim_id="hi", quantity_kind="ci_bound",
-                              value=reported_upper, precision=2, description="CI upper"),
+        artifacts.ClaimRecord(claim_id=f"{prefix}d", quantity_kind="d", value=estimate,
+                              precision=2, description="Cohen's d"),
+        artifacts.ClaimRecord(claim_id=f"{prefix}lo", quantity_kind="ci_bound", value=lo,
+                              precision=2, description="CI lower"),
+        artifacts.ClaimRecord(claim_id=f"{prefix}hi", quantity_kind="ci_bound", value=hi,
+                              precision=2, description="CI upper"),
     ]
     links = {
-        ("d1", "glm_1"): match.LinkResult(found=True, value=-0.45,
-                                          ci_lower=replicated_lower, ci_upper=replicated_upper),
-        ("lo", "glm_1"): match.LinkResult(found=True, value=replicated_lower),
-        ("hi", "glm_1"): match.LinkResult(found=True, value=replicated_upper),
+        f"{prefix}d": match.LinkResult(found=True, value=-estimate, n=n,
+                                       ci_lower=rlo if estimate_ci else None,
+                                       ci_upper=rhi if estimate_ci else None),
+        f"{prefix}lo": match.LinkResult(found=True, value=rlo, n=n),
+        f"{prefix}hi": match.LinkResult(found=True, value=rhi, n=n),
     }
+    return claims, links
+
+
+def _mirror(*intervals):
+    """Grade every claim of these intervals on one replica, then mirror."""
+    claims = [c for group in intervals for c in group[0]]
+    links = {(cid, "glm_1"): link for group in intervals for cid, link in group[1].items()}
     rows = []
     for claim in claims:
         linked = links[(claim.claim_id, "glm_1")]
@@ -184,6 +198,14 @@ def _ci_case(reported_lower, reported_upper, replicated_lower, replicated_upper)
     analysis_of = {c.claim_id: "a1" for c in claims}
     match.mirror_ci_bounds(rows, links, {c.claim_id: c for c in claims}, analysis_of)
     return {r.claim_id: r for r in rows}
+
+
+def _ci_case(reported_lower, reported_upper, replicated_lower, replicated_upper,
+             *, estimate_ci=True):
+    by_id = _mirror(_interval("", 0.45, (reported_lower, reported_upper),
+                              (replicated_lower, replicated_upper),
+                              estimate_ci=estimate_ci, n=60))
+    return {"d1": by_id["d"], "lo": by_id["lo"], "hi": by_id["hi"]}
 
 
 def test_ci_bounds_of_a_flipped_contrast_are_graded_on_the_mirrored_interval():
@@ -200,6 +222,27 @@ def test_mirroring_pairs_each_bound_with_the_other_end_of_the_interval():
     by_id = _ci_case(0.35, 0.55, -0.5497926155, -0.3511951204)
     assert by_id["lo"].band == "A" and by_id["lo"].replicated == pytest.approx(0.3511951204)
     assert by_id["hi"].band == "A" and by_id["hi"].replicated == pytest.approx(0.5497926155)
+
+
+def test_bounds_pair_through_the_sample_size_when_the_estimate_carries_no_interval():
+    by_id = _ci_case(0.35, 0.55, -0.5497926155, -0.3511951204, estimate_ci=False)
+    assert by_id["lo"].band == "A" and by_id["lo"].replicated == pytest.approx(0.3511951204)
+    assert by_id["hi"].band == "A" and by_id["hi"].replicated == pytest.approx(0.5497926155)
+
+
+def test_two_intervals_in_one_analysis_pair_within_their_own_sample():
+    """Two analyses of one contract on different samples: bounds must not cross over."""
+    by_id = _mirror(
+        _interval("a", 0.45, (0.42, 0.49), (-0.4866738134, -0.4155786250),
+                  estimate_ci=False, n=12502),
+        _interval("b", 0.45, (0.35, 0.55), (-0.5497926155, -0.3511951204),
+                  estimate_ci=False, n=1607),
+    )
+    assert by_id["alo"].replicated == pytest.approx(0.4155786250)
+    assert by_id["ahi"].replicated == pytest.approx(0.4866738134)
+    assert by_id["blo"].replicated == pytest.approx(0.3511951204)
+    assert by_id["bhi"].replicated == pytest.approx(0.5497926155)
+    assert all(by_id[k].band == "A" for k in ("alo", "ahi", "blo", "bhi"))
 
 
 def test_a_bound_mirroring_cannot_explain_keeps_its_own_grade():

@@ -401,10 +401,18 @@ def mirror_ci_bounds(
     An estimate that came out with the opposite sign brings its confidence interval with
     it: the replica's lower bound is minus the reported upper bound, and its upper bound
     minus the reported lower bound. Each `ci_bound` row of an analysis and replica whose
-    estimate row flipped is therefore regraded on the mirrored value — the negation of
-    the replica's other bound where the estimate's link recorded the pair, and the
-    negation of the row's own value otherwise. The new grade is kept only when it lands
-    in a better band, so a bound that mirroring does not explain stays as it was.
+    estimate row flipped is therefore regraded on the mirrored value: the negation of the
+    replica's counterpart bound, found in one of three ways, in order.
+
+    1. The flipped estimate's own link recorded `ci_lower` and `ci_upper`, and this row's
+       value is one of them; the counterpart is the other.
+    2. The analysis's ci_bound rows split by the sample size their link reported, and this
+       row's group of that size holds exactly two rows; the counterpart is the other one.
+       This separates the intervals of two analyses run on different samples.
+    3. Neither identifies a counterpart, so the row's own value is negated.
+
+    The new grade is kept only when it lands in a better band, so a bound that mirroring
+    does not explain stays as it was.
     """
     groups: dict[tuple[str | None, str], list[artifacts.ComparableRow]] = {}
     for row in rows:
@@ -420,19 +428,33 @@ def mirror_ci_bounds(
             link = links.get((r.claim_id, r.replica_id))
             if link and link.ci_lower is not None and link.ci_upper is not None:
                 intervals.append((link.ci_lower, link.ci_upper))
-        for row in group:
-            if row.quantity_kind != "ci_bound" or row.replicated is None:
-                continue
-            mirrored = -row.replicated
+
+        # The values as linked, read before any row is regraded in place: a bound whose
+        # counterpart has already been mirrored must still pair with the linked value.
+        bounds = [r for r in group if r.quantity_kind == "ci_bound" and r.replicated is not None]
+        raw = {r.claim_id: r.replicated for r in bounds}
+        by_n: dict[int | None, list[str]] = {}
+        for r in bounds:
+            link = links.get((r.claim_id, r.replica_id))
+            by_n.setdefault(link.n if link else None, []).append(r.claim_id)
+
+        for row in bounds:
+            value = raw[row.claim_id]
+            link = links.get((row.claim_id, row.replica_id))
+            mirrored = -value
             for lower, upper in intervals:
-                if math.isclose(row.replicated, lower, rel_tol=1e-9):
+                if math.isclose(value, lower, rel_tol=1e-9):
                     mirrored = -upper
                     break
-                if math.isclose(row.replicated, upper, rel_tol=1e-9):
+                if math.isclose(value, upper, rel_tol=1e-9):
                     mirrored = -lower
                     break
+            else:
+                pair = by_n[link.n if link else None]
+                if len(pair) == 2:
+                    other = next(cid for cid in pair if cid != row.claim_id)
+                    mirrored = -raw[other]
             claim = claims_by_id[row.claim_id]
-            link = links.get((row.claim_id, row.replica_id))
             graded = grade_with_unit_check(
                 row.quantity_kind, row.reported, mirrored,
                 precision=claim.precision, se=link.se if link else None,
