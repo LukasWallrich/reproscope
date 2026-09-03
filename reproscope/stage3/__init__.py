@@ -335,27 +335,8 @@ def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None)
     ) != artifacts.prompt_version("stage3_interpret") if interp_json.exists() else True
     if (_step(interp_md, force) or _step(interp_json, force) or executed_now or interp_stale
             or "interpret" in force_steps):
-        prompt = artifacts.load_prompt(
-            "stage3_interpret",
-            specs=specs_path.read_text()[:60000],
-            reported=fq.get("reported_value"),
-            rank=ranking.get("rank"),
-            n=ranking.get("n_converged"),
-            share_below=ranking.get("share_below"),
-            share_above=ranking.get("share_above"),
-            share_tied=ranking.get("share_tied"),
-            extremeness=ranking.get("extremeness"),
-            factors=json.dumps(
-                [{"name": f["name"], "levels": [lv["value"] for lv in f["levels"]]}
-                 for f in grid["factors"]], indent=2),
-            coverage=(
-                f"the {grid['n_specs']} specifications below are a stratified "
-                f"{grid['sample_fraction']:.1%} sample of the full grid of "
-                f"{grid['grid_size']}; describe them as a sample of the multiverse, "
-                f"not as the whole of it"
-                if grid.get("sampled") else
-                f"the {grid['n_specs']} specifications below are the whole grid"
-            ),
+        prompt = mv.interpretation_prompt(
+            specs_path.read_text(), fq.get("reported_value"), grid
         )
         r = llm.call("interpret", prompt, paper_id=paper_id, stage="3", tier="strong",
                      log_path=stage3 / "logs" / "interpret.log")

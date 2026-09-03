@@ -386,6 +386,22 @@ def test_parse_interpretation_reads_the_trailing_json_block():
     assert mv.parse_interpretation(md) == {"median": 0.5, "n_specs": 12}
 
 
+def test_interpretation_prompt_carries_specs_and_factors_but_no_ranking():
+    grid = {"factors": [{"name": "outliers", "levels": [{"value": "keep"}, {"value": "drop"}]}],
+            "sampled": False, "n_specs": 2, "grid_size": 2}
+    prompt = mv.interpretation_prompt("spec_id,estimate\n1,0.3\n2,0.4\n", 0.35, grid)
+    assert "spec_id,estimate" in prompt and "0.35" in prompt
+    assert "outliers" in prompt and "keep" in prompt
+    assert "the whole grid" in prompt
+    for leaked in ("extremeness", "share_below", "share_above", "rank"):
+        assert leaked not in prompt
+
+
+def test_interpretation_prompt_says_when_the_executed_set_is_a_sample():
+    grid = {"factors": [], "sampled": True, "n_specs": 64, "grid_size": 256}
+    assert "a sample of the multiverse" in mv.interpretation_prompt("csv", 1.0, grid)
+
+
 # --- work assembly --------------------------------------------------------
 
 

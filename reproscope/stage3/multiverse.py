@@ -1059,6 +1059,33 @@ def hardcoding_audit(script: Path | None, specs_path: Path, paper_id: str) -> di
 _JSON_BLOCK = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
 
+SPECS_CAP = 60000
+
+
+def interpretation_prompt(specs_text: str, reported: Any, grid: dict[str, Any]) -> str:
+    """Assemble the step-6 prompt.
+
+    The reader gets the executed specifications, the factor names and levels, whether
+    those specifications are the whole grid or a sample of it, and the paper's reported
+    estimate. Where the reported estimate ranks and how extreme it is are computed
+    deterministically in rank.json and belong to the report, so they stay out of here.
+    """
+    return artifacts.load_prompt(
+        "stage3_interpret",
+        specs=specs_text[:SPECS_CAP],
+        reported=reported,
+        factors=json.dumps(
+            [{"name": f["name"], "levels": [lv["value"] for lv in f["levels"]]}
+             for f in grid.get("factors", [])], indent=2),
+        coverage=(
+            "the specifications below are a stratified sample of a larger grid; describe "
+            "them as a sample of the multiverse, not as the whole of it"
+            if grid.get("sampled") else
+            "the specifications below are the whole grid"
+        ),
+    )
+
+
 def parse_interpretation(text: str) -> dict[str, Any]:
     m = _JSON_BLOCK.search(text or "")
     blob = m.group(1) if m else None
