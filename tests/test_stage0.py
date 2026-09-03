@@ -118,6 +118,20 @@ def test_supporting_claims_need_three_significant_digits():
     assert {"0.85", ".85"} <= forms(value=0.85, importance="headline")
 
 
+def test_a_rounding_onto_an_alpha_level_is_not_searched():
+    """Methods sections name their significance convention ("p between .05 and .10")."""
+    forbidden, _ = leakcheck.forbidden_strings(
+        [claim(quantity_kind="eta2", value=0.099, precision=3)]
+    )
+    assert "0.099" in forbidden and ".099" in forbidden
+    assert "0.10" not in forbidden and ".10" not in forbidden
+    # A value the paper itself printed at that precision is searched.
+    at_precision, _ = leakcheck.forbidden_strings(
+        [claim(quantity_kind="p_value", value=0.1, precision=2)]
+    )
+    assert "0.10" in at_precision and ".10" in at_precision
+
+
 def test_the_extractors_own_kind_label_still_counts_as_inferential():
     """The arbiter records `ci_upper` alongside the validated kind `ci_bound`."""
     forbidden, _ = leakcheck.forbidden_strings(
