@@ -16,12 +16,28 @@ __all__ = ["run", "audit", "blind", "diagnose", "match", "replicas", "rerun", "t
 
 STAGE0_INPUTS = ("claims.json", "contracts.json", "redacted_methods.md", "blind_contract.json")
 
+# Artifact files carry `meta` (a timestamp and call ids that change on every re-save
+# without changing the content); hash them on their analytical payload instead of the
+# file. blind_contract.json and redacted_methods.md carry no `meta` and stay file-hashed.
+STAGE0_ARTIFACT_CLASSES = {
+    "claims.json": artifacts.ClaimRecord,
+    "contracts.json": artifacts.EstimandContract,
+}
+
 
 def inputs(paper_id: str) -> dict[str, str]:
     s0 = paths.run_dir(paper_id, 0)
-    hashes = {
-        name: artifacts.sha256_file(s0 / name) for name in STAGE0_INPUTS if (s0 / name).exists()
-    }
+    hashes: dict[str, str] = {}
+    for name in STAGE0_INPUTS:
+        path = s0 / name
+        if not path.exists():
+            continue
+        cls = STAGE0_ARTIFACT_CLASSES.get(name)
+        hashes[name] = (
+            artifacts.content_hash(artifacts.load(cls, path))
+            if cls is not None
+            else artifacts.sha256_file(path)
+        )
     hashes["models.toml"] = artifacts.sha256_file(paths.ROOT / "models.toml")
     hashes["manifest"] = artifacts.sha256_file(paths.corpus_dir(paper_id) / "manifest.json")
     return hashes

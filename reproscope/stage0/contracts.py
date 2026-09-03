@@ -101,7 +101,13 @@ def run(
     if out_path.exists() and methods_path.exists() and not force:
         existing = artifacts.load(artifacts.EstimandContract, out_path)
         records = existing if isinstance(existing, list) else [existing]
-        if records and not artifacts.prompt_stale(records[0], PROMPTS):
+        first = records[0] if records else None
+        if (
+            first
+            and not artifacts.prompt_stale(first, PROMPTS)
+            and first.meta is not None
+            and first.meta.inputs == (inputs or {})
+        ):
             return records, []
 
     r = llm.call(

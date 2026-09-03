@@ -427,7 +427,11 @@ def run(
 
     if report_path.exists() and blind_path.exists() and not force:
         existing = artifacts.load(artifacts.RedactionReport, report_path)
-        if not artifacts.prompt_stale(existing, PROMPTS):  # type: ignore[arg-type]
+        if (
+            not artifacts.prompt_stale(existing, PROMPTS)  # type: ignore[arg-type]
+            and existing.meta is not None  # type: ignore[union-attr]
+            and existing.meta.inputs == (inputs or {})  # type: ignore[union-attr]
+        ):
             return existing, []  # type: ignore[return-value]
 
     scrubbed, scrub_calls = scrub_texts(manifest, scrub_items(claims, contract_records))

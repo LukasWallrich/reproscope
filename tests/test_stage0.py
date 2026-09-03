@@ -407,6 +407,49 @@ def test_repair_stops_after_two_rounds_and_leaves_the_hits(stage0_root, monkeypa
     assert [h["value"] for h in hits] == ["5.91"]  # the caller abstains on these
 
 
+def _fake_contracts_call(calls):
+    def fake_call(step, prompt, **kw):
+        calls.append((step, prompt, kw))
+        return llm.LLMResult(
+            text="",
+            parsed=contracts.ContractsAndMethods(
+                contracts=[contracts.SlimContract(analysis_id="a01", model_type="paired t test")],
+                redacted_methods="# Methods\n\nParticipants were 40 students.\n",
+            ),
+            ledger_id="L1",
+        )
+    return fake_call
+
+
+def test_contracts_rebuilds_when_the_prompt_changes(stage0_root, monkeypatch):
+    calls = []
+    monkeypatch.setattr(llm, "call", _fake_contracts_call(calls))
+    contracts.run(Manifest(), [record()], PAPER, {"pdf": "h"})
+    assert len(calls) == 1
+
+    # Editing the prompt file must invalidate the cached contracts, even though
+    # nothing else about the run changed.
+    prompt_file = paths.ROOT / "reproscope" / "prompts" / "stage0_contracts.md"
+    prompt_file.write_text(prompt_file.read_text() + "\n<!-- edited -->\n")
+
+    calls.clear()
+    contracts.run(Manifest(), [record()], PAPER, {"pdf": "h"})
+    assert len(calls) == 1  # rebuilt, not reused
+
+
+def test_contracts_rebuilds_when_an_input_changes(stage0_root, monkeypatch):
+    calls = []
+    monkeypatch.setattr(llm, "call", _fake_contracts_call(calls))
+    contracts.run(Manifest(), [record()], PAPER, {"pdf": "h1"})
+    assert len(calls) == 1
+
+    # A different input hash (e.g. the PDF was re-extracted) must invalidate the cache
+    # even though the prompt is unchanged.
+    calls.clear()
+    contracts.run(Manifest(), [record()], PAPER, {"pdf": "h2"})
+    assert len(calls) == 1  # rebuilt, not reused
+
+
 # --- readiness ------------------------------------------------------------
 
 

@@ -252,7 +252,11 @@ def run(
 
     if out_path.exists() and not force:
         existing = artifacts.load(artifacts.DataReadinessRecord, out_path)
-        if not artifacts.prompt_stale(existing, PROMPTS):  # type: ignore[arg-type]
+        if (
+            not artifacts.prompt_stale(existing, PROMPTS)  # type: ignore[arg-type]
+            and existing.meta is not None  # type: ignore[union-attr]
+            and existing.meta.inputs == (inputs or {})  # type: ignore[union-attr]
+        ):
             return existing, []  # type: ignore[return-value]
 
     # The paper text is not part of this call: binding columns to contract fields

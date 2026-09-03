@@ -140,13 +140,18 @@ def _chunk_call(manifest, tier: str, pages: list[Path], start: int):
     return start, r.parsed, (r.ledger_id or "")
 
 
+EXTRACT_PROMPT = "stage0_extract"
+
+
 def extract_one(
     manifest, tier: str, pages: list[Path], out_path: Path, force: bool = False
 ) -> tuple[ClaimList, list[str]]:
     """One extractor's claim list, built from page chunks run concurrently."""
+    prompt_version = artifacts.prompt_version(EXTRACT_PROMPT)
     if out_path.exists() and not force:
         data = json.loads(out_path.read_text())
-        return ClaimList.model_validate(data["result"]), data.get("model_calls", [])
+        if data.get("prompt_version") == prompt_version:
+            return ClaimList.model_validate(data["result"]), data.get("model_calls", [])
 
     starts = list(range(0, len(pages), CHUNK_PAGES))
     parts: dict[int, ClaimList] = {}
@@ -175,6 +180,7 @@ def extract_one(
                 "tier": tier,
                 "mode": mode,
                 "model_calls": calls,
+                "prompt_version": prompt_version,
                 "result": result.model_dump(),
             },
             indent=2,

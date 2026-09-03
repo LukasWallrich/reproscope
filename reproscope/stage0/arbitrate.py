@@ -579,7 +579,13 @@ def run(
     if out_path.exists() and not force:
         existing = artifacts.load(artifacts.ClaimRecord, out_path)
         existing = existing if isinstance(existing, list) else [existing]
-        if existing and not artifacts.prompt_stale(existing[0], PROMPTS):
+        first = existing[0] if existing else None
+        if (
+            first
+            and not artifacts.prompt_stale(first, PROMPTS)
+            and first.meta is not None
+            and first.meta.inputs == (inputs or {})
+        ):
             return existing, []
 
     resolutions = partition(list_a, list_b)

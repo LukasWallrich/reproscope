@@ -36,6 +36,44 @@ def _step(path: Path, force: bool):
     return force or not path.exists()
 
 
+def _step_keys(inputs: dict[str, str], *prefixes: str) -> dict[str, str]:
+    return {k: v for k, v in inputs.items() if any(k == p or k.startswith(p) for p in prefixes)}
+
+
+def _step_stale(
+    path: Path,
+    force: bool,
+    inputs: dict[str, str],
+    key_prefixes: tuple[str, ...],
+    prompt_names: tuple[str, ...] = (),
+) -> bool:
+    """True when the step must run: missing, forced, an input changed, or a prompt did.
+
+    Each step records the subset of `_stage_inputs` it reads, plus the version of any
+    prompt it calls, under `_inputs` / `_prompt_versions` in its own output file. A file
+    that exists but was built from now-stale inputs must not be treated as current.
+    """
+    if force or not path.exists():
+        return True
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return True
+    wanted = _step_keys(inputs, *key_prefixes)
+    if data.get("_inputs", {}) != wanted:
+        return True
+    recorded_prompts = data.get("_prompt_versions", {})
+    return any(recorded_prompts.get(n) != artifacts.prompt_version(n) for n in prompt_names)
+
+
+def _stamp(out: dict[str, Any], inputs: dict[str, str], key_prefixes: tuple[str, ...],
+           prompt_names: tuple[str, ...] = ()) -> dict[str, Any]:
+    out["_inputs"] = _step_keys(inputs, *key_prefixes)
+    if prompt_names:
+        out["_prompt_versions"] = {n: artifacts.prompt_version(n) for n in prompt_names}
+    return out
+
+
 def executor_stale(stage3_dir: Path, grid_sha: str, *, force: bool) -> bool:
     """Whether step 4 must run again.
 
@@ -52,19 +90,33 @@ def executor_stale(stage3_dir: Path, grid_sha: str, *, force: bool) -> bool:
 
 
 def _stage_inputs(paper_id: str) -> dict[str, str]:
-    """Hashes of everything Stage 3 reads, for the done.json check."""
-    wanted = {
+    """Hashes of everything Stage 3 reads, for the done.json check.
+
+    Artifact files (claims, contracts, readiness, match, traces) are hashed on their
+    analytical payload, not the file: `meta` carries a timestamp and call ids that
+    change on every re-save without changing the content.
+    """
+    file_hashed = {
         "manifest": paths.corpus_dir(paper_id) / "manifest.json",
-        "claims": paths.run_dir(paper_id, 0) / "claims.json",
-        "contracts": paths.run_dir(paper_id, 0) / "contracts.json",
         "schema": paths.run_dir(paper_id, 0) / "schema.json",
-        "readiness": paths.run_dir(paper_id, 0) / "readiness.json",
-        "match": paths.run_dir(paper_id, 1) / "match.json",
     }
-    out = {n: artifacts.sha256_file(p) for n, p in wanted.items() if p.exists()}
+    out = {n: artifacts.sha256_file(p) for n, p in file_hashed.items() if p.exists()}
+
+    artifact_hashed = {
+        "claims": (paths.run_dir(paper_id, 0) / "claims.json", ClaimRecord),
+        "contracts": (paths.run_dir(paper_id, 0) / "contracts.json", EstimandContract),
+        "readiness": (paths.run_dir(paper_id, 0) / "readiness.json", artifacts.DataReadinessRecord),
+        "match": (paths.run_dir(paper_id, 1) / "match.json", artifacts.ComparableResult),
+    }
+    for name, (p, cls) in artifact_hashed.items():
+        if p.exists():
+            out[name] = artifacts.content_hash(artifacts.load(cls, p))
+
     traces = sorted((paths.run_dir(paper_id, 1) / "replicas").glob("*/trace.json"))
     for t in traces:
-        out[f"trace:{t.parent.name}"] = artifacts.sha256_file(t)
+        out[f"trace:{t.parent.name}"] = artifacts.content_hash(
+            artifacts.load(artifacts.ReplicaDecisionTrace, t)
+        )
     for name in PROMPTS:
         out[f"prompt:{name}"] = artifacts.prompt_version(name)
     return out
@@ -117,9 +169,10 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
 
     # --- 1. focal claim binding ------------------------------------------
     focal_path = stage3 / "focal.json"
-    if _step(focal_path, force):
+    focal_keys = ("manifest", "claims", "contracts")
+    if _step_stale(focal_path, force, inputs, focal_keys):
         focal = focal_mod.bind_focal_claim(manifest, claims, contracts, paper_id=paper_id)
-        mv._write_json(focal_path, focal)
+        mv._write_json(focal_path, _stamp(focal, inputs, focal_keys))
     focal = mv._read_json(focal_path)
     fq = focal["focal_quantity"]
     print(f"stage 3: focal quantity {fq['kind']} = {fq['reported_value']} "
@@ -131,7 +184,8 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
 
     # --- 2. enumerate -----------------------------------------------------
     proposed_path = stage3 / "factors_proposed.json"
-    if _step(proposed_path, force):
+    enumerate_keys = ("manifest", "claims", "contracts", "schema", "trace:")
+    if _step_stale(proposed_path, force, inputs, enumerate_keys, ("stage3_enumerate",)):
         prompt = artifacts.load_prompt(
             "stage3_enumerate",
             contract=focal_contract.model_dump_json(indent=2),
@@ -145,15 +199,22 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
             raise RuntimeError(f"stage 3 enumerate failed: {r.error}")
         out = r.parsed.model_dump()
         out["_ledger_id"] = r.ledger_id
-        mv._write_json(proposed_path, out)
+        mv._write_json(proposed_path, _stamp(out, inputs, enumerate_keys, ("stage3_enumerate",)))
     proposed = mv._read_json(proposed_path)
     calls.append(proposed.get("_ledger_id", ""))
     print(f"stage 3: {len(proposed.get('factors', []))} factors proposed", flush=True)
 
     # --- 2b. what the paper itself did -----------------------------------
     paper_path = stage3 / "paper_level.json"
-    if _step(paper_path, force):
-        mv._write_json(paper_path, mv.derive_paper_levels(paper_id, proposed, focal))
+    paper_level_keys = ("manifest", "claims", "contracts", "schema", "trace:")
+    if _step_stale(paper_path, force, inputs, paper_level_keys, ("stage3_paper_level",)):
+        mv._write_json(
+            paper_path,
+            _stamp(
+                mv.derive_paper_levels(paper_id, proposed, focal),
+                inputs, paper_level_keys, ("stage3_paper_level",),
+            ),
+        )
     paper = mv._read_json(paper_path)
     calls.append(paper.get("_ledger_id", ""))
     print(f"stage 3: paper levels from {paper['source']}", flush=True)
@@ -162,7 +223,8 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
 
     # --- 3. screen + grid -------------------------------------------------
     screen_path = stage3 / "screen.json"
-    if _step(screen_path, force):
+    screen_keys = ("manifest", "claims", "contracts", "schema", "trace:")
+    if _step_stale(screen_path, force, inputs, screen_keys, ("stage3_screen",)):
         prompt = artifacts.load_prompt(
             "stage3_screen",
             contract=focal_contract.model_dump_json(indent=2),
@@ -176,7 +238,7 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
             raise RuntimeError(f"stage 3 screen failed: {r.error}")
         out = r.parsed.model_dump()
         out["_ledger_id"] = r.ledger_id
-        mv._write_json(screen_path, out)
+        mv._write_json(screen_path, _stamp(out, inputs, screen_keys, ("stage3_screen",)))
     screen = mv._read_json(screen_path)
     calls.append(screen.get("_ledger_id", ""))
 
@@ -260,7 +322,10 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
     # --- 6. interpret -----------------------------------------------------
     interp_md = stage3 / "interpretation.md"
     interp_json = stage3 / "interpretation.json"
-    if _step(interp_md, force) or _step(interp_json, force) or executed_now:
+    interp_stale = json.loads(interp_json.read_text()).get("_prompt_versions", {}).get(
+        "stage3_interpret"
+    ) != artifacts.prompt_version("stage3_interpret") if interp_json.exists() else True
+    if _step(interp_md, force) or _step(interp_json, force) or executed_now or interp_stale:
         prompt = artifacts.load_prompt(
             "stage3_interpret",
             specs=specs_path.read_text()[:60000],
@@ -290,6 +355,7 @@ def run(paper_id: str, force: bool = False) -> SpecificationSpace:
         interp_md.write_text(r.text)
         parsed = mv.parse_interpretation(r.text)
         parsed["_ledger_id"] = r.ledger_id
+        parsed["_prompt_versions"] = {"stage3_interpret": artifacts.prompt_version("stage3_interpret")}
         mv._write_json(interp_json, parsed)
     interpretation = mv._read_json(interp_json)
     calls.append(interpretation.get("_ledger_id", ""))

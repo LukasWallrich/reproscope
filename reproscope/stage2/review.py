@@ -325,6 +325,15 @@ def gather(paper_id: str) -> Stage2Inputs:
         if path.exists():
             hashes[name] = artifacts.sha256_file(path)
 
+    def note_artifact(name: str, path: Path, cls: type) -> None:
+        """Hash the analytical payload, not the file: `meta` carries volatile fields."""
+        if not path.exists():
+            return
+        try:
+            hashes[name] = artifacts.content_hash(artifacts.load(cls, path))
+        except Exception:
+            hashes[name] = artifacts.sha256_file(path)
+
     paper_path = corpus / "paper.txt"
     if not paper_path.exists():
         raise FileNotFoundError(f"stage 2 needs {paper_path} (stage 0 pdftotext layer)")
@@ -332,10 +341,12 @@ def gather(paper_id: str) -> Stage2Inputs:
     note("manifest.json", corpus / "manifest.json")
     paper_text = paper_path.read_text(errors="replace")
 
-    for name in ("claims.json", "contracts.json", "readiness.json", "schema.json",
-                 "redacted_methods.md"):
+    note_artifact("stage0/claims.json", s0 / "claims.json", ClaimRecord)
+    note_artifact("stage0/contracts.json", s0 / "contracts.json", EstimandContract)
+    note_artifact("stage0/readiness.json", s0 / "readiness.json", artifacts.DataReadinessRecord)
+    for name in ("schema.json", "redacted_methods.md"):
         note(f"stage0/{name}", s0 / name)
-    note("stage1/match.json", s1 / "match.json")
+    note_artifact("stage1/match.json", s1 / "match.json", artifacts.ComparableResult)
 
     claims_raw = _read_json(s0 / "claims.json") or []
     claims = [ClaimRecord.model_validate(c) for c in claims_raw]
@@ -353,7 +364,9 @@ def gather(paper_id: str) -> Stage2Inputs:
     if rdir.exists():
         for d in sorted(p for p in rdir.iterdir() if p.is_dir()):
             trace = _read_json(d / "trace.json") or {}
-            note(f"stage1/{d.name}/trace.json", d / "trace.json")
+            note_artifact(
+                f"stage1/{d.name}/trace.json", d / "trace.json", artifacts.ReplicaDecisionTrace
+            )
             results = _read_json(d / "work" / "out" / "results.json")
             note(f"stage1/{d.name}/results.json", d / "work" / "out" / "results.json")
             script = next(
