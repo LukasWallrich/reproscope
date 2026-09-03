@@ -55,9 +55,11 @@ runs = 2
 route = "opencode"
 model = "z-ai/glm-5.3-flash"
 
-# USD per million tokens for routes that report no price (codex). Used only for
-# list-equivalent totals in the ledger, never for cash spend.
-# ASSUMPTION: both values are placeholders — edit them to the published list prices.
+
+# USD per million tokens for routes that report no price (codex). Codex reports one
+# token total, almost all of it input, so the input list price is used as the rate.
+# OpenAI list prices as of 2026-08-21 (Sol promotional rate through at least
+# 2026-11-21): Sol 4.00 in / 20.00 out; Luna 0.20 in / 1.20 out.
 [shadow_prices]
-"gpt-5.6-sol" = 2.5
-"gpt-5.6-luna" = 2.5
+"gpt-5.6-sol" = 4.0
+"gpt-5.6-luna" = 0.2

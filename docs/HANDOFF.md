@@ -13,7 +13,7 @@ Read this first in a new session. It states where the pilot stands and what wait
 
 ## Decisions waiting on Lukas
 
-1. **Shadow prices.** `models.toml` `[shadow_prices]` carries USD 2.5 per million tokens for `gpt-5.6-sol` and `gpt-5.6-luna` as placeholders. Enter the real list prices; the ledger's list-equivalent totals for Codex depend on them.
+1. **Shadow prices** are set to OpenAI's input list prices (Sol 4.0, Luna 0.2 USD per million tokens, 2026-08-21 rates); Codex reports one token total, so output tokens are priced as input. Revisit when Sol's promotional rate ends (at least 2026-11-21).
 2. **Leak rule for p-values.** The scan forbids inferential kinds plus headline claims, with three significant digits required for supporting claims. Supporting p-values are exempt from the three-digit rule (a printed p rarely has three), so ".03" from a supporting claim is still forbidden. The narrowed rule lets through supporting means, MSEs, percentages and CI bounds that the pilot's first-draft contracts had leaked into ambiguity notes; the cheap description scrub is what removes those now. Confirm or widen (add `other`/`mean` to the inferential set).
 3. **Stage 3 interpretation input.** The interpretation prompt receives the rank statistics alongside specs.csv; the design describes a specs-only prompt. Keep or strip.
 4. **Matching sign gate for contrasts.** Axt's eight universal fails are one two-group contrast reported with the opposite sign and its CI bounds. A direction-agnostic rule for two-group contrasts would remove them. Decide whether to change the rule or keep it and annotate.
