@@ -45,6 +45,7 @@ STAGE = "2"
 CHECKS = ("causal_language", "mde", "alignment", "broad")
 PROMPTS = ("stage2_causal_language", "stage2_alignment", "stage2_broad")
 DIFF_LINE_CAP = 150  # lines of unified diff carried per non-canonical replica
+BROAD_TOKEN_BUDGET = 50_000  # the broad prompt shrinks its diffs to stay under the call limit
 CHEAP_REASONING_CAP = 512  # hidden-reasoning cap on the two cheap-tier checks
 
 
@@ -527,7 +528,7 @@ def canonical_replica(inp: Stage2Inputs) -> tuple[Replica | None, str]:
     return best, f"closest to the reported focal value on the match table (|difference| = {d:g})"
 
 
-def replica_diffs(canonical: Replica, others: list[Replica]) -> list[tuple[str, str]]:
+def replica_diffs(canonical: Replica, others: list[Replica], cap: int = DIFF_LINE_CAP) -> list[tuple[str, str]]:
     """Unified diffs of every other replica's script against the canonical one."""
     out = []
     base = canonical.script_text.splitlines()
@@ -542,10 +543,8 @@ def replica_diffs(canonical: Replica, others: list[Replica]) -> list[tuple[str, 
         if not lines:
             out.append((rep.replica_id, "(identical to the canonical script)"))
             continue
-        if len(lines) > DIFF_LINE_CAP:
-            lines = lines[:DIFF_LINE_CAP] + [
-                f"... diff truncated at {DIFF_LINE_CAP} lines"
-            ]
+        if len(lines) > cap:
+            lines = lines[:cap] + [f"... diff truncated at {cap} lines"]
         out.append((rep.replica_id, "\n".join(lines)))
     return out
 
@@ -556,11 +555,17 @@ def focal_match_summary(inp: Stage2Inputs) -> dict[str, Any]:
         return {}
     ids = set(inp.focal["claim_ids"]) if inp.focal else set()
     analysis_id = inp.focal["analysis_id"] if inp.focal else None
+    summary_keys = ("claim_id", "n_ran", "n_abstained", "fraction_matched", "fraction_a",
+                    "importance", "state", "dispersion")
+    row_keys = ("claim_id", "replica_id", "quantity_kind", "reported", "replicated", "band",
+                "direction_flipped", "state", "abstain_reason", "link_note")
     return {
-        "summaries": [s for s in (inp.match.get("summaries") or [])
+        "summaries": [{k: s.get(k) for k in summary_keys if s.get(k) is not None}
+                      for s in (inp.match.get("summaries") or [])
                       if s.get("claim_id") in ids
                       or (analysis_id and s.get("analysis_id") == analysis_id)],
-        "rows": [r for r in (inp.match.get("rows") or []) if r.get("claim_id") in ids],
+        "rows": [{k: r.get(k) for k in row_keys if r.get(k) not in (None, False)}
+                 for r in (inp.match.get("rows") or []) if r.get("claim_id") in ids],
     }
 
 
@@ -876,7 +881,7 @@ def verify_anchors(findings: list[dict[str, Any]], sources: dict[str, str]) -> l
     return out
 
 
-def broad_material(inp: Stage2Inputs) -> tuple[str, dict[str, Any]]:
+def broad_material(inp: Stage2Inputs, diff_cap: int = DIFF_LINE_CAP) -> tuple[str, dict[str, Any]]:
     """The one strong-tier prompt's payload, scoped to the focal analysis.
 
     One canonical replica script in full plus unified diffs of the others: ten
@@ -894,7 +899,7 @@ def broad_material(inp: Stage2Inputs) -> tuple[str, dict[str, Any]]:
         f"## Data schema (stage0/schema.json)\n\n{schema_summary(inp.schema_text)}",
     ]
     provenance: dict[str, Any] = {"canonical_replica": None, "canonical_replica_reason": why,
-                                  "diffed_replicas": []}
+                                  "diffed_replicas": [], "diff_line_cap": diff_cap}
     if canonical is not None:
         name = canonical.script_path.name if canonical.script_path else "script"
         blocks.append(
@@ -908,7 +913,7 @@ def broad_material(inp: Stage2Inputs) -> tuple[str, dict[str, Any]]:
         )
         others = [r for r in inp.replicas
                   if r.replica_id != canonical.replica_id and r.script_text]
-        diffs = replica_diffs(canonical, sorted(others, key=lambda r: r.replica_id))
+        diffs = replica_diffs(canonical, sorted(others, key=lambda r: r.replica_id), cap=diff_cap)
         provenance["canonical_replica"] = canonical.replica_id
         provenance["diffed_replicas"] = [rid for rid, _ in diffs]
         for rid, diff in diffs:
@@ -938,8 +943,13 @@ def check_broad(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
     if reusable(existing, inputs, prompts) and not force:
         return existing  # type: ignore[return-value]
 
-    material, provenance = broad_material(inp)
-    prompt = artifacts.load_prompt("stage2_broad", material=material)
+    # Eight replica diffs at the full cap can push a long paper past the call limit;
+    # the diffs shrink first, so the passages, schema and canonical script stay whole.
+    for cap in (DIFF_LINE_CAP, 75, 40, 20, 0):
+        material, provenance = broad_material(inp, diff_cap=cap)
+        prompt = artifacts.load_prompt("stage2_broad", material=material)
+        if len(prompt) // 4 <= BROAD_TOKEN_BUDGET:
+            break
     r = llm.call(
         "broad",
         prompt,
