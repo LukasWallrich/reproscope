@@ -240,6 +240,10 @@ class ComparableRow(BaseModel):
     sign_match: bool | None = None
     band: Band | None = None
     sigma_rule: Literal["within", "outside", "na"] = "na"
+    # A row whose link step could not produce a value carries no evidence either way:
+    # it is abstained, with band None, and stays out of every denominator.
+    state: State = "complete"
+    abstain_reason: str | None = None
 
 
 class Dispersion(BaseModel):
@@ -255,7 +259,8 @@ class MatchSummary(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     claim_id: str
-    n_ran: int = 0
+    n_ran: int = 0  # replicas that produced a usable row for this claim
+    n_abstained: int = 0
     fraction_matched: float | None = None
     fraction_a: float | None = None
     dispersion: Dispersion | None = None
@@ -269,12 +274,15 @@ class ComparableResult(Artifact):
 
 class TargetedReconstruction(Artifact):
     triggered: bool = False
+    # "not_reachable" is only what the agent reports after finishing its search.
+    # A crash, a timeout or a missing outcome file is "abstained".
     outcome: Literal[
-        "reachable", "reachable_indefensibly", "not_reachable", "not_triggered"
+        "reachable", "reachable_indefensibly", "not_reachable", "not_triggered", "abstained"
     ] = "not_triggered"
     added_choices: list[str] = []
     attempts: int = 0
     notes: str | None = None
+    diagnosis: str | None = None  # the agent's unblinded conjecture, when it wrote one
 
 
 # --- stage 2 --------------------------------------------------------------

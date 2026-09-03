@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from reproscope import artifacts, paths
-from reproscope.stage1 import blind, match, replicas, rerun
+from reproscope.stage1 import blind, diagnose, match, replicas, rerun, targeted
 
 FIXTURE = Path(__file__).parent / "fixtures" / "stage1"
 sys.path.insert(0, str(FIXTURE))
@@ -147,10 +147,34 @@ def test_assemble_gives_the_replica_only_the_blind_material(sandbox):
         "CONTRACT.json", "METHODS.md", "TASK.md", "data", "out",
     ]
     assert sorted(p.name for p in (work / "data").iterdir()) == ["codebook.csv", "study1.csv"]
-    contract = json.loads((work / "CONTRACT.json").read_text())
-    assert {"contracts", "claims"} <= set(contract)
-    assert all("value" not in c for c in contract["claims"])
+    packet = json.loads((work / "CONTRACT.json").read_text())
+    assert [a["analysis_id"] for a in packet["analyses"]] == ["a1"]
+    quantities = packet["analyses"][0]["quantities"]
+    assert [q["claim_id"] for q in quantities] == ["c1", "c2", "c3", "c4", "c5"]
+    assert all("value" not in q for q in quantities)
+    assert "unassigned" not in packet
     assert "reproduce the analyses" in (work / "TASK.md").read_text()
+
+
+def test_grouped_contract_carries_no_reported_value_past_the_scan(sandbox):
+    """Positive control first: the scan does fire on a value, and not on the packet."""
+    claims = blind.claims("_fixture")
+    leaky = sandbox / "scratch_leaky_contract.json"
+    leaky.write_text(json.dumps({"analyses": [{"quantities": [{"note": "t was 4.69"}]}]}))
+    assert blind.scan([leaky], claims, "_fixture")
+
+    work = blind.assemble("_fixture", "glm_1")
+    assert blind.scan([work / "CONTRACT.json"], claims, "_fixture") == []
+
+
+def test_claims_no_contract_claims_go_to_unassigned(sandbox):
+    src = sandbox / "runs" / "_fixture" / "stage0" / "blind_contract.json"
+    doc = json.loads(src.read_text())
+    doc["claims"].append({"claim_id": "c9", "description": "orphan quantity"})
+    src.write_text(json.dumps(doc))
+    packet = blind.blind_packet("_fixture", src)
+    assert [c["claim_id"] for c in packet["unassigned"]] == ["c9"]
+    assert blind.bound_claim_ids(packet) == {"c1", "c2", "c3", "c4", "c5", "c9"}
 
 
 def test_assemble_blocks_when_a_reported_value_leaks(sandbox):
@@ -262,18 +286,20 @@ def _summary(claim_id, importance, fraction, cv=None):
     )
 
 
-def test_targeted_triggers_on_a_headline_miss_or_high_dispersion():
+def test_targeted_triggers_on_the_focal_claim_only():
+    focal_ids = ["c3"]
     ok = artifacts.ComparableResult(summaries=[_summary("c3", "headline", 1.0, 0.01)])
-    assert match.targeted_trigger(ok) == (False, [])
+    assert match.targeted_trigger(ok, focal_ids) == (False, [])
 
     missed = artifacts.ComparableResult(summaries=[_summary("c3", "headline", 0.0, 0.01)])
-    assert match.targeted_trigger(missed)[0] is True
+    assert match.targeted_trigger(missed, focal_ids)[0] is True
 
     dispersed = artifacts.ComparableResult(summaries=[_summary("c3", "headline", 1.0, 0.4)])
-    assert match.targeted_trigger(dispersed)[0] is True
+    assert match.targeted_trigger(dispersed, focal_ids)[0] is True
 
-    supporting = artifacts.ComparableResult(summaries=[_summary("c1", "supporting", 0.0, 0.9)])
-    assert match.targeted_trigger(supporting) == (False, [])
+    # A headline claim outside the focal binding does not open the arm.
+    other_headline = artifacts.ComparableResult(summaries=[_summary("c5", "headline", 0.0, 0.9)])
+    assert match.targeted_trigger(other_headline, focal_ids) == (False, [])
 
 
 def test_rerun_abstains_without_runnable_code(sandbox):
@@ -286,3 +312,161 @@ def test_rerun_abstains_without_runnable_code(sandbox):
     (sandbox / "runs" / "_fixture" / "stage1" / "rerun.json").unlink(missing_ok=True)
     out = rerun.run("_fixture", force=True)
     assert out["state"] == "abstained" and ".sps" in out["abstain_reason"]
+
+
+# --- abstention on a failed link, and the match fingerprint ----------------
+
+
+def _install_replica(root: Path, replica_id: str, results: dict) -> None:
+    rdir = root / "runs" / "_fixture" / "stage1" / "replicas" / replica_id
+    (rdir / "work" / "out").mkdir(parents=True, exist_ok=True)
+    (rdir / "work" / "out" / "results.json").write_text(json.dumps(results))
+    artifacts.save(
+        artifacts.ReplicaDecisionTrace(
+            replica_id=replica_id, family=replica_id.split("_")[0], ran=True,
+            model_formula="closeness ~ condition", open_choices=["pooled variance"],
+            meta=artifacts.ArtifactMeta(artifact="ReplicaDecisionTrace", stage="1"),
+        ),
+        rdir / "trace.json",
+    )
+
+
+def _fake_llm(monkeypatch, **result):
+    """Replace llm.call with a stub; returns the list the calls are recorded in."""
+    from types import SimpleNamespace
+
+    from reproscope import llm
+
+    defaults = {"text": "", "parsed": None, "ok": False, "error": "boom", "ledger_id": None}
+    calls: list[tuple[str, dict]] = []
+
+    def fake(step, prompt, **kwargs):
+        calls.append((step, kwargs))
+        return SimpleNamespace(**{**defaults, **result})
+
+    monkeypatch.setattr(llm, "call", fake)
+    return calls
+
+
+def test_a_failed_link_abstains_and_leaves_the_denominator(sandbox, monkeypatch):
+    _install_replica(sandbox, "glm_1", {"results": [{"claim_id": "c3", "value": 4.70}]})
+    # Without a claim_id the deterministic join cannot fire, so the link call is made.
+    _install_replica(sandbox, "glm_2", {"results": [{"label": "t statistic", "value": 4.70}]})
+    _fake_llm(monkeypatch)
+
+    result = match.run("_fixture")
+    rows = {r.replica_id: r for r in result.rows if r.claim_id == "c3"}
+    assert rows["glm_1"].band == "A" and rows["glm_1"].state == "complete"
+    assert rows["glm_2"].band is None
+    assert rows["glm_2"].state == "abstained"
+    assert "link call failed" in rows["glm_2"].abstain_reason
+
+    summary = next(s for s in result.summaries if s.claim_id == "c3")
+    assert (summary.n_ran, summary.n_abstained) == (1, 1)
+    assert summary.fraction_matched == 1.0 and summary.fraction_a == 1.0
+
+
+def test_fingerprint_follows_results_and_ignores_trace_meta(sandbox):
+    _install_replica(sandbox, "glm_1", {"results": [{"claim_id": "c3", "value": 4.70}]})
+    before = match.replica_fingerprint("_fixture", replicas.load_traces("_fixture"))
+
+    trace_path = sandbox / "runs" / "_fixture" / "stage1" / "replicas" / "glm_1" / "trace.json"
+    doc = json.loads(trace_path.read_text())
+    doc["meta"]["created"] = "2030-01-01T00:00:00+00:00"
+    doc["meta"]["model_calls"] = ["a-fresh-call-id"]
+    trace_path.write_text(json.dumps(doc))
+    assert match.replica_fingerprint("_fixture", replicas.load_traces("_fixture")) == before
+
+    out = sandbox / "runs" / "_fixture" / "stage1" / "replicas" / "glm_1" / "work" / "out"
+    (out / "results.json").write_text(json.dumps({"results": [{"claim_id": "c3", "value": 4.71}]}))
+    assert match.replica_fingerprint("_fixture", replicas.load_traces("_fixture")) != before
+
+
+# --- targeted reconstruction ----------------------------------------------
+
+
+def test_methods_section_takes_every_method_to_results_span():
+    paper = "\n".join(
+        [
+            "Introduction", "We asked whether attention matters.",
+            "Method", "Sixty students took part.",
+            "Participants.", "They were undergraduates.",
+            "Results", "The effect was large.",
+            "Experiment 2", "Method", "Fifty-four students took part.",
+            "General Discussion", "Attention matters.",
+        ]
+    )
+    section = targeted.methods_section(paper)
+    assert "Sixty students" in section and "Fifty-four students" in section
+    assert "They were undergraduates" in section  # a subheading does not close the span
+    assert "The effect was large" not in section
+    assert "We asked whether" not in section
+    assert "Attention matters" not in section
+    assert targeted.methods_section("No headings here, only prose.") == ""
+
+
+def _missed_focal_result() -> artifacts.ComparableResult:
+    return artifacts.ComparableResult(
+        rows=[
+            artifacts.ComparableRow(
+                claim_id="c3", replica_id="glm_1", reported=4.69, replicated=3.10,
+                raw_diff=-1.59, band="fail",
+            )
+        ],
+        summaries=[
+            artifacts.MatchSummary(
+                claim_id="c3", n_ran=1, fraction_matched=0.0, fraction_a=0.0,
+                importance="headline", analysis_id="a1",
+            )
+        ],
+    )
+
+
+def test_targeted_abstains_when_the_agent_writes_no_outcome(sandbox, monkeypatch):
+    _install_replica(sandbox, "glm_1", {"results": [{"claim_id": "c3", "value": 3.10}]})
+    out = sandbox / "runs" / "_fixture" / "stage1" / "replicas" / "glm_1" / "work" / "out"
+    (out / "analysis.R").write_text("t.test(closeness ~ condition, data = d)\n")
+    calls = _fake_llm(monkeypatch, text="I ran out of time.", ok=True, error=None,
+                      ledger_id="call1")
+
+    rec = targeted.run("_fixture", _missed_focal_result())
+    assert rec.triggered is True
+    assert rec.outcome == "abstained" and rec.state == "abstained"
+    assert rec.started_from == "glm_1"
+    assert calls[0][1]["max_turns"] == targeted.MAX_TURNS
+
+    work = targeted.targeted_dir("_fixture") / "work"
+    assert sorted(p.name for p in work.iterdir()) == [
+        "CONTRACT.json", "FOCAL.json", "METHODS.md", "REPORTED.json", "TASK.md",
+        "closest_replica.R", "data", "out",
+    ]
+    assert json.loads((work / "CONTRACT.json").read_text())["analysis_id"] == "a1"
+    reported = json.loads((work / "REPORTED.json").read_text())["claims"]
+    assert [c["claim_id"] for c in reported] == ["c1", "c2", "c3", "c4", "c5"]
+
+
+def test_the_agents_diagnosis_section_is_taken_verbatim():
+    answer = (
+        "Attempt 3 reached the reported t.\n\n"
+        "## Diagnosis (unblinded conjecture)\n\n"
+        "The analysts kept the two excluded participants.\n"
+    )
+    assert targeted._split_diagnosis(answer) == "The analysts kept the two excluded participants."
+    assert targeted._split_diagnosis("No section here.") is None
+
+
+def test_diagnosis_reuses_the_targeted_section_without_a_call(sandbox, monkeypatch):
+    artifacts.save(
+        artifacts.TargetedReconstruction(
+            triggered=True, outcome="reachable",
+            diagnosis="The analysts kept the two excluded participants.",
+            meta=artifacts.ArtifactMeta(artifact="TargetedReconstruction", stage="1"),
+        ),
+        sandbox / "runs" / "_fixture" / "stage1" / "targeted.json",
+    )
+    calls = _fake_llm(monkeypatch)
+
+    text = diagnose.run("_fixture").read_text()
+    assert "kept the two excluded participants" in text
+    assert "unblinded conjecture" in text.lower()
+    assert calls == []

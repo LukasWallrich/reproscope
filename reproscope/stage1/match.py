@@ -8,6 +8,7 @@ rules.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -27,6 +28,7 @@ SMALL_TOL = 0.002
 LOG_KINDS = {"OR", "HR"}
 UNSIGNED_KINDS = {"sd", "n", "F", "chi2", "p_value", "se", "eta2", "percent"}
 BLIND_CLAIM_FIELDS = {"value", "precision", "uncertainty"}
+PROMPTS = ("stage1_link_results", "stage1_trace_choices")
 
 
 class LinkResult(BaseModel):
@@ -40,6 +42,10 @@ class LinkResult(BaseModel):
     n: int | None = None
     unit_note: str | None = None
     note: str | None = None
+    # Set when the link step itself could not run or returned nothing usable. The
+    # replica's evidence is then unknown, which is different from a replica that
+    # computed nothing for the claim.
+    error: str | None = None
 
 
 class TraceEquivalence(BaseModel):
@@ -244,8 +250,11 @@ def link(
     r = llm.call("link_results", prompt, paper_id=paper_id, stage="1",
                  tier="cheap", schema=LinkResult)
     if r.parsed is None:
-        return LinkResult(found=False, note=f"link call failed: {r.error}"), r.ledger_id
-    return r.parsed, r.ledger_id  # type: ignore[return-value]
+        return LinkResult(error=f"link call failed: {r.error}"), r.ledger_id
+    linked: LinkResult = r.parsed  # type: ignore[assignment]
+    if linked.found and linked.value is None:
+        linked.error = "link call reported a match but returned no value"
+    return linked, r.ledger_id
 
 
 def results_keyed(results_text: str) -> bool:
@@ -288,15 +297,28 @@ def direct_link(claim_id: str, results_text: str) -> LinkResult | None:
 
 
 def trace_equivalence(paper_id: str, traces: list[artifacts.ReplicaDecisionTrace]):
-    """One strong call over all traces that ran: how far the analysts agree."""
+    """One cheap call over the two fields that carry the analytical choices.
+
+    `open_choices` and `model_formula` are where replicas actually diverge; the rest of
+    a trace is bookkeeping that costs tokens without moving the agreement score.
+    """
     if len(traces) < 2:
         return TraceEquivalence(agreement=None, notable_divergences=[]), None
-    payload = "\n\n".join(
-        f"### {t.replica_id}\n{t.model_dump_json(indent=2, exclude={'meta', 'hardcoding_audit'})}"
-        for t in traces
+    payload = json.dumps(
+        [
+            {
+                "replica_id": t.replica_id,
+                "open_choices": t.open_choices,
+                "model_formula": t.model_formula,
+            }
+            for t in traces
+        ],
+        indent=2,
+        default=str,
     )
-    r = llm.call("trace_equivalence", fill("stage1_trace_equivalence", traces=payload[:120_000]),
-                 paper_id=paper_id, stage="1", tier="strong", schema=TraceEquivalence)
+    r = llm.call("trace_choices", fill("stage1_trace_choices", traces=payload[:60_000]),
+                 paper_id=paper_id, stage="1", tier="cheap", schema=TraceEquivalence,
+                 reasoning_max_tokens=256)
     if r.parsed is None:
         return TraceEquivalence(agreement=None, notable_divergences=[]), r.ledger_id
     return r.parsed, r.ledger_id  # type: ignore[return-value]
@@ -311,11 +333,44 @@ def _results_text(paper_id: str, replica_id: str) -> str:
 
 
 def replica_fingerprint(paper_id: str, traces: list[artifacts.ReplicaDecisionTrace]) -> dict[str, str]:
-    """Cache key for match.json: which traces went into it, and their content."""
-    return {
-        t.replica_id: artifacts.sha256_file(blind.replica_dir(paper_id, t.replica_id) / "trace.json")
-        for t in traces
-    }
+    """Cache key for match.json: each replica's analytical content and its results.
+
+    The trace contributes `content_hash` (everything but `meta`), so re-saving a trace
+    with unchanged content does not invalidate the match; the results file is hashed as
+    bytes, so a corrected results.json does.
+    """
+    out: dict[str, str] = {}
+    for t in traces:
+        results = blind.replica_dir(paper_id, t.replica_id) / "work" / "out" / "results.json"
+        h = hashlib.sha256(artifacts.content_hash(t).encode())
+        h.update(results.read_bytes() if results.exists() else b"")
+        out[t.replica_id] = h.hexdigest()
+    return out
+
+
+def closest_replicas(
+    result: artifacts.ComparableResult, claim_id: str, n: int = 1
+) -> list[str]:
+    """Replica ids ranked by how close they came on one claim, closest first.
+
+    Distance is |std_diff| where the replica reported a standard error, and the
+    relative difference otherwise. Rows without a replicated value are not ranked.
+    """
+    scored: list[tuple[float, str]] = []
+    for row in result.rows:
+        if row.claim_id != claim_id or row.replicated is None or row.state == "abstained":
+            continue
+        if row.std_diff is not None:
+            distance = abs(row.std_diff)
+        elif row.reported not in (None, 0) and row.raw_diff is not None:
+            distance = abs(row.raw_diff) / abs(row.reported)
+        elif row.raw_diff is not None:
+            distance = abs(row.raw_diff)
+        else:
+            continue
+        scored.append((distance, row.replica_id))
+    scored.sort()
+    return [rid for _, rid in scored[:n]]
 
 
 def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
@@ -328,7 +383,8 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
     if out_path.exists() and not force:
         loaded = artifacts.load(artifacts.ComparableResult, out_path)
         cached = loaded if isinstance(loaded, artifacts.ComparableResult) else loaded[0]
-        if cached.meta and cached.meta.inputs == fingerprint:
+        fresh = not artifacts.prompt_stale(cached, PROMPTS)
+        if cached.meta and cached.meta.inputs == fingerprint and fresh:
             return cached
 
     call_ids: list[str] = []
@@ -341,8 +397,7 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
     # Only claims the replicas were asked about are linked; claims from analyses that
     # abstained at intake (no data) get an abstained summary and no model call.
     s0 = blind.stage0_dir(paper_id)
-    bound = blind.bound_contract(paper_id, s0 / "blind_contract.json")
-    bound_ids = {c.get("claim_id") for c in bound.get("claims", [])}
+    bound_ids = blind.bound_claim_ids(blind.blind_packet(paper_id, s0 / "blind_contract.json"))
     results_texts = {t.replica_id: _results_text(paper_id, t.replica_id) for t in traces}
     trace_json = {t.replica_id: t.model_dump_json() for t in traces}
 
@@ -365,10 +420,11 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
         matched = 0
         matched_a = 0
         found = 0
+        abstained = 0
         if claim.claim_id not in bound_ids:
             summaries.append(
                 artifacts.MatchSummary(
-                    claim_id=claim.claim_id, n_ran=len(traces), n_found=0, n_matched=0,
+                    claim_id=claim.claim_id, n_ran=0, n_found=0, n_matched=0,
                     importance=claim.importance, analysis_id=analysis_of.get(claim.claim_id),
                     state="abstained",
                     abstain_reason="analysis abstained at intake: no data file covers it",
@@ -379,6 +435,22 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
             linked, call = futures[(claim.claim_id, trace.replica_id)].result()
             if call:
                 call_ids.append(call)
+            if linked.error:
+                abstained += 1
+                rows.append(
+                    artifacts.ComparableRow(
+                        claim_id=claim.claim_id,
+                        replica_id=trace.replica_id,
+                        quantity_kind=claim.quantity_kind,
+                        reported=reported,
+                        comparator=comparator,
+                        band=None,
+                        state="abstained",
+                        abstain_reason=linked.error,
+                        link_note=linked.note,
+                    )
+                )
+                continue
             if linked.found and linked.value is not None:
                 found += 1
             graded = grade_with_unit_check(
@@ -413,7 +485,7 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                     link_note=linked.note,
                 )
             )
-        n_ran = len(traces)
+        n_ran = len(traces) - abstained  # replicas that produced a usable row
         cv = None
         if len(values) > 1 and statistics.fmean(values):
             cv = statistics.stdev(values) / abs(statistics.fmean(values))
@@ -421,6 +493,7 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
             artifacts.MatchSummary(
                 claim_id=claim.claim_id,
                 n_ran=n_ran,
+                n_abstained=abstained,
                 n_found=found,
                 n_matched=matched,
                 fraction_matched=(matched / n_ran) if n_ran else None,
@@ -430,6 +503,8 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                     decision_agreement=equivalence.agreement, numeric_cv=cv
                 ),
                 analysis_id=analysis_of.get(claim.claim_id),
+                state="complete" if n_ran else "abstained",
+                abstain_reason=None if n_ran else "no replica produced a usable value for this claim",
             )
         )
 
@@ -442,21 +517,25 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
         meta=artifacts.ArtifactMeta(
             artifact="ComparableResult", stage="1", model_calls=call_ids,
             inputs=fingerprint,
-            prompt_versions={
-                "link_results": artifacts.prompt_version("stage1_link_results"),
-                "trace_equivalence": artifacts.prompt_version("stage1_trace_equivalence"),
-            },
+            prompt_versions={name: artifacts.prompt_version(name) for name in PROMPTS},
         ),
     )
     artifacts.save(result, out_path)
     return result
 
 
-def targeted_trigger(result: artifacts.ComparableResult) -> tuple[bool, list[str]]:
-    """Headline claim with under half the ran replicas in A/B, none in A, or CV above 0.2."""
+def targeted_trigger(
+    result: artifacts.ComparableResult, claim_ids: list[str]
+) -> tuple[bool, list[str]]:
+    """Whether the focal claim missed: under half the usable rows in A/B, none in A, or CV above 0.2.
+
+    `claim_ids` are the claims carrying the focal claim; nothing else can trigger the arm.
+    Abstained rows are already out of `n_ran` and the fractions.
+    """
+    wanted = set(claim_ids)
     reasons = []
     for s in result.summaries:
-        if getattr(s, "importance", None) != "headline" or not s.n_ran:
+        if s.claim_id not in wanted or not s.n_ran:
             continue
         if s.fraction_matched is None:  # abstained at intake: nothing to reconstruct
             continue
