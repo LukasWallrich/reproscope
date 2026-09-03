@@ -90,7 +90,13 @@ def find_script(out_dir: Path) -> Path | None:
     return None
 
 
-def script_command(script: Path, cwd: Path) -> list[str]:
+def base_python() -> str:
+    """The interpreter carrying the stack TASK.md promises (numpy, pandas, scipy, ...)."""
+    venv = paths.ROOT / ".venv" / "bin" / "python"
+    return str(venv if venv.exists() else sys.executable)
+
+
+def script_command(script: Path, cwd: Path, python: str | None = None) -> list[str]:
     """Command to re-run `script` from `cwd`, as the agent would have run it."""
     try:
         rel = str(script.resolve().relative_to(Path(cwd).resolve()))
@@ -98,8 +104,109 @@ def script_command(script: Path, cwd: Path) -> list[str]:
         rel = str(script)
     if script.suffix.lower() == ".r":
         return ["Rscript", rel]
-    venv = paths.ROOT / ".venv" / "bin" / "python"
-    return [str(venv if venv.exists() else sys.executable), rel]
+    return [python or base_python(), rel]
+
+
+# --- declared environments ------------------------------------------------
+
+INSTALL_TIMEOUT_S = 600
+CRAN = "https://cloud.r-project.org"
+
+
+def r_package_names(text: str) -> list[str]:
+    """CRAN names from r_packages.txt. `install.packages` takes no version, so a
+    declared `name==version` pin is recorded but installed by name."""
+    names = []
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            names.append(line.split("==")[0].strip())
+    return names
+
+
+def prepare_env(out_dir: Path, rdir: Path) -> dict[str, Any]:
+    """Build the environment the agent declared and say how to run the script in it.
+
+    `out/requirements.txt` gets a fresh venv at `<rdir>/env` holding the base stack plus
+    the declared packages; `out/r_packages.txt` gets a per-replica R library at
+    `<rdir>/rlib`. Both live under the replica's run directory, outside the work copy the
+    agent worked in — the agent has exited by the time this runs, so nothing here can
+    reach it.
+
+    Returns `interpreter`, `env` (extra variables for the run), `installed`, `env_dir`,
+    `error` (the packages that could not be installed) and the install `log`.
+    """
+    info: dict[str, Any] = {
+        "interpreter": None, "env": {}, "installed": [], "env_dir": None,
+        "error": None, "log": "",
+    }
+
+    def step(cmd: list[str], what: str) -> subprocess.CompletedProcess | None:
+        try:
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=INSTALL_TIMEOUT_S,
+                env={**os.environ, **info["env"]},
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            info["log"] += f"[{what}] {' '.join(cmd)}\n{e}\n"
+            return None
+        info["log"] += f"[{what}] {' '.join(cmd)}\n{proc.stdout or ''}{proc.stderr or ''}\n"
+        return proc if proc.returncode == 0 else None
+
+    req = out_dir / "requirements.txt"
+    if req.exists():
+        declared = [
+            ln.split("#", 1)[0].strip()
+            for ln in req.read_text().splitlines()
+            if ln.split("#", 1)[0].strip()
+        ]
+        env_dir = rdir / "env"
+        shutil.rmtree(env_dir, ignore_errors=True)
+        python = str(env_dir / "bin" / "python")
+        # The declared file lists only the extras, so the base stack goes in first: an
+        # env with scipy but no pandas would fail the check for the wrong reason.
+        base = rdir / "base_requirements.txt"
+        frozen = step(["uv", "pip", "freeze", "--python", base_python()], "base stack")
+        if frozen is None:
+            info["error"] = "base stack could not be frozen"
+        else:
+            base.write_text(frozen.stdout or "")
+            ok = step(["uv", "venv", str(env_dir), "--python", "3.14"], "venv")
+            # Two installs rather than one resolution over both files: a declared pin
+            # that differs from the base pin replaces it instead of conflicting.
+            for source, what in ((base, "base stack install"), (req, "declared install")):
+                if ok is not None:
+                    ok = step(
+                        ["uv", "pip", "install", "--python", python, "-r", str(source)], what
+                    )
+            if ok is None:
+                info["error"] = ", ".join(declared) or "declared Python packages"
+            else:
+                info.update(interpreter=python, env_dir=str(env_dir))
+                info["installed"] += declared
+
+    rpkgs = out_dir / "r_packages.txt"
+    if rpkgs.exists() and info["error"] is None:
+        names = r_package_names(rpkgs.read_text())
+        lib = rdir / "rlib"
+        lib.mkdir(parents=True, exist_ok=True)
+        info["env"]["R_LIBS_USER"] = str(lib)
+        vector = ", ".join(f'"{n}"' for n in names)
+        code = (
+            f'lib <- "{lib}"; pkgs <- c({vector}); '
+            "miss <- setdiff(pkgs, rownames(installed.packages())); "
+            f'if (length(miss)) install.packages(miss, lib=lib, repos="{CRAN}"); '
+            "bad <- setdiff(pkgs, rownames(installed.packages())); "
+            'if (length(bad)) { cat("missing:", bad, "\\n"); quit(status=1) }'
+        )
+        if names and step(["Rscript", "-e", code], "R packages") is None:
+            info["error"] = ", ".join(names)
+        else:
+            info["installed"] += names
+
+    if info["error"]:
+        info["error"] = f"environment: {info['error']} could not be installed"
+    return info
 
 
 def _read_json(path: Path) -> Any | None:
@@ -159,6 +266,18 @@ def rerun_script(work: Path, script: Path, rdir: Path) -> dict[str, Any]:
     # the re-execution happens in that same isolation copy (recreated from work/ if it
     # is gone) and the outputs are copied back afterwards.
     repo_work = work
+    # The declarations are read from the agent's own output directory in the repository,
+    # which is authoritative; the isolation copy may predate the agent's last write.
+    env_info = prepare_env(repo_work / "out", rdir)
+    if env_info["error"]:
+        (rdir / "check.log").write_text(env_info["log"])
+        return {
+            "exit_code": None, "wall_s": None, "script": script.name, "ran_from": None,
+            "regenerated_results": False, "results_match_agent": None,
+            "results_from_script": False, "n_values": 0,
+            "env_error": env_info["error"], "interpreter": env_info["interpreter"],
+            "installed": env_info["installed"], "env_dir": env_info["env_dir"],
+        }
     iso = blind.ISOLATION_ROOT / rdir.parents[2].name / rdir.name
     if not iso.exists():
         iso = blind.isolate(work, rdir.parents[2].name, rdir.name)
@@ -182,11 +301,12 @@ def rerun_script(work: Path, script: Path, rdir: Path) -> dict[str, Any]:
         ran_from = cwd
         try:
             proc = subprocess.run(
-                script_command(script, cwd),
+                script_command(script, cwd, env_info["interpreter"]),
                 cwd=str(cwd),
                 capture_output=True,
                 text=True,
                 timeout=RERUN_TIMEOUT_S,
+                env={**os.environ, **env_info["env"]},
             )
             exit_code, attempt_log = proc.returncode, (proc.stdout or "") + (proc.stderr or "")
         except subprocess.TimeoutExpired as e:
@@ -198,7 +318,7 @@ def rerun_script(work: Path, script: Path, rdir: Path) -> dict[str, Any]:
         if exit_code == 0 or exit_code == 124:
             break
     wall = time.monotonic() - started
-    (rdir / "check.log").write_text(log)
+    (rdir / "check.log").write_text(env_info["log"] + log)
 
     regenerated = results.exists()
     new_payload = _read_json(results) if regenerated else None
@@ -218,6 +338,10 @@ def rerun_script(work: Path, script: Path, rdir: Path) -> dict[str, Any]:
         "results_match_agent": _same_values(agent_vals, new_vals) if regenerated else None,
         "results_from_script": regenerated,
         "n_values": sum(1 for v in values.values() if v is not None),
+        "env_error": None,
+        "interpreter": script_command(script, ran_from, env_info["interpreter"])[0],
+        "installed": env_info["installed"],
+        "env_dir": env_info["env_dir"],
     }
 
 
@@ -358,7 +482,7 @@ def run_one(
         checks.update(rerun_script(work, script, rdir))
     else:
         checks.update({"exit_code": None, "wall_s": None, "regenerated_results": False,
-                       "results_match_agent": None, "n_values": 0})
+                       "results_match_agent": None, "n_values": 0, "env_error": None})
     checks["outputs_present"] = bool(
         checks["results_present"] and checks["script_present"] and checks["agent_trace_present"]
     )
@@ -411,7 +535,9 @@ def run_one(
         run_checks=artifacts.RunChecks(**checks),
         hardcoding_audit=hard,
         state="complete" if ran else "abstained",
-        abstain_reason=None if ran else "script did not re-execute cleanly with results",
+        abstain_reason=None
+        if ran
+        else (checks.get("env_error") or "script did not re-execute cleanly with results"),
         usage=usage,
         meta=artifacts.ArtifactMeta(
             artifact="ReplicaDecisionTrace",
