@@ -359,6 +359,24 @@ def test_a_failed_link_abstains_and_leaves_the_denominator(sandbox, monkeypatch)
     assert summary.fraction_matched == 1.0 and summary.fraction_a == 1.0
 
 
+def test_an_omitted_keyed_claim_abstains_rather_than_grading_fail(sandbox, monkeypatch):
+    """A replica that keys its results by claim_id but has no entry for this claim did
+    not compute it; that abstains, the same as a failed link call, rather than grading
+    the missing value as band "fail"."""
+    _install_replica(sandbox, "glm_1", {"results": [{"claim_id": "c1", "value": 1.0}]})
+    _fake_llm(monkeypatch)  # any model call here would be a bug: no entry needs one
+
+    result = match.run("_fixture")
+    row = next(r for r in result.rows if r.claim_id == "c3" and r.replica_id == "glm_1")
+    assert row.state == "abstained"
+    assert row.band is None
+    assert row.abstain_reason == "replica produced no value for this claim"
+
+    summary = next(s for s in result.summaries if s.claim_id == "c3")
+    assert summary.n_abstained >= 1
+    assert summary.n_ran == 0  # the only replica for c3 abstained; nothing usable
+
+
 def test_fingerprint_follows_results_and_ignores_trace_meta(sandbox):
     _install_replica(sandbox, "glm_1", {"results": [{"claim_id": "c3", "value": 4.70}]})
     before = match.replica_fingerprint("_fixture", replicas.load_traces("_fixture"))

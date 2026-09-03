@@ -435,7 +435,10 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
             linked, call = futures[(claim.claim_id, trace.replica_id)].result()
             if call:
                 call_ids.append(call)
-            if linked.error:
+            # A failed link call and a replica that simply produced no value for this
+            # claim carry the same evidential weight: none. Both abstain rather than
+            # grading a missing value as band "fail".
+            if linked.error or not linked.found:
                 abstained += 1
                 rows.append(
                     artifacts.ComparableRow(
@@ -446,7 +449,8 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                         comparator=comparator,
                         band=None,
                         state="abstained",
-                        abstain_reason=linked.error,
+                        abstain_reason=linked.error
+                        or "replica produced no value for this claim",
                         link_note=linked.note,
                     )
                 )
