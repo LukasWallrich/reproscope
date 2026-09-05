@@ -4,7 +4,7 @@ Read this first in a new session. It states where the pilot stands and what wait
 
 ## State
 
-- Package `reproscope/` implements Stages 0–3, the report and the evaluation; 222 offline tests pass (`.venv/bin/python -m pytest tests -q`).
+- Package `reproscope/` implements Stages 0–3, the report and the evaluation; 226 offline tests pass (`.venv/bin/python -m pytest tests -q`).
 - The efficiency and correctness work list from the audit is implemented and merged (git log from `36cc1d9` to HEAD). Highlights: deterministic arbitration with cheap-vision batches, one strong call for contracts plus redacted methods, leak scan limited to inferential and headline quantities, CONTRACT.json grouped per analysis, abstained match rows, focal claim bound through `reproscope/focal.py` everywhere, targeted arm on the focal quantity only with `max_turns`, Stage 2 scoped to the focal analysis, Stage 3 execution capped at 64 with stratified sampling, content-hash cache keys with per-step input and prompt checks, `--force-step`, per-attempt ledger rows, opencode cache tokens, Codex shadow prices.
 - All five papers have complete runs (`runs/<paper_id>/`, gitignored): Stage 0 from the 2026-09-02 pilot; replica agent runs from the pilot (ten per paper, all traces present); matching, targeted arm, diagnosis, Stage 2, Stage 3 and reports rebuilt on 2026-09-03 with the fixed code. Two DeepSeek replicas (Petersen) stay `ran: false`: their scripts import scipy, which the re-execution interpreter lacks.
 - Evaluation: `docs/evaluation/pilot_eval.{md,json}` (from `python -m reproscope.evaluate`), `docs/evaluation/cost_table.json` (from `docs/evaluation/cost_table.py`), and the writeup `docs/evaluation/PILOT_EVALUATION.html` (from `docs/evaluation/build_writeup.py`).
@@ -22,8 +22,7 @@ Read this first in a new session. It states where the pilot stands and what wait
 
 ## Decisions waiting on Lukas
 
-1. **Agent interpreter.** Replica agents run `python3` from PATH (Homebrew 3.14.6) inside the isolation copy, while the checker re-executes with the repo `.venv` (3.14.3) plus declared packages. The stacks match today by coincidence. Putting `.venv/bin` first on the agent's PATH would align them but reveals the repository path to a blind agent. Decide which side to move.
-2. **Stage 0 on the new code.** Stage 0 has not been rerun since the fixes. The first Stage 0 run (a sixth paper, or `--force` on one of the five) exercises the rebuilt arbitration, the combined contracts call, the leak repair and the widened scan live for the first time; budget about USD 0.1 metered and 2–3 list-equivalent.
+None open. Two things settled on 2026-09-05: replica agents and the checker share one Python environment outside the repository (`~/.cache/reproscope/replica-env`, built by `reproscope/replica_env.py` from the repo's pins; the agent's environment is scrubbed of the repository path before launch), and Stage 0 ran clean on the new code on a Hertel copy (`runs/_fixture_s0_Hertel`, USD 0.06 metered, 2.29 list-equivalent; 101 claims, 27 contracts, scan clean, focal claim bound). The OpenRouter reasoning cap is opt-in and unused: glm-5.3-flash answers a capped structured call with reasoning only.
 
 ## Known findings (in the writeup)
 
@@ -46,4 +45,4 @@ REPROSCOPE_FAMILIES=glm,deepseek REPROSCOPE_RUNS=1 .venv/bin/python -m reproscop
 .venv/bin/python docs/evaluation/cost_table.py && .venv/bin/python docs/evaluation/build_writeup.py
 ```
 
-Launch long runs under a Monitor or a background shell with a log under `runs/logs/`; `claude -p` calls need `CLAUDECODE` unset (handled in `llm.py`). Keep at most two papers in flight on the Claude subscription. Stage 0 has not been rerun since the fixes; the first Stage 0 run on a new paper exercises the rebuilt arbitration, contracts and repair paths live for the first time.
+Launch long runs under a Monitor or a background shell with a log under `runs/logs/`; `claude -p` calls need `CLAUDECODE` unset (handled in `llm.py`). Keep at most two papers in flight on the Claude subscription. Stage 0 on the new code has run once, on a Hertel copy; rerunning Stage 0 in place on a pilot paper renumbers the claim ids that the replica outputs are keyed by, so use a copy under a `_fixture_` id or a new paper.

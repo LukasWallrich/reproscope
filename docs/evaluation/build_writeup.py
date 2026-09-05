@@ -231,16 +231,19 @@ per step of the rebuilt Stages 1 to 3 (matching, targeted arm, review, multivers
 caused by Opus overload retries and by trace changes during the rebuild. <em>Replica runs</em> are the eight-replica
 development lineup's agent runs from the pilot ledger. Stage 0 was not rerun; its post-fix cost is projected below.</p>
 {table(["paper", "pilot as run: metered", "list-equiv", "single pass S1–3: metered", "list-equiv", "replica runs: metered", "list-equiv", "clean S1–3 total: metered", "list-equiv"], rows)}
-<p><b>Stage 0 projection.</b> Arbitration on the existing extractions needs 2–22 cheap vision calls per paper (Axt at the
-top, with 968 and 587 extracted entries) and at most one strong call; contracts and the redacted methods are one strong
-call with the paper text; readiness is one Sonnet call; leak repair is 0–4 cheap calls. Rescanning the pilot's first-draft
-documents under the new leak rule, four of eleven would have launched with no repair and the rest need one cheap sentence
-rewrite instead of a whole-paper strong retry. Expected Stage 0: about USD 0.1 metered and 2–3 list-equivalent per paper,
-against USD 14 list-equivalent per paper in the pilot.</p>
+<p><b>Stage 0, measured on one paper.</b> Stage 0 was rerun on a copy of Hertel under a fixture id (rerunning it in
+place would renumber the claim ids the replica outputs are keyed by). One clean pass: 22 calls, USD 0.06 metered and 2.29
+list-equivalent (pilot: USD 14 list-equivalent per paper). Arbitration merged 82 of the 97 and 89 extracted entries
+deterministically and sent the 3 conflicts and 16 singletons in one cheap vision batch, with no strong call; the combined
+contracts-plus-methods call was one Opus call of USD 1.61; readiness on Sonnet USD 0.68; one cheap leak repair; the scan
+was clean and the focal F = 6.20 bound by number. The pass produced 101 claims (pilot: 105) and 27 contracts (pilot: 12),
+of which readiness could bind 11 to the data (pilot: 3). Extraction runs without the reasoning cap: GLM answers a capped
+structured call with reasoning only and no content.</p>
 <p><b>Where the remaining list-equivalent goes.</b> The Stage 2 broad review is the largest single strong call
 (about USD 1.2–1.9 list-equivalent), then the targeted arm when it triggers (USD 1–3), the diagnosis fallback when the
 arm does not run (USD 0.2–0.4), and the Stage 3 interpretation (USD 0.2). Every other step is on the cheap tier or
-deterministic.</p>
+deterministic. Expected total for a clean v0.1 run of a paper like Hertel: about USD 0.4 metered and 8 list-equivalent,
+of which the replica agent runs are USD 0.27 and 3.4.</p>
 """
 
 
@@ -285,7 +288,7 @@ def sec_limits():
 <li><b>The leak audit does not discriminate.</b> The deterministic scan is clean on all five papers under the rule as it
 stands (inferential kinds, headline claims, and every numeric claim of an analysis that carries either, with
 significant-digit thresholds), but the model-based audit rates leakage "strong" on every paper for structural reasons: the
-claim inventory itself reveals which analyses carry p-values. The rule has not yet been exercised on a fresh Stage 0 run.</li>
+claim inventory itself reveals which analyses carry p-values. The widened rule ran clean on the fresh Stage 0 pass on Hertel.</li>
 <li><b>MDE covers three designs</b> (two-group, paired, correlation) and abstains on the rest; on Hertel and Hurst it abstains.</li>
 <li><b>Stage 3 abstains when nothing can move the estimate or its significance.</b> The enumerator lists factors it cannot
 implement with the supplied data, the screen marks each level as affecting the estimate, the inference or only reporting,
@@ -296,6 +299,9 @@ about 200 s); a retry runner completed them in later passes. An early-failing ag
 outage still stalls the targeted arm, the broad review and the interpretation.</li>
 <li><b>Stage 3 interpretation receives the rank statistics</b> alongside specs.csv, which the design describes as a
 specs-only prompt. Left as is; flagged for a decision.</li>
+<li><b>The OpenRouter reasoning cap is unusable with GLM-5.3-flash.</b> Every capped structured call returned reasoning
+tokens and no content after about 900 s; the cap is opt-in and no step uses it. The pilot's per-claim link calls, which
+motivated it, are gone.</li>
 <li><b>Codex list-equivalents use the input list price</b> (Sol USD 4, Luna USD 0.20 per million tokens) because Codex
 reports one token total per call; output tokens are priced as input.</li>
 </ul>
