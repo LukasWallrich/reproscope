@@ -14,14 +14,13 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from .. import artifacts, config, llm, paths
+from .. import artifacts, config, llm, paths, replica_env
 from . import audit, blind
 
 AGENT_TIMEOUT_S = 2400
@@ -90,12 +89,6 @@ def find_script(out_dir: Path) -> Path | None:
     return None
 
 
-def base_python() -> str:
-    """The interpreter carrying the stack TASK.md promises (numpy, pandas, scipy, ...)."""
-    venv = paths.ROOT / ".venv" / "bin" / "python"
-    return str(venv if venv.exists() else sys.executable)
-
-
 def script_command(script: Path, cwd: Path, python: str | None = None) -> list[str]:
     """Command to re-run `script` from `cwd`, as the agent would have run it."""
     try:
@@ -104,7 +97,7 @@ def script_command(script: Path, cwd: Path, python: str | None = None) -> list[s
         rel = str(script)
     if script.suffix.lower() == ".r":
         return ["Rscript", rel]
-    return [python or base_python(), rel]
+    return [python or replica_env.base_python(), rel]
 
 
 # --- declared environments ------------------------------------------------
@@ -127,9 +120,9 @@ def r_package_names(text: str) -> list[str]:
 def prepare_env(out_dir: Path, rdir: Path) -> dict[str, Any]:
     """Build the environment the agent declared and say how to run the script in it.
 
-    `out/requirements.txt` gets a fresh venv at `<rdir>/env` holding the base stack plus
-    the declared packages; `out/r_packages.txt` gets a per-replica R library at
-    `<rdir>/rlib`. Both live under the replica's run directory, outside the work copy the
+    `out/requirements.txt` gets a fresh venv at `<rdir>/env`, built from the shared
+    replica interpreter and holding the base stack plus the declared packages;
+    `out/r_packages.txt` gets a per-replica R library at `<rdir>/rlib`. Both live under the replica's run directory, outside the work copy the
     agent worked in — the agent has exited by the time this runs, so nothing here can
     reach it.
 
@@ -166,12 +159,14 @@ def prepare_env(out_dir: Path, rdir: Path) -> dict[str, Any]:
         # The declared file lists only the extras, so the base stack goes in first: an
         # env with scipy but no pandas would fail the check for the wrong reason.
         base = rdir / "base_requirements.txt"
-        frozen = step(["uv", "pip", "freeze", "--python", base_python()], "base stack")
+        frozen = step(["uv", "pip", "freeze", "--python", replica_env.base_python()], "base stack")
         if frozen is None:
             info["error"] = "base stack could not be frozen"
         else:
             base.write_text(frozen.stdout or "")
-            ok = step(["uv", "venv", str(env_dir), "--python", "3.14"], "venv")
+            ok = step(
+                ["uv", "venv", str(env_dir), "--python", replica_env.base_python()], "venv"
+            )
             # Two installs rather than one resolution over both files: a declared pin
             # that differs from the base pin replaces it instead of conflicting.
             for source, what in ((base, "base stack install"), (req, "declared install")):
@@ -438,6 +433,9 @@ def run_one(
         loaded = artifacts.load(artifacts.ReplicaDecisionTrace, trace_path)
         return loaded if isinstance(loaded, artifacts.ReplicaDecisionTrace) else loaded[0]
 
+    # The agent and the re-execution check share one interpreter and one package stack.
+    replica_env.ensure_base_env()
+
     result: llm.LLMResult | None = None
     if results_path.exists() and not force:
         # Interrupted between the agent finishing and the trace being written:
@@ -457,6 +455,7 @@ def run_one(
             model=spec.model,
             cwd=iso,
             agentic=True,
+            env_extra=replica_env.agent_env(iso),
             timeout_s=AGENT_TIMEOUT_S,
             log_path=rdir / "agent.log",
             extra={"replica_id": replica_id, "family": family},

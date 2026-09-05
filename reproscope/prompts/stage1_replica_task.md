@@ -9,14 +9,14 @@ You are working in an isolated directory. It contains:
 ## Interpreters and packages
 
 - **R**: `Rscript`, R 4.6.1. A large CRAN library is already installed; list it with `Rscript -e 'rownames(installed.packages())'`.
-- **Python**: `python3`, 3.14. The pre-installed stack is numpy, pandas, scipy, statsmodels, pyreadstat and openpyxl; list it with `python3 -m pip list`.
+- **Python**: `python3` (also `python`) on PATH, 3.14, is the analysis interpreter. Its pre-installed stack is numpy, pandas, scipy, statsmodels, pyreadstat and openpyxl; list it with `python3 -m pip list`.
 
 Declare anything you use beyond that, or your script will not run when it is checked:
 
 - **`out/requirements.txt`** — pip format, one Python package per line, pinned (`package==1.2.3`) where you know the version, for every Python package you import that is not in the stack above.
 - **`out/r_packages.txt`** — one CRAN package name per line, optionally `name==version`, for every R package your script attaches that is not already installed.
 
-After you finish, your script is re-executed in a fresh environment holding the stack above plus exactly what these two files declare. A script whose dependencies are not declared fails that check when it imports something missing. Write no file if you use only what is already there.
+After you finish, your script is re-executed with that same `python3` interpreter, plus exactly what these two files declare. A script whose dependencies are not declared fails that check when it imports something missing. Write no file if you use only what is already there.
 
 Each analysis is fitted **once**. Every quantity in that analysis's `quantities` list is then read out of that single fitted object and written to `out/results.json`. Do not refit the model per quantity, and do not skip quantities: a block with thirty table cells is still one fit.
 

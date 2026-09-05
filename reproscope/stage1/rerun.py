@@ -12,7 +12,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from .. import artifacts, paths
+from .. import artifacts, paths, replica_env
 from . import blind, replicas
 
 RUNNABLE = {".r", ".py"}
@@ -51,6 +51,8 @@ def run(paper_id: str, force: bool = False) -> dict:
             "original_code": list(man.original_code),
         }
     else:
+        # The authors' Python code runs on the same stack as the replicas.
+        replica_env.ensure_base_env()
         work = rerun_dir(paper_id) / "work"
         (work / "out").mkdir(parents=True, exist_ok=True)
         blind.copy_data(paper_id, work / "data")

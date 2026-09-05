@@ -247,10 +247,11 @@ def _openrouter(
     return text, stats
 
 
-def _subprocess_env() -> dict[str, str]:
+def _subprocess_env(extra: dict[str, str] | None = None) -> dict[str, str]:
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE_ENTRYPOINT", None)
+    env.update(extra or {})
     return env
 
 
@@ -277,6 +278,7 @@ def _claude_p(
     agentic: bool,
     timeout_s: int,
     max_turns: int | None,
+    env_extra: dict[str, str] | None,
 ) -> tuple[str, dict[str, Any], str]:
     # Project settings only: the user's global CLAUDE.md would otherwise steer every call
     # (orchestration, advisor, deviation flagging), which contaminates blind replicas.
@@ -304,7 +306,7 @@ def _claude_p(
     if images:
         listing = "\n".join(f"- {Path(p).resolve()}" for p in images)
         prompt = f"{prompt}\n\nRead these image files with the Read tool before answering:\n{listing}"
-    proc = _run(cmd, prompt, cwd, timeout_s, _subprocess_env())
+    proc = _run(cmd, prompt, cwd, timeout_s, _subprocess_env(env_extra))
     log = (proc.stdout or "") + ("\n[stderr]\n" + proc.stderr if proc.stderr else "")
     # The result event is parsed before any failure is raised, so a crashed or
     # error-reporting session still ledgers the tokens it burned.
@@ -363,6 +365,7 @@ def _codex(
     cwd: Path | None,
     agentic: bool,
     timeout_s: int,
+    env_extra: dict[str, str] | None,
 ) -> tuple[str, dict[str, Any], str]:
     import tempfile
 
@@ -385,7 +388,7 @@ def _codex(
             else:
                 prompt += schema_instruction(schema)
         cmd.append("-")
-        proc = _run(cmd, prompt, workdir, timeout_s, _subprocess_env())
+        proc = _run(cmd, prompt, workdir, timeout_s, _subprocess_env(env_extra))
         # Run non-interactively, codex puts the answer on stdout and the banner,
         # transcript and token count on stderr.
         log = (proc.stdout or "") + ("\n[stderr]\n" + proc.stderr if proc.stderr else "")
@@ -426,13 +429,14 @@ def _opencode(
     cwd: Path | None,
     agentic: bool,
     timeout_s: int,
+    env_extra: dict[str, str] | None,
 ) -> tuple[str, dict[str, Any], str]:
     workdir = Path(cwd) if cwd else Path.cwd()
     cmd = ["opencode", "run", "--format", "json", "-m", f"openrouter/{model}", "--dir", str(workdir)]
     if agentic:
         cmd.append("--auto")
     cmd.append(prompt)
-    env = _subprocess_env()
+    env = _subprocess_env(env_extra)
     env["OPENROUTER_API_KEY"] = openrouter_key()
     proc = _run(cmd, "", workdir, timeout_s, env)  # prompt is the positional arg; stdin stays empty
     log = (proc.stdout or "") + ("\n[stderr]\n" + proc.stderr if proc.stderr else "")
@@ -497,6 +501,7 @@ def call(
     system: str | None = None,
     cwd: Path | None = None,
     agentic: bool = False,
+    env_extra: dict[str, str] | None = None,
     timeout_s: int = 1800,
     log_path: Path | None = None,
     extra: dict[str, Any] | None = None,
@@ -506,7 +511,8 @@ def call(
 ) -> LLMResult:
     """Route one call and ledger every attempt.
 
-    `max_turns` caps agentic claude_p sessions. `large_context` opts a non-agentic
+    `env_extra` overrides variables in the subprocess environment of the agentic
+    routes. `max_turns` caps agentic claude_p sessions. `large_context` opts a non-agentic
     call out of the `MAX_INPUT_TOKENS` refusal. `reasoning_max_tokens` caps hidden
     reasoning on OpenRouter structured calls; it applies to calls that pass a
     `schema` only, and `None` leaves the provider default in place.
@@ -586,17 +592,20 @@ def call(
                     attempt_prompt, model,
                     schema=schema, images=images, system=system,
                     cwd=cwd, agentic=agentic, timeout_s=timeout_s, max_turns=max_turns,
+                    env_extra=env_extra,
                 )
                 logs.append(log)
             elif route == "codex":
                 text, stats, log = _codex(
                     attempt_prompt, model,
                     schema=schema, cwd=cwd, agentic=agentic, timeout_s=timeout_s,
+                    env_extra=env_extra,
                 )
                 logs.append(log)
             else:
                 text, stats, log = _opencode(
-                    attempt_prompt, model, cwd=cwd, agentic=agentic, timeout_s=timeout_s
+                    attempt_prompt, model, cwd=cwd, agentic=agentic, timeout_s=timeout_s,
+                    env_extra=env_extra,
                 )
                 logs.append(log)
         except subprocess.TimeoutExpired as e:

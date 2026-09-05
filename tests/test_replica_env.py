@@ -1,14 +1,18 @@
-"""Offline tests for the per-replica environments a replica agent declares.
+"""Offline tests for the shared replica environment and the per-replica declarations.
 
-Every `subprocess.run` is mocked: no installer and no interpreter is invoked.
+Every `subprocess.run` is mocked, except the final real build of the shared
+environment: no installer and no interpreter is invoked elsewhere.
 """
 
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 
 import pytest
 
+from reproscope import paths, replica_env
 from reproscope.stage1 import blind, replicas
 
 
@@ -38,6 +42,14 @@ def recorder(exit_codes: dict[str, int] | None = None):
     return run
 
 
+@pytest.fixture
+def base_env(tmp_path, monkeypatch):
+    """The shared environment relocated under the test's own directory."""
+    d = tmp_path / "replica-env"
+    monkeypatch.setattr(replica_env, "BASE_ENV", d)
+    return d
+
+
 def test_no_declarations_run_in_the_base_interpreter(rdir, monkeypatch):
     run = recorder()
     monkeypatch.setattr(subprocess, "run", run)
@@ -49,7 +61,7 @@ def test_no_declarations_run_in_the_base_interpreter(rdir, monkeypatch):
                     "error": None, "log": ""}
     script = rdir / "work" / "out" / "analysis.py"
     assert replicas.script_command(script, script.parent, info["interpreter"])[0] == (
-        replicas.base_python()
+        replica_env.base_python()
     )
 
 
@@ -67,7 +79,9 @@ def test_requirements_build_a_venv_and_pick_its_interpreter(rdir, monkeypatch):
     # The base stack is frozen from the repo venv and installed alongside the extras.
     assert run.calls[0]["cmd"][:4] == ["uv", "pip", "freeze", "--python"]
     assert (rdir / "base_requirements.txt").read_text() == "pandas==3.0.5\n"
-    assert run.calls[1]["cmd"] == ["uv", "venv", str(rdir / "env"), "--python", "3.14"]
+    assert run.calls[1]["cmd"] == [
+        "uv", "venv", str(rdir / "env"), "--python", replica_env.base_python()
+    ]
     # Base first, then the declarations, so a declared pin replaces the base one.
     prefix = ["uv", "pip", "install", "--python", info["interpreter"], "-r"]
     assert run.calls[2]["cmd"] == prefix + [str(rdir / "base_requirements.txt")]
@@ -128,3 +142,78 @@ def test_a_failed_r_install_abstains(rdir, monkeypatch):
     info = replicas.prepare_env(rdir / "work" / "out", rdir)
 
     assert info["error"] == "environment: nosuchpkg could not be installed"
+
+
+# --- the shared environment ----------------------------------------------
+
+
+def test_the_base_env_is_built_once_and_reused(base_env, monkeypatch):
+    run = recorder()
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(replica_env, "BASE_PACKAGES", ("pandas",))
+
+    assert replica_env.ensure_base_env() == base_env
+    built = [c["cmd"] for c in run.calls]
+    assert built[1] == ["uv", "venv", str(base_env), "--python", "3.14", "--seed"]
+    assert built[2] == [
+        "uv", "pip", "install", "--python", replica_env.base_python(), "pandas==3.0.5"
+    ]
+    assert json.loads((base_env / "stamp.json").read_text()) == {
+        "python": "3.14", "packages": ["pandas==3.0.5"]
+    }
+
+    run.calls.clear()
+    assert replica_env.ensure_base_env() == base_env
+    # Only the freeze that reads the pins runs; the stamp matches, so nothing is built.
+    assert [c["cmd"][:3] for c in run.calls] == [["uv", "pip", "freeze"]]
+
+
+def test_moved_pins_rebuild_the_base_env(base_env, monkeypatch):
+    monkeypatch.setattr(subprocess, "run", recorder())
+    monkeypatch.setattr(replica_env, "BASE_PACKAGES", ("pandas",))
+    replica_env.ensure_base_env()
+
+    base_env.mkdir(parents=True, exist_ok=True)
+    (base_env / "stamp.json").write_text(json.dumps({"python": "3.14", "packages": ["pandas==1.0"]}))
+    run = recorder()
+    monkeypatch.setattr(subprocess, "run", run)
+    replica_env.ensure_base_env()
+
+    assert ["uv", "venv", str(base_env), "--python", "3.14", "--seed"] in [
+        c["cmd"] for c in run.calls
+    ]
+
+
+def test_the_agent_env_leads_with_the_base_env_and_hides_the_repository(base_env, tmp_path):
+    root = str(paths.ROOT)
+    environ = {
+        "PATH": os.pathsep.join([f"{root}/.venv/bin", "/usr/bin"]),
+        "VIRTUAL_ENV": f"{root}/.venv",
+        "PWD": root,
+        "HOME": "/Users/someone",
+    }
+    iso = tmp_path / "iso"
+
+    extra = replica_env.agent_env(iso, environ)
+
+    assert extra["PATH"] == os.pathsep.join([str(base_env / "bin"), "/usr/bin"])
+    assert extra["VIRTUAL_ENV"] == str(base_env)
+    assert extra["PWD"] == str(iso) and extra["OLDPWD"] == str(iso)
+    replica_env.assert_no_repo_path({**environ, **extra})
+
+
+def test_a_repository_path_in_the_agent_env_is_refused():
+    with pytest.raises(replica_env.RepoPathLeak, match="REPROSCOPE_HOME"):
+        replica_env.assert_no_repo_path({"REPROSCOPE_HOME": str(paths.ROOT / "corpus")})
+
+
+@pytest.mark.slow
+def test_the_real_base_env_imports_the_declared_stack():
+    """Builds the shared environment for real and imports the stack it promises."""
+    env = replica_env.ensure_base_env()
+    proc = subprocess.run(
+        [str(env / "bin" / "python3"), "-c",
+         "import numpy, pandas, scipy, statsmodels, pyreadstat, openpyxl"],
+        capture_output=True, text=True, timeout=300,
+    )
+    assert proc.returncode == 0, proc.stderr
