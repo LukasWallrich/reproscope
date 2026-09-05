@@ -39,6 +39,14 @@ def stamp_path() -> Path:
     return BASE_ENV / "stamp.json"
 
 
+def stamped_pins() -> list[str]:
+    """The package pins the shared environment was built from, from its stamp."""
+    try:
+        return list(json.loads(stamp_path().read_text()).get("packages") or [])
+    except (OSError, ValueError):
+        return []
+
+
 def base_pins() -> list[str]:
     """`name==version` for each base package, as pinned in the repository's own venv."""
     repo_python = paths.ROOT / ".venv" / "bin" / "python"

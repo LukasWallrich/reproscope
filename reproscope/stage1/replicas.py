@@ -158,12 +158,15 @@ def prepare_env(out_dir: Path, rdir: Path) -> dict[str, Any]:
         python = str(env_dir / "bin" / "python")
         # The declared file lists only the extras, so the base stack goes in first: an
         # env with scipy but no pandas would fail the check for the wrong reason.
+        # The pins come from the shared environment's stamp, not from a live freeze,
+        # so a package an agent installed into the shared env cannot reach another
+        # replica's check.
         base = rdir / "base_requirements.txt"
-        frozen = step(["uv", "pip", "freeze", "--python", replica_env.base_python()], "base stack")
-        if frozen is None:
-            info["error"] = "base stack could not be frozen"
+        pins = replica_env.stamped_pins()
+        if not pins:
+            info["error"] = "base stack pins unavailable (shared environment has no stamp)"
         else:
-            base.write_text(frozen.stdout or "")
+            base.write_text("\n".join(pins) + "\n")
             ok = step(
                 ["uv", "venv", str(env_dir), "--python", replica_env.base_python()], "venv"
             )

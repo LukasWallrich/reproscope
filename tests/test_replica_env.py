@@ -69,6 +69,7 @@ def test_requirements_build_a_venv_and_pick_its_interpreter(rdir, monkeypatch):
     (rdir / "work" / "out" / "requirements.txt").write_text("scipy==1.18.1\n# a note\n")
     run = recorder()
     monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(replica_env, "stamped_pins", lambda: ["pandas==3.0.5"])
 
     info = replicas.prepare_env(rdir / "work" / "out", rdir)
 
@@ -76,16 +77,15 @@ def test_requirements_build_a_venv_and_pick_its_interpreter(rdir, monkeypatch):
     assert info["installed"] == ["scipy==1.18.1"]
     assert info["env_dir"] == str(rdir / "env")
     assert info["interpreter"] == str(rdir / "env" / "bin" / "python")
-    # The base stack is frozen from the repo venv and installed alongside the extras.
-    assert run.calls[0]["cmd"][:4] == ["uv", "pip", "freeze", "--python"]
+    # The base stack comes from the shared environment's stamp, not a live freeze.
     assert (rdir / "base_requirements.txt").read_text() == "pandas==3.0.5\n"
-    assert run.calls[1]["cmd"] == [
+    assert run.calls[0]["cmd"] == [
         "uv", "venv", str(rdir / "env"), "--python", replica_env.base_python()
     ]
     # Base first, then the declarations, so a declared pin replaces the base one.
     prefix = ["uv", "pip", "install", "--python", info["interpreter"], "-r"]
-    assert run.calls[2]["cmd"] == prefix + [str(rdir / "base_requirements.txt")]
-    assert run.calls[3]["cmd"] == prefix + [str(rdir / "work" / "out" / "requirements.txt")]
+    assert run.calls[1]["cmd"] == prefix + [str(rdir / "base_requirements.txt")]
+    assert run.calls[2]["cmd"] == prefix + [str(rdir / "work" / "out" / "requirements.txt")]
 
     script = rdir / "work" / "out" / "analysis.py"
     assert replicas.script_command(script, script.parent, info["interpreter"]) == [
