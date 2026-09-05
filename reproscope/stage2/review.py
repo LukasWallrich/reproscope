@@ -46,7 +46,6 @@ CHECKS = ("causal_language", "mde", "alignment", "broad")
 PROMPTS = ("stage2_causal_language", "stage2_alignment", "stage2_broad")
 DIFF_LINE_CAP = 150  # lines of unified diff carried per non-canonical replica
 BROAD_TOKEN_BUDGET = 50_000  # the broad prompt shrinks its diffs to stay under the call limit
-CHEAP_REASONING_CAP = 512  # hidden-reasoning cap on the two cheap-tier checks
 
 
 # --- per-check record -----------------------------------------------------
@@ -669,7 +668,6 @@ def check_causal_language(inp: Stage2Inputs, *, force: bool = False) -> CheckRec
         stage=STAGE,
         tier="cheap",
         schema=CausalLanguageResponse,
-        reasoning_max_tokens=CHEAP_REASONING_CAP,
         log_path=paths.run_dir(inp.paper_id, 2) / "logs" / "causal_language.log",
     )
     versions = _versions(*prompts)
@@ -838,7 +836,6 @@ def check_alignment(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
         stage=STAGE,
         tier="cheap",
         schema=AlignmentResponse,
-        reasoning_max_tokens=CHEAP_REASONING_CAP,
         log_path=paths.run_dir(inp.paper_id, 2) / "logs" / "alignment.log",
     )
     versions = _versions(*prompts)

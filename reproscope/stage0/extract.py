@@ -197,9 +197,6 @@ def _chunk_call(manifest, tier: str, pages: list[Path], start: int):
         images=chunk,
         timeout_s=1800,
         log_path=paths.run_dir(manifest.paper_id, 0) / "logs" / f"extract_{tier}_{start + 1}.log",
-        # A results-heavy chunk needs tens of thousands of reasoning tokens; a cap
-        # ends the completion before any JSON appears.
-        reasoning_max_tokens=None,
     )
     if r.parsed is None:
         raise llm.LLMError(f"{tier} failed on pages {start + 1}-{start + len(chunk)}: {r.error}")

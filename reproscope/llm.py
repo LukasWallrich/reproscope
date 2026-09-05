@@ -507,15 +507,16 @@ def call(
     extra: dict[str, Any] | None = None,
     max_turns: int | None = None,
     large_context: bool = False,
-    reasoning_max_tokens: int | None = 512,
+    reasoning_max_tokens: int | None = None,
 ) -> LLMResult:
     """Route one call and ledger every attempt.
 
     `env_extra` overrides variables in the subprocess environment of the agentic
     routes. `max_turns` caps agentic claude_p sessions. `large_context` opts a non-agentic
     call out of the `MAX_INPUT_TOKENS` refusal. `reasoning_max_tokens` caps hidden
-    reasoning on OpenRouter structured calls; it applies to calls that pass a
-    `schema` only, and `None` leaves the provider default in place.
+    reasoning on OpenRouter structured calls when a step passes one; the default leaves
+    the provider setting in place, because glm-5.3-flash answers a capped structured call
+    with reasoning only and no content.
 
     Token and cost figures on the returned result sum across attempts;
     `ledger_id` is the id of the last attempt's row.

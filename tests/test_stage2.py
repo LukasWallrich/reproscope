@@ -300,8 +300,8 @@ def test_run_calls_each_check_once_on_the_tier_it_belongs_on(fixture_root, monke
 
     assert [s[0] for s in seen] == ["causal_language", "alignment", "broad"]  # no mde call
     tiers = {step: (tier, cap) for step, tier, cap, _ in seen}
-    assert tiers["causal_language"] == ("cheap", review.CHEAP_REASONING_CAP)
-    assert tiers["alignment"] == ("cheap", review.CHEAP_REASONING_CAP)
+    assert tiers["causal_language"] == ("cheap", None)
+    assert tiers["alignment"] == ("cheap", None)
     assert tiers["broad"][0] == "strong"
     # no prompt carries the paper body: the introduction reaches none of them
     assert not any("Cooperation between strangers is fragile" in prompt

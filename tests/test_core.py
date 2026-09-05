@@ -272,12 +272,13 @@ def cli_stub(monkeypatch, stdout: str, returncode: int = 0):
     )
 
 
-def test_reasoning_cap_applies_to_structured_openrouter_calls_only(sandbox, monkeypatch):
-    posted = openrouter_stub(monkeypatch, [_or_reply('{"answer": "OK"}'), _or_reply("plain")])
-    r = llm.call("s", "hi", paper_id="p", stage="0", route="openrouter", model="m", schema=Probe)
+def test_reasoning_cap_is_sent_only_when_a_step_passes_one(sandbox, monkeypatch):
+    posted = openrouter_stub(monkeypatch, [_or_reply('{"answer": "OK"}'), _or_reply('{"answer": "OK"}')])
+    r = llm.call("s", "hi", paper_id="p", stage="0", route="openrouter", model="m", schema=Probe,
+                 reasoning_max_tokens=512)
     assert r.ok, r.error
     assert posted[0]["reasoning"] == {"max_tokens": 512}
-    llm.call("s", "hi", paper_id="p", stage="0", route="openrouter", model="m")
+    llm.call("s", "hi", paper_id="p", stage="0", route="openrouter", model="m", schema=Probe)
     assert "reasoning" not in posted[1]
 
 

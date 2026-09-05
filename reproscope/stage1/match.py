@@ -334,8 +334,7 @@ def trace_equivalence(paper_id: str, traces: list[artifacts.ReplicaDecisionTrace
         default=str,
     )
     r = llm.call("trace_choices", fill("stage1_trace_choices", traces=payload[:60_000]),
-                 paper_id=paper_id, stage="1", tier="cheap", schema=TraceEquivalence,
-                 reasoning_max_tokens=256)
+                 paper_id=paper_id, stage="1", tier="cheap", schema=TraceEquivalence)
     if r.parsed is None:
         return TraceEquivalence(agreement=None, notable_divergences=[]), r.ledger_id
     return r.parsed, r.ledger_id  # type: ignore[return-value]
