@@ -63,26 +63,31 @@ def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None)
     list_b = _nonempty(manifest, "vision_b", pages, stage_dir / "extract_b.json", list_b, list_a)
     print(f"extracted: A={len(list_a.claims)} B={len(list_b.claims)}", flush=True)
 
-    claims, _ = arbitrate.run(manifest, list_a, list_b, pages, inputs, force=fstep("arbitrate"))
+    # Each step's cache key is the stage's input surface plus the content of the
+    # artifacts it reads, so a rebuilt upstream artifact rebuilds everything below it.
+    def keyed(**upstream) -> dict[str, str]:
+        return {**inputs, **{k: artifacts.content_hash(v) for k, v in upstream.items()}}
+
+    claims, _ = arbitrate.run(
+        manifest, list_a, list_b, pages, keyed(extract_a=list_a, extract_b=list_b),
+        force=fstep("arbitrate"),
+    )
     print(f"claims: {len(claims)}", flush=True)
 
     # One reading of the paper produces both the contracts and the redacted methods.
-    contract_records, contract_calls = contracts.run(
-        manifest, claims, paper_text, inputs, force=fstep("contracts")
+    contract_records, _ = contracts.run(
+        manifest, claims, paper_text, keyed(claims=claims), force=fstep("contracts")
     )
     print(f"contracts: {len(contract_records)}", flush=True)
 
-    # Rebuilt contracts carry new analysis ids and labels, so the two steps that read
-    # them are rebuilt too rather than reused against the previous set.
-    downstream = force or bool(contract_calls)
-
     readiness_record, _ = readiness.run(
-        manifest, contract_records, inputs, force=downstream or fstep("readiness")
+        manifest, contract_records, keyed(contracts=contract_records), force=fstep("readiness")
     )
     print(f"readiness: {len(readiness_record.variable_bindings)} bindings", flush=True)
 
     report, _ = redact.run(
-        manifest, claims, contract_records, inputs, force=downstream or fstep("redact")
+        manifest, claims, contract_records, keyed(claims=claims, contracts=contract_records),
+        force=fstep("redact"),
     )
     print(
         f"redaction: scan_clean={report.scan_clean} "
