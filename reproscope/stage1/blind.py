@@ -13,14 +13,11 @@ import shutil
 from pathlib import Path
 
 from .. import artifacts, paths
-from ..stage0.leakcheck import result_claim_ids, scan
+from ..stage0.leakcheck import LeakDetected, result_claim_ids, scan
 
 
 PROSE_SUFFIXES = {".txt", ".md", ".rtf", ".do", ".log"}
 
-
-class LeakDetected(RuntimeError):
-    pass
 
 
 # --- assembly -------------------------------------------------------------

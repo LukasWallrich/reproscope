@@ -242,6 +242,8 @@ def _openrouter(
         "tokens_out": usage.get("completion_tokens", 0),
         "tokens_reasoning": (usage.get("completion_tokens_details") or {}).get("reasoning_tokens", 0),
         "cost_usd": float(usage.get("cost") or 0.0),
+        "provider": data.get("provider"),
+        "finish_reason": data["choices"][0].get("finish_reason"),
         "raw": data,
     }
     return text, stats
@@ -553,6 +555,7 @@ def call(
                 "duration_s": round(seconds, 2),
                 "ok": error is None,
                 "error": error,
+                **{k: stats[k] for k in ("provider", "finish_reason") if stats.get(k) is not None},
                 **(extra or {}),
             },
         )

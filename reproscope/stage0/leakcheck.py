@@ -24,6 +24,10 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
+
+class LeakDetected(RuntimeError):
+    pass
+
 # Quantity kinds that carry an inferential result. Every claim of one of these
 # kinds is forbidden, whatever its importance.
 INFERENTIAL_KINDS = frozenset(
@@ -109,11 +113,18 @@ def _kinds(claim: Any) -> set[str]:
     } - {""}
 
 
+# Degrees of freedom printed with a test statistic: "t(29)", "F(1, 24)", "χ2(3)",
+# "t(27.4)". They follow from the sample size the contract must state, so they are
+# not reported values. The label is required so that "CI (0.12, 0.45)" keeps its bounds.
+_DF_GROUP = re.compile(r"(?<![A-Za-z])(?:t|F|z|Z|r|Q|W|H|U|chi2|χ2|χ²)\s*\(\s*[\d.,\s]+\)")
+
+
 def _uncertainty_numbers(unc: Any) -> list[float]:
     """Numbers hidden inside an uncertainty record (se, ci bounds, sd)."""
     if unc is None:
         return []
     text = json.dumps(unc) if not isinstance(unc, str) else unc
+    text = _DF_GROUP.sub(" ", text)
     return [float(t) for t in re.findall(r"-?\d*\.?\d+", text) if t not in {".", "-"}]
 
 

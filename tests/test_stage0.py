@@ -164,6 +164,19 @@ def test_forbidden_strings_include_uncertainty_numbers():
     assert "4.58" in forbidden and "0.82" in forbidden
 
 
+def test_forbidden_strings_skip_degrees_of_freedom():
+    forbidden, _ = leakcheck.forbidden_strings(
+        [
+            claim(value=2.42, precision=2, uncertainty="t(29) = 2.42, 95% CI [0.10, 0.52]"),
+            claim(claim_id="c002", value=6.15, precision=2, uncertainty={"reported": "F(1, 42, 32)"}),
+            claim(claim_id="c003", value=1.9, precision=1, uncertainty="Welch t(27.4)"),
+        ]
+    )
+    assert ".52" in forbidden  # the CI bound survives the stripping
+    for df in ("29", "42", "32", "27.4"):
+        assert df not in forbidden
+
+
 # --- the scan -------------------------------------------------------------
 
 

@@ -6,7 +6,7 @@ so a run that fails halfway resumes without repeating a paid call.
 
 from __future__ import annotations
 
-from .. import artifacts, paths
+from .. import artifacts, llm, paths
 from . import arbitrate, contracts, extract, leakcheck, readiness, redact
 
 PROMPTS = (
@@ -59,6 +59,8 @@ def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None)
     list_b, _ = extract.extract_one(
         manifest, "vision_b", pages, stage_dir / "extract_b.json", force=fstep("extract")
     )
+    list_a = _nonempty(manifest, "vision_a", pages, stage_dir / "extract_a.json", list_a, list_b)
+    list_b = _nonempty(manifest, "vision_b", pages, stage_dir / "extract_b.json", list_b, list_a)
     print(f"extracted: A={len(list_a.claims)} B={len(list_b.claims)}", flush=True)
 
     claims, _ = arbitrate.run(manifest, list_a, list_b, pages, inputs, force=fstep("arbitrate"))
@@ -88,7 +90,29 @@ def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None)
         flush=True,
     )
 
+    if not report.scan_clean:
+        # Stage 1 refuses blind material with a hit, so stage 0 is not done either:
+        # the caller sees a failure and a rerun redoes the redaction, not the whole stage.
+        raise leakcheck.LeakDetected(
+            f"{len(report.scan_hits)} reported value(s) survive repair in the blind material"
+        )
     paths.mark_done(stage_dir, inputs)
+
+
+def _nonempty(manifest, tier, pages, out_path, mine, other):
+    """A cheap extractor can answer a successful structured call with an empty claim
+    list while its notes describe the claims it meant to emit. Arbitration with one
+    side empty would pass every claim of the other side unchecked, so the empty
+    extractor runs once more and the stage refuses if it is still empty."""
+    if mine.claims or not other.claims:
+        return mine
+    print(f"extracted: {tier} returned no claims; retrying once", flush=True)
+    mine, _ = extract.extract_one(manifest, tier, pages, out_path, force=True)
+    if not mine.claims:
+        raise llm.LLMError(
+            f"{tier} returned no claims twice while the other extractor found {len(other.claims)}"
+        )
+    return mine
 
 
 __all__ = ["run", "leakcheck", "input_hashes"]
