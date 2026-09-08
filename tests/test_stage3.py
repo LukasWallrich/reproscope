@@ -100,6 +100,39 @@ def test_binding_derives_d_when_only_t_is_reported(sandbox):
     assert fq["reported_value"] == pytest.approx(2 * t / df**0.5)
 
 
+def test_binding_anchors_on_the_reported_statistic_and_its_analysis(sandbox):
+    """A "1" in "F(1, 48)" must not bind a cutoff mean of 1.0 from another analysis,
+    and the quantity preference then must not rank that mean above the focal F."""
+    manifest, _claims, _contracts = _fixture_inputs(sandbox)
+    manifest = manifest.model_copy(deep=True)
+    manifest.focal_claim.reported.value = 6.2
+    manifest.focal_claim.reported.df = 1.0
+    manifest.focal_claim.reported.statistic = (
+        "There was a significant interaction, F(1, 48) = 6.20, MSE = 746.04, p = .016, "
+        "partial eta squared = .11."
+    )
+    claims = [
+        ClaimRecord(claim_id="c061", quantity_kind="mean", value=1.0, precision=0,
+                    description="Participants whose ratings exceeded 1 (our cutoff) were replaced."),
+        ClaimRecord(claim_id="c092", quantity_kind="F", value=6.2, precision=2,
+                    importance="headline", description="The rumination by condition interaction."),
+        ClaimRecord(claim_id="c095", quantity_kind="p_value", value=0.016, precision=3),
+        ClaimRecord(claim_id="c099", quantity_kind="eta2", value=0.11, precision=2),
+        ClaimRecord(claim_id="c200", quantity_kind="mean", value=746.04, precision=2,
+                    description="A mean elsewhere that happens to equal the MSE."),
+    ]
+    contracts = [
+        EstimandContract(analysis_id="a03", claim_ids=["c061"]),
+        EstimandContract(analysis_id="a11", claim_ids=["c092", "c095", "c099"]),
+        EstimandContract(analysis_id="a12", claim_ids=["c200"]),
+    ]
+    focal = focal_mod.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
+    assert set(focal["claim_ids"]) == {"c092", "c095", "c099"}
+    assert focal["focal_quantity"]["claim_id"] == "c092"
+    assert focal["focal_quantity"]["kind"] == "F"
+    assert focal["analysis_id"] == "a11"
+
+
 def test_binding_raises_when_nothing_matches(sandbox):
     manifest, _claims, contracts = _fixture_inputs(sandbox)
     other = [ClaimRecord(claim_id="x1", quantity_kind="coefficient", value=99.9,

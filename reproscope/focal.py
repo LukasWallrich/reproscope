@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from . import llm, paths
 from .artifacts import ClaimRecord, EstimandContract
+from .stage0.leakcheck import _DF_GROUP
 
 # The quantity the specification curve is drawn in. A test statistic is the last
 # resort: it mixes the effect with the sample size, so it moves for reasons the
@@ -65,30 +66,52 @@ def bind_focal_claim(
 ) -> dict[str, Any]:
     """Find the claims that carry the manifest's focal claim and pick the curve quantity.
 
-    Deterministic first: the manifest's `reported.value` is the test statistic, and
-    `reported.statistic` is the in-text sentence, so every number in that sentence is a
-    candidate claim value. Claims matching any of them belong to the focal claim. A cheap
-    model call breaks the tie only when nothing matches numerically.
+    Deterministic first: the manifest's `reported.value` is the test statistic, so the
+    claims printing it anchor the binding (narrowed to `reported.family` when the
+    manifest names one). `reported.statistic` is the in-text sentence, and the other
+    numbers in it (effect size, MSE, p) bind the claims of the anchors' own analysis
+    only: a bare "1" or a df in that sentence matches unrelated claims everywhere else.
+    Without an anchor every claim printing a sentence number is bound. A cheap model
+    call breaks the tie only when nothing matches numerically.
     """
     reported = (manifest.focal_claim.reported if manifest.focal_claim else None)
     stat_text = (reported.statistic if reported else "") or ""
     stat_value = _as_float(reported.value if reported else None)
-    sentence_numbers = _numbers_in(stat_text)
+    family = getattr(reported, "family", None) if reported else None
+    # Degrees of freedom sit inside the statistic label and are not claim values.
+    sentence_numbers = _numbers_in(_DF_GROUP.sub(" ", stat_text))
     notes: list[str] = []
+
+    def prints(c: ClaimRecord, numbers: list[float]) -> bool:
+        v = _as_float(c.value)
+        return v is not None and any(
+            math.isclose(v, n, rel_tol=1e-6, abs_tol=1e-9) for n in numbers
+        )
 
     matched: list[ClaimRecord] = []
     override = getattr(manifest.focal_claim, "claim_id", None) if manifest.focal_claim else None
     if override:
         matched = [c for c in claims if c.claim_id == override]
         notes.append(f"focal claim fixed by the manifest: {override}")
-    for c in ([] if matched else claims):
-        v = _as_float(c.value)
-        if v is None:
-            continue
-        hit = stat_value is not None and math.isclose(v, stat_value, rel_tol=1e-6, abs_tol=1e-9)
-        hit = hit or any(math.isclose(v, n, rel_tol=1e-6, abs_tol=1e-9) for n in sentence_numbers)
-        if hit:
-            matched.append(c)
+    if not matched and stat_value is not None:
+        anchors = [c for c in claims if prints(c, [stat_value])]
+        of_family = [c for c in anchors if family and c.quantity_kind == family]
+        anchors = of_family or anchors
+        if anchors:
+            analyses = {
+                ct.analysis_id for ct in contracts
+                if any(a.claim_id in (ct.claim_ids or []) for a in anchors)
+            }
+            in_analysis = {
+                cid for ct in contracts if ct.analysis_id in analyses
+                for cid in (ct.claim_ids or [])
+            }
+            matched = anchors + [
+                c for c in claims
+                if c not in anchors and c.claim_id in in_analysis and prints(c, sentence_numbers)
+            ]
+    if not matched:
+        matched = [c for c in claims if prints(c, sentence_numbers + ([stat_value] if stat_value is not None else []))]
 
     if not matched:
         # Fall back to text overlap between the claim description and the focal sentence.
