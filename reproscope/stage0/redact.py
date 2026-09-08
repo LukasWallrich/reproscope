@@ -46,7 +46,7 @@ class ScrubOut(BaseModel):
     items: list[ScrubbedText] = []
 
 
-SCRUB_CHUNK = 120
+SCRUB_CHUNK = 40  # a host cuts a reply at about 300 s; 120 items ran past it
 
 SCRUB_PROMPT = """You are preparing material for an analyst who must re-run a study's analyses
 without learning what the study found. Each item below is one fragment of that material: a
