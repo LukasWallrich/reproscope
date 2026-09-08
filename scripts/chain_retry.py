@@ -8,6 +8,7 @@ import json, subprocess, sys, time
 from pathlib import Path
 
 MAX_ATTEMPTS, PAUSE_S = 8, 600
+LIMIT_PAUSE_S = 1800  # a subscription session limit resets on the hour scale, not minutes
 ROOT = Path(__file__).resolve().parents[1]
 PY = ROOT / ".venv/bin/python"
 
@@ -63,8 +64,13 @@ for attempt in range(1, MAX_ATTEMPTS + 1):
             pending.remove(paper)
     if not pending:
         break
-    print(f"pass {attempt} leaves {pending}; pausing {PAUSE_S}s", flush=True)
-    time.sleep(PAUSE_S)
+    limited = any(
+        "session limit" in (ROOT / "runs/logs" / f"rerun_{p}.log").read_text()[-20000:]
+        for p in pending
+    )
+    pause = LIMIT_PAUSE_S if limited else PAUSE_S
+    print(f"pass {attempt} leaves {pending}; pausing {pause}s{' (session limit)' if limited else ''}", flush=True)
+    time.sleep(pause)
 else:
     print(f"GAVE UP on {pending} after {MAX_ATTEMPTS} passes", flush=True)
 print("ALL DONE", flush=True)

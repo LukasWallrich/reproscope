@@ -314,16 +314,21 @@ def _claude_p(
     # error-reporting session still ledgers the tokens it burned.
     data = _claude_result(proc.stdout or "", agentic)
     stats = _claude_stats(data)
+    # An API refusal (a 429 session limit, a 529 overload) arrives as an is_error
+    # result with exit code 1 and an empty stderr, so the result text is the message.
+    if data is not None and data.get("is_error"):
+        status = data.get("api_error_status")
+        raise LLMError(
+            f"claude reported an error{f' ({status})' if status else ''}: "
+            f"{str(data.get('result'))[:500]}",
+            stats=stats, log=log,
+        )
     if proc.returncode != 0:
         raise LLMError(
             f"claude exited {proc.returncode}: {proc.stderr[-800:]}", stats=stats, log=log
         )
     if data is None:
         raise LLMError(f"claude gave non-JSON output: {proc.stdout[:500]}", stats=stats, log=log)
-    if data.get("is_error"):
-        raise LLMError(
-            f"claude reported an error: {str(data.get('result'))[:500]}", stats=stats, log=log
-        )
     structured = data.get("structured_output")
     text = json.dumps(structured) if structured is not None else (data.get("result") or "")
     return text, stats, log
