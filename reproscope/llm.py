@@ -30,7 +30,8 @@ ROUTES = ("openrouter", "claude_p", "codex", "opencode")
 
 #: Estimated input tokens above which a non-agentic call is refused.
 MAX_INPUT_TOKENS = 60_000
-EARLY_FAILURE_S = 300  # an agentic call that fails within this is retried once
+EARLY_FAILURE_S = 300  # an agentic call that fails within this is retried
+MAX_ATTEMPTS = 4  # transient route failures (gateway errors, overload) are retried with backoff
 
 
 class LLMError(RuntimeError):
@@ -585,8 +586,9 @@ def call(
     parsed: BaseModel | None = None
     error: str | None = None
     attempt_prompt = prompt
+    validation_retried = False
 
-    for attempt in (1, 2):
+    for attempt in range(1, MAX_ATTEMPTS + 1):
         attempt_started = time.monotonic()
         stats, error, retry_prompt, transient = {}, None, None, False
         try:
@@ -626,8 +628,8 @@ def call(
             if getattr(e, "log", ""):
                 logs.append(e.log)
             # Routes fail transiently (rate limits, overload, a provider returning no
-            # choices); retry once. An agentic call retries only when it died early,
-            # so a session that did real work before failing is not repeated blindly.
+            # choices); retry with backoff. An agentic call retries only when it died
+            # early, so a session that did real work before failing is not repeated blindly.
             early = time.monotonic() - attempt_started < EARLY_FAILURE_S
             transient = not agentic or early
         else:
@@ -643,14 +645,19 @@ def call(
                     )
 
         ledger_id = book(attempt, stats, error, time.monotonic() - attempt_started)
-        if error is None or attempt == 2:
+        if error is None or attempt == MAX_ATTEMPTS:
             break
         if retry_prompt is not None:
+            # One corrected reply is asked for; a model that fails the schema twice
+            # will not fix it on a third try.
+            if validation_retried:
+                break
+            validation_retried = True
             attempt_prompt = retry_prompt
             continue
         if not transient:
             break
-        time.sleep(20)
+        time.sleep(20 * attempt)
 
     duration = time.monotonic() - started
     if log_path is not None and logs:
