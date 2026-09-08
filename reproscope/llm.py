@@ -633,7 +633,11 @@ def call(
             early = time.monotonic() - attempt_started < EARLY_FAILURE_S
             transient = not agentic or early
         else:
-            if schema is not None:
+            if schema is not None and stats.get("finish_reason") == "error":
+                # The host cut the stream: the truncated JSON is its failure, not the model's.
+                error = f"provider ended the reply with an error after {len(text)} chars"
+                transient = True
+            elif schema is not None:
                 try:
                     parsed = validate(schema, text)
                 except ValidationError as e:
