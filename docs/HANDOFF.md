@@ -1,48 +1,35 @@
-# Handoff — reproscope pilot (2026-09-03, evening)
+# Handoff — reproscope pilot (2026-09-08, evening)
 
-Read this first in a new session. It states where the pilot stands and what waits on Lukas. Background: `docs/PILOT_DESIGN.md` (mechanics, current), `docs/evaluation/PILOT_EVALUATION.html` (the pilot writeup), `docs/EFFICIENCY_AUDIT.html` (the cost audit the fixes answer), `SCOPE.html` (design rationale).
+Read this first in a new session. It states where the pilot stands and what waits on Lukas. Background: `docs/PILOT_DESIGN.md` (mechanics), `docs/PILOT_NOTES.md` (dated findings), `docs/evaluation/PILOT_EVALUATION.html` (the pilot writeup, still from the 2026-09-03 runs), `docs/EFFICIENCY_AUDIT.html`, `SCOPE.html`.
 
 ## State
 
-- Package `reproscope/` implements Stages 0–3, the report and the evaluation; 226 offline tests pass (`.venv/bin/python -m pytest tests -q`).
-- The efficiency and correctness work list from the audit is implemented and merged (git log from `36cc1d9` to HEAD). Highlights: deterministic arbitration with cheap-vision batches, one strong call for contracts plus redacted methods, leak scan limited to inferential and headline quantities, CONTRACT.json grouped per analysis, abstained match rows, focal claim bound through `reproscope/focal.py` everywhere, targeted arm on the focal quantity only with `max_turns`, Stage 2 scoped to the focal analysis, Stage 3 execution capped at 64 with stratified sampling, content-hash cache keys with per-step input and prompt checks, `--force-step`, per-attempt ledger rows, opencode cache tokens, Codex shadow prices.
-- All five papers have complete runs (`runs/<paper_id>/`, gitignored): Stage 0 from the 2026-09-02 pilot; replica agent runs from the pilot (ten per paper, all traces present); matching, targeted arm, diagnosis, Stage 2, Stage 3 and reports rebuilt on 2026-09-03 with the fixed code. All fifty replicas re-execute cleanly (`ran: true`); the two DeepSeek scripts on Petersen, which import scipy, were re-checked under the shared environment on 2026-09-06 (results match the agent's, 106 and 116 values).
-- Evaluation: `docs/evaluation/pilot_eval.{md,json}` (from `python -m reproscope.evaluate`), `docs/evaluation/cost_table.json` (from `docs/evaluation/cost_table.py`), and the writeup `docs/evaluation/PILOT_EVALUATION.html` (from `docs/evaluation/build_writeup.py`).
-- Spend on the rebuild (all passes, including the evening's reruns): about USD 1.0 metered, USD 46 list-equivalent across the five papers including retries; a single clean pass of Stages 1–3 is USD 0.05–0.08 metered and 1.9–6.0 list-equivalent per paper. OpenRouter balance was about USD 8 at the end (45 credited, 36.85 used).
+- Package `reproscope/` implements Stages 0–3, the report and the evaluation; 228 offline tests pass (`.venv/bin/python -m pytest tests -q`). Everything is pushed to origin.
+- Three papers have complete end-to-end runs on the current code under fresh ids: `Hertel_ClinPsychSci_2018_YabW_v2`, `Ohtsubo_EvoHumanBehavior_2014_zlm2_v2`, `Petersen_Cognition_2017_yJwG_v2` (`runs/<id>/`, gitignored; corpus copies under `corpus/<id>/` with only the manifest id changed). Hurst and Axt have not run on the current code; their pilot runs (2026-09-03) and the three other pilot runs stay on disk under the original ids.
+- Results of the v2 runs: Hertel 63 specifications all converged, F 5.40–7.46, reported 6.20 at rank 37 (all significant); Ohtsubo 8 specifications, d 2.14–2.20, reported 2.2 at rank 5; Petersen 9 specifications all equal to the reported 0.89. Replicas: Hertel 8/8, Ohtsubo 8/8, Petersen 6/8 (deepseek_2 script error, glm_2 returned nothing twice).
+- Spend per paper including every failed pass: Hertel USD 0.77 metered / 12.6 list-equivalent, Ohtsubo 0.55 / 14.0, Petersen 0.59 / 11.4. OpenRouter credit left: about USD 4.1 of 45. The Claude subscription hit its session limit once (2026-09-07 about 18:00, reset 19:40).
+- The evaluation and writeup (`docs/evaluation/`) have not been regenerated over the v2 runs.
 - No pipeline process is running.
 
-## Decisions taken on 2026-09-03 (evening)
+## Fixed on 2026-09-07 and 09-08 (details in PILOT_NOTES)
 
-- **Shadow prices** are OpenAI's input list prices (Sol 4.0, Luna 0.2 USD per million tokens; Sol's rate is promotional through at least 2026-11-21).
-- **Leak rule** is widened by analysis: every numeric claim of an analysis that carries an inferential or headline claim is forbidden, sample-description analyses stay exempt. Verified offline against the current blind materials (0 hits); not yet exercised on a fresh Stage 0 run.
-- **Stage 3 interpretation** reads specs.csv, the grid's factors and the reported estimate only.
-- **Sign gate**: a reversed two-group contrast (t, d) is graded on the flipped value and its CI bounds are mirrored, marked `direction_flipped` and shown as "sign flipped" in the report; coefficients and correlations keep the gate.
-- **Stage 3 gate**: the enumerator lists unimplementable factors, the screen marks each level as affecting the estimate, the inference or only reporting; reporting-only factors are pinned to one level; a grid with no defensible level that moves the estimate or the inference is recorded as an abstention. Significance shares use each specification's own threshold.
-- **Replica packages**: the task names the interpreters and the base stack (numpy, pandas, scipy, statsmodels, pyreadstat, openpyxl); anything beyond goes in `out/requirements.txt` or `out/r_packages.txt`, and the checker builds a per-replica environment from it; an install failure is `abstained: environment`.
+Degrees of freedom no longer forbidden by the leak scan; an empty extractor is retried then refused; a dirty scan fails Stage 0; Stage 0 steps are keyed on the artifacts they read; the focal binder anchors on the reported statistic and binds companions from its own analysis; the targeted arm and diagnosis are keyed on the binding; Stage 3 refuses a failed execution, the executor has 3600 s and a rule against reading package source; the claude route reports the API error it received; readiness that binds nothing is rechecked at the strong tier then refused; Stage 1 refuses zero runnable replicas; the retry runner waits 30 min on a session limit and gives up after two passes with nothing to force; OpenRouter calls get four attempts with backoff, skip the host that just failed, and treat a host-ended reply as transient; scrub chunks are 40 items; ledger rows carry provider and finish reason.
 
 ## Decisions waiting on Lukas
 
-None open. Two things settled on 2026-09-05: replica agents and the checker share one Python environment outside the repository (`~/.cache/reproscope/replica-env`, built by `reproscope/replica_env.py` from the repo's pins; the agent's environment is scrubbed of the repository path before launch), and Stage 0 ran clean on the new code on a Hertel copy (`runs/_fixture_s0_Hertel`, USD 0.06 metered, 2.29 list-equivalent; 101 claims, 27 contracts, scan clean, focal claim bound). The OpenRouter reasoning cap is opt-in and unused: glm-5.3-flash answers a capped structured call with reasoning only.
-
-## Known findings (in the writeup)
-
-- Ohtsubo: the deposited workbook has 30 rows and no exclusion marker; the targeted arm identifies the excluded participant and reproduces all seven reported quantities exactly.
-- Hurst: five cells of the Mini-K correlation table are unreachable by any defensible specification; one is arithmetically inconsistent with its subscales (a likely transcription error). This came from a targeted run under the earlier, broader trigger; kept under `runs/logs/superseded/`.
-- Petersen: the data are first-stage output; six factors are unimplementable and the executable curve is two specifications (Bonferroni on or off) with the identical estimate.
-- Axt: every family produces the same profile; the fails are the sign-convention artefact above.
-- Hertel: all ten replicas reproduce the focal F; differences sit in supporting claims (GLM's second run 73% band A, the rest 83–100%).
-- The model-based leak audit rates every paper "strong" for structural reasons and does not discriminate.
-- Claude Opus returned "529 Overloaded" on 15 strong-call attempts during the rebuild; a retry runner (`scripts/chain_retry.py`) completed them in later passes. `scripts/repair_replicas.sh` re-checks replicas marked failed and clears everything downstream of the traces.
+- **Single-call gates.** Three stage-level judgements were made by one cheap or mid-tier call and were wrong on a fresh run: the extractor (empty claim list), the Stage 3 executor (spent its budget in package source), and readiness (bound no analysis). Guards now catch the degenerate cases (empty, zero, failed) and escalate or refuse; a wrong-but-nonempty readiness or extraction still passes. Whether readiness moves to the strong tier by default (about USD 1.4 list-equivalent per paper) or gets a second independent call is a design choice.
+- **Executor model.** glm-5.3-flash through opencode completed all three grids, but needed 40 min for 63 specifications and one retry on Petersen after an outage. A stronger or faster executor is a cost choice.
+- **OpenRouter credit** needs topping up before Hurst and Axt (about USD 0.6 metered each) and any evaluation rerun.
+- **Old Stage 0 outputs.** The pilot runs under the original ids keep Stage 0 output from the 2026-09-02 code. The writeup should be regenerated over the v2 runs once all five exist; the evaluation currently mixes both.
 
 ## How to run
 
 ```
 .venv/bin/python -m reproscope run <paper_id> --stages 0 1 2 3 report
-.venv/bin/python -m reproscope run <paper_id> --stages 1 2 --force-step targeted diagnose broad
-REPROSCOPE_FAMILIES=glm,deepseek REPROSCOPE_RUNS=1 .venv/bin/python -m reproscope run <paper_id> --stages 1
+S0_ARGS='--force-step readiness' ./scripts/fullchain.sh <paper_id>      # Stage 0 (3 attempts) then the retry runner, logs under runs/logs/
+.venv/bin/python scripts/chain_retry.py <paper_id>                       # Stages 1-3 + report with retries
 .venv/bin/python -m reproscope ledger <paper_id>
-.venv/bin/python -m reproscope.evaluate
-.venv/bin/python docs/evaluation/cost_table.py && .venv/bin/python docs/evaluation/build_writeup.py
+.venv/bin/python -m reproscope.evaluate && .venv/bin/python docs/evaluation/cost_table.py && .venv/bin/python docs/evaluation/build_writeup.py
 ```
 
-Launch long runs under a Monitor or a background shell with a log under `runs/logs/`; `claude -p` calls need `CLAUDECODE` unset (handled in `llm.py`). Keep at most two papers in flight on the Claude subscription. Stage 0 on the new code has run once, on a Hertel copy; rerunning Stage 0 in place on a pilot paper renumbers the claim ids that the replica outputs are keyed by, so use a copy under a `_fixture_` id or a new paper.
+To run a paper on the current code, copy `corpus/<id>` to `corpus/<id>_v2` and set `paper_id` (and `multi100.paper_id`) in its manifest; Stage 0 renumbers claim ids, so never rerun it in place on a paper with replica outputs. Keep at most two papers in flight on the Claude subscription. A replica that must be relaunched is moved out of `runs/<id>/stage1/replicas/` (the checker only re-verifies a replica whose results file exists); `runs/<id>/stage1/replicas_superseded/` holds the ones set aside so far.
