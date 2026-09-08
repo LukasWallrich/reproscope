@@ -83,7 +83,26 @@ def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None)
     readiness_record, _ = readiness.run(
         manifest, contract_records, keyed(contracts=contract_records), force=fstep("readiness")
     )
-    print(f"readiness: {len(readiness_record.variable_bindings)} bindings", flush=True)
+    bound = _complete_analyses(readiness_record)
+    if not bound and manifest.data_files:
+        # One mid-tier call gates every analysis of the paper. When it binds nothing
+        # although data were deposited, its verdict is checked once at the strong tier
+        # before eight replica agents are launched on an empty packet.
+        print("readiness: no analysis bound to the deposited data; rechecking at the strong tier", flush=True)
+        readiness_record, _ = readiness.run(
+            manifest, contract_records, keyed(contracts=contract_records), force=True, tier="strong"
+        )
+        bound = _complete_analyses(readiness_record)
+        if not bound:
+            reasons = list((readiness_record.per_analysis_reasons or {}).values())[:3]
+            raise RuntimeError(
+                "readiness bound no analysis to the deposited data twice: " + " | ".join(reasons)
+            )
+    print(
+        f"readiness: {len(readiness_record.variable_bindings)} bindings, "
+        f"{len(bound)} of {len(contract_records)} analyses complete",
+        flush=True,
+    )
 
     report, _ = redact.run(
         manifest, claims, contract_records, keyed(claims=claims, contracts=contract_records),
@@ -102,6 +121,10 @@ def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None)
             f"{len(report.scan_hits)} reported value(s) survive repair in the blind material"
         )
     paths.mark_done(stage_dir, inputs)
+
+
+def _complete_analyses(record) -> list[str]:
+    return [a for a, st in (record.per_analysis_state or {}).items() if st == "complete"]
 
 
 def _nonempty(manifest, tier, pages, out_path, mine, other):

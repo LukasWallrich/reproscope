@@ -57,6 +57,7 @@ def run_once(paper, force):
 
 papers = sys.argv[1:]
 pending = list(papers)
+stuck: dict[str, int] = {}  # passes that failed with no step this runner can force
 for attempt in range(1, MAX_ATTEMPTS + 1):
     for paper in list(pending):
         rc = run_once(paper, failed_steps(paper))
@@ -65,6 +66,11 @@ for attempt in range(1, MAX_ATTEMPTS + 1):
         print(f"{paper}: pass {attempt} rc={rc} failed_steps={remaining} done={done}", flush=True)
         if done:
             pending.remove(paper)
+        elif rc != 0 and not remaining:
+            stuck[paper] = stuck.get(paper, 0) + 1
+            if stuck[paper] >= 2:
+                print(f"{paper}: failed twice with nothing to force; see runs/logs/rerun_{paper}.log", flush=True)
+                pending.remove(paper)
     if not pending:
         break
     limited = any(

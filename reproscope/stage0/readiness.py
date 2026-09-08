@@ -241,6 +241,7 @@ def run(
     contract_records: list[artifacts.EstimandContract],
     inputs: dict[str, str] | None = None,
     force: bool = False,
+    tier: str = "mid",
 ) -> tuple[artifacts.DataReadinessRecord, list[str]]:
     stage_dir = paths.run_dir(manifest.paper_id, 0)
     schema_path = stage_dir / "schema.json"
@@ -274,7 +275,7 @@ def run(
         prompt,
         paper_id=manifest.paper_id,
         stage="0",
-        tier="mid",
+        tier=tier,
         schema=ReadinessOut,
         cwd=manifest.dir / "data",
         timeout_s=3600,

@@ -86,6 +86,15 @@ def run(
     traces = replicas.run(paper_id, force=fstep("replicas"), families=families, only=only)
     ran = [t for t in traces if t.ran]
     print(f"replicas: {len(ran)}/{len(traces)} produced runnable results", flush=True)
+    if traces and not ran:
+        # Matching, the targeted arm and everything downstream read replica results; on
+        # none they would spend strong calls describing nothing. A cached trace is
+        # returned as long as its results exist, so after fixing the cause relaunch the
+        # agents explicitly.
+        raise RuntimeError(
+            "no replica produced runnable results; fix the blind material or the data, "
+            "then rerun with --force-step replicas"
+        )
 
     on_disk = {t.replica_id for t in replicas.load_traces(paper_id)}
     missing = [rid for rid in full_lineup() if rid not in on_disk]
