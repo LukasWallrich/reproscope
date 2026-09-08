@@ -190,6 +190,7 @@ def _openrouter(
     system: str | None,
     timeout_s: int,
     reasoning_max_tokens: int | None,
+    ignore_providers: list[str] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     import httpx
 
@@ -207,6 +208,9 @@ def _openrouter(
             "sort": "price",
             "preferred_min_throughput": 40,
             "require_parameters": bool(schema),
+            # A host that just failed this call is skipped on the retry; price sorting
+            # would otherwise route every attempt to the same broken host.
+            **({"ignore": ignore_providers} if ignore_providers else {}),
         },
     }
     if schema is not None:
@@ -587,6 +591,7 @@ def call(
     error: str | None = None
     attempt_prompt = prompt
     validation_retried = False
+    failed_hosts: list[str] = []
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         attempt_started = time.monotonic()
@@ -596,7 +601,7 @@ def call(
                 text, stats = _openrouter(
                     attempt_prompt, model,
                     schema=schema, images=images, system=system, timeout_s=timeout_s,
-                    reasoning_max_tokens=reasoning_max_tokens,
+                    reasoning_max_tokens=reasoning_max_tokens, ignore_providers=failed_hosts,
                 )
             elif route == "claude_p":
                 text, stats, log = _claude_p(
@@ -651,6 +656,8 @@ def call(
         ledger_id = book(attempt, stats, error, time.monotonic() - attempt_started)
         if error is None or attempt == MAX_ATTEMPTS:
             break
+        if error and stats.get("provider") and stats["provider"] not in failed_hosts:
+            failed_hosts.append(stats["provider"])
         if retry_prompt is not None:
             # One corrected reply is asked for; a model that fails the schema twice
             # will not fix it on a third try.
