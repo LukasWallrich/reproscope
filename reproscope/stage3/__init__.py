@@ -323,6 +323,15 @@ def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None)
     specs_path = Path(execute["specs_csv"])
     if not specs_path.exists():
         raise RuntimeError(f"stage 3: no specs.csv at {specs_path}; see {stage3 / 'logs'}")
+    # A partial or non-reproducing specs.csv is not a curve: ranking it and paying a
+    # strong call to read it would report a multiverse that was never run.
+    executor_failed = (execute.get("executor") or {}).get("ok") is False
+    if executor_failed or execute.get("problems"):
+        raise RuntimeError(
+            "stage 3: execution did not produce the grid ("
+            + "; ".join(execute.get("problems") or [str((execute.get("executor") or {}).get("error"))])
+            + f"); see {stage3 / 'logs' / 'execute.log'}"
+        )
     rows = mv.read_specs(specs_path, grid)
 
     # --- 5. rank ----------------------------------------------------------

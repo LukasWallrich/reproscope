@@ -45,7 +45,7 @@ from ..focal import QUANTITY_PREFERENCE, _TSTAT_KINDS, _as_float, _norm, bind_fo
 # of the pruned grid instead of all of it.
 GRID_CAP = 256
 EXEC_CAP = 64
-EXECUTOR_TIMEOUT_S = 2400
+EXECUTOR_TIMEOUT_S = 3600
 
 
 # --- structured-output schemas -------------------------------------------

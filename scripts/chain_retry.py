@@ -32,12 +32,15 @@ def failed_steps(paper):
         steps.append("broad")
     for name in ("causal_language", "mde", "alignment"):
         rec = _read(run / f"stage2/{name}.json") or {}
-        if "LLMError" in str(rec.get("abstain_reason") or ""):
+        if any(w in str(rec.get("abstain_reason") or "") for w in ("Error", "Timeout")):
             steps.append(name)
     for name in ("broad",):
         rec = _read(run / f"stage2/{name}.json") or {}
         if "LLMError" in str(rec.get("abstain_reason") or ""):
             steps.append(name)
+    ex = _read(run / "stage3/execute.json") or {}
+    if (ex.get("executor") or {}).get("ok") is False or ex.get("problems"):
+        steps.append("execute")
     return sorted(set(steps))
 
 
