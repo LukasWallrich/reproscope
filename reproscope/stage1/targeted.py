@@ -153,7 +153,7 @@ def run(
     paper_id: str, result: artifacts.ComparableResult, force: bool = False
 ) -> artifacts.TargetedReconstruction:
     out_path = paths.run_dir(paper_id, 1) / "targeted.json"
-    key = {"match": artifacts.content_hash(result)}
+    key = {"match": artifacts.content_hash(result), "focal": focal.binding_hash(paper_id)}
     if out_path.exists() and not force:
         loaded = artifacts.load(artifacts.TargetedReconstruction, out_path)
         cached = loaded if isinstance(loaded, artifacts.TargetedReconstruction) else loaded[0]

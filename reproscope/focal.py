@@ -7,6 +7,8 @@ matches. Every consumer of "the focal claim" must go through `bind_focal_claim`.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import re
 from typing import Any
@@ -195,3 +197,16 @@ def bind_focal_claim(
     }
 
 
+def binding_hash(paper_id: str) -> str:
+    """Cache-key term for the deterministic binding: a step that reads the focal claim
+    is stale when the binding changes, even if the artifacts it reads do not."""
+    from .stage1 import blind  # imported here: blind imports this module
+
+    try:
+        binding = bind_focal_claim(
+            paths.manifest(paper_id), blind.claims(paper_id), blind.contracts(paper_id),
+            paper_id=paper_id, allow_llm=False,
+        )
+    except (ValueError, FileNotFoundError):
+        return "unbound"
+    return hashlib.sha256(json.dumps(binding, sort_keys=True).encode()).hexdigest()

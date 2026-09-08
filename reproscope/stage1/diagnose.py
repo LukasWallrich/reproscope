@@ -96,6 +96,7 @@ def key(paper_id: str) -> dict[str, str]:
         if path.exists():
             loaded = artifacts.load(cls, path)
             out[name] = artifacts.content_hash(loaded)
+    out["focal"] = focal.binding_hash(paper_id)
     return out
 
 
