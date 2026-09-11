@@ -63,7 +63,7 @@ def test_ledger_summary_empty(sandbox):
 def test_config_reads_models_toml():
     spec = config.tier("strong")
     assert (spec.route, spec.model) == ("claude_p", "opus")
-    assert config.tier("mid").model == "sonnet"
+    assert config.tier("mid").model == "opus"
     assert config.replicas()["glm"].runs == 2
     assert "sol" not in config.replicas()
     assert config.executor().route == "opencode"

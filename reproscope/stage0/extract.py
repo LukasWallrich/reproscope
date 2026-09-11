@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
@@ -200,7 +201,37 @@ def _chunk_call(manifest, tier: str, pages: list[Path], start: int):
     )
     if r.parsed is None:
         raise llm.LLMError(f"{tier} failed on pages {start + 1}-{start + len(chunk)}: {r.error}")
+    if not r.parsed.claims and _prints_results(manifest, start, len(chunk)):
+        # A model can answer with notes and an empty list while the pages print results
+        # (seen from glm-5.3-flash: notes naming claims it never emitted). One corrected
+        # reply is asked for; a second empty list fails the chunk.
+        r = llm.call(
+            f"extract:{tier}:p{start + 1}:retry",
+            artifacts.load_prompt("stage0_extract") + hint
+            + "\n\nYour previous reply listed no claims, but these pages report results. "
+              "Extract every reported quantity into `claims`; `notes` alone is not an answer.",
+            paper_id=manifest.paper_id, stage="0", tier=tier, schema=ClaimList, images=chunk,
+            timeout_s=1800,
+            log_path=paths.run_dir(manifest.paper_id, 0) / "logs" / f"extract_{tier}_{start + 1}_retry.log",
+        )
+        if r.parsed is None or not r.parsed.claims:
+            raise llm.LLMError(
+                f"{tier} returned no claims twice on pages {start + 1}-{start + len(chunk)}, "
+                "which print numbers"
+            )
     return start, r.parsed, (r.ledger_id or "")
+
+
+_NUMBER = re.compile(r"(?<![\w.])\d+\.\d+|(?<![\w.])[<>=]\s*\.\d+")
+RESULT_NUMBERS_MIN = 20
+
+
+def _prints_results(manifest, start: int, n: int) -> bool:
+    """Whether pages start+1..start+n carry enough decimal numbers to be results pages
+    (a reference list has years and page ranges, but few decimals)."""
+    texts = page_texts(manifest, len(page_paths(manifest)))
+    body = " ".join(texts[start + 1 : start + n + 1])
+    return len(_NUMBER.findall(body)) >= RESULT_NUMBERS_MIN
 
 
 EXTRACT_PROMPT = "stage0_extract"
