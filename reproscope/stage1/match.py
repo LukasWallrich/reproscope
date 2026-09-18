@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict
 
 from .. import artifacts, llm, paths
 from ._prompt import fill
-from . import blind, replicas
+from . import blind, replicas, audit
 
 P_THRESHOLDS = (0.05, 0.01, 0.001)
 BAND_EDGES = ((0.02, "A"), (0.20, "B"), (0.40, "C"))
@@ -27,12 +27,7 @@ SMALL = 0.001  # |reported| below this uses the absolute rule
 SMALL_TOL = 0.002
 LOG_KINDS = {"OR", "HR"}
 UNSIGNED_KINDS = {"sd", "n", "F", "chi2", "p_value", "se", "eta2", "percent"}
-# Quantities of a two-group contrast, whose sign records which group was subtracted from
-# which. That order is a coding choice, so a replica that reversed it produces the same
-# magnitude with the opposite sign. Coefficients, correlations and ratios carry a
-# substantive sign and keep the sign gate.
-FLIPPABLE_KINDS = {"t", "d"}
-BLIND_CLAIM_FIELDS = {"value", "precision", "uncertainty"}
+BLIND_CLAIM_FIELDS = {"value", "precision", "uncertainty", "source_quote", "source_anchor_quote", "source_anchor_scope", "source_region", "abstain_reason"}
 PROMPTS = ("stage1_link_results", "stage1_trace_choices")
 
 
@@ -51,6 +46,8 @@ class LinkResult(BaseModel):
     # replica's evidence is then unknown, which is different from a replica that
     # computed nothing for the claim.
     error: str | None = None
+    error_kind: str | None = None
+    source_analysis_ids: list[str] = []
 
 
 class TraceEquivalence(BaseModel):
@@ -80,7 +77,10 @@ def parse_reported(value: float | str | None) -> tuple[float | None, str | None]
 
 
 def _round_to(value: float, precision: int | None) -> float:
-    return round(value, precision) if precision is not None else value
+    if precision is None:
+        return value
+    from decimal import Decimal, ROUND_HALF_UP
+    return float(Decimal(str(value)).quantize(Decimal(1).scaleb(-precision), rounding=ROUND_HALF_UP))
 
 
 def _rel_band(reported: float, replicated: float) -> tuple[str, float]:
@@ -128,8 +128,8 @@ def grade(
 ) -> dict[str, Any]:
     """Band one claim x replica pair. Returns band, diffs, sign and sigma rule.
 
-    `replicated_used` is the value the band was computed on, which is the sign-flipped
-    value for a two-group contrast the replica coded the other way round.
+    `replicated_used` is the supplied canonical value. The grader never chooses
+    an orientation or unit transformation by closeness to the reported result.
     """
     out: dict[str, Any] = {
         "band": None, "raw_diff": None, "std_diff": None,
@@ -147,8 +147,19 @@ def grade(
         out["sigma_rule"] = "within" if abs(replicated - reported) / se <= 2 else "outside"
 
     if comparator:
-        out["band"] = "A" if _satisfies(comparator, replicated, reported) else "fail"
-        out["rule"] = f"comparator {comparator}{reported:g}: threshold side only"
+        satisfied = _satisfies(comparator, replicated, reported)
+        out["band"] = "A" if satisfied else "fail"
+        out["bound_satisfied"] = satisfied
+        out["rule"] = f"comparator {comparator}{reported:g}: literal bound {'satisfied' if satisfied else 'not satisfied'}"
+        # Rounding can explain a displayed family bound, but never changes its
+        # truth value or the grade. Conventional p cutoffs remain exact thresholds.
+        conventional_cutoff = quantity_kind == "p_value" and reported in P_THRESHOLDS
+        if not satisfied and precision is not None and not conventional_cutoff:
+            half_unit = .5 * 10.0 ** (-precision)
+            edge = reported + half_unit if comparator.startswith("<") else reported - half_unit
+            out["bound_rounding_compatible"] = _satisfies(comparator, replicated, edge)
+            if out["bound_rounding_compatible"]:
+                out["rule"] += "; compatible with rounding the bound, without satisfying the printed inequality"
         out["raw_diff"] = None
         return out
 
@@ -156,6 +167,9 @@ def grade(
     kind = quantity_kind or "other"
 
     if kind == "p_value":
+        if precision is not None and rounded == reported:
+            out.update(band="A", rule="p-value equality matches printed rounding; rounded equality does not establish a strict significance bound")
+            return out
         band, rel = _grade_p(reported, replicated)
         out.update(band=band, rule=f"p-value thresholds; relative diff {rel:.3g}")
         return out
@@ -169,17 +183,8 @@ def grade(
         return out
 
     if kind not in UNSIGNED_KINDS and abs(reported) >= SMALL:
-        out["sign_match"] = (rounded >= 0) == (reported >= 0)
-        if not out["sign_match"]:
-            if kind in FLIPPABLE_KINDS:
-                flipped = grade(kind, reported, -replicated,
-                                precision=precision, se=se, comparator=comparator)
-                if flipped["band"] != "fail":
-                    flipped.update(
-                        sign_match=False, direction_flipped=True,
-                        rule=f"sign flipped (group order is a coding choice); {flipped['rule']}",
-                    )
-                    return flipped
+        out["sign_match"] = None if replicated == 0 else (replicated > 0) == (reported > 0)
+        if out["sign_match"] is False:
             out.update(band="fail", rule="sign gate: opposite signs")
             return out
 
@@ -217,25 +222,13 @@ def grade_with_unit_check(
     comparator: str | None = None,
     unit_note: str | None = None,
 ) -> dict[str, Any]:
-    """Grade as reported; if the linker flagged a rescaling, try the obvious ones.
-
-    A rescaled candidate is used only when it lands in a strictly better band, and
-    the rescaling applied is recorded in unit_check.
-    """
+    """Grade the supplied canonical value and preserve any explicit unit note."""
     base = grade(quantity_kind, reported, replicated,
                  precision=precision, se=se, comparator=comparator)
     base["unit_check"] = unit_note or "none"
-    flagged = bool(unit_note) and unit_note.strip().lower() not in {"none", "n/a", "no", ""}
-    if not flagged or replicated is None or reported is None:
-        return base
-    best = base
-    for candidate, label in unit_candidates(replicated):
-        alt = grade(quantity_kind, reported, candidate,
-                    precision=precision, se=se, comparator=comparator)
-        if BAND_ORDER[alt["band"]] < BAND_ORDER[best["band"]]:
-            alt["unit_check"] = f"{unit_note}; {label}"
-            best = alt
-    return best
+    # A prose linker hint cannot authorise a transformation. Conversion must be
+    # fixed in the semantic contract and applied before calling the grader.
+    return base
 
 
 # --- linking --------------------------------------------------------------
@@ -251,7 +244,10 @@ def blind_claim(claim: artifacts.ClaimRecord) -> str:
 def link(
     paper_id: str, claim: artifacts.ClaimRecord, results_text: str, trace_text: str
 ) -> tuple[LinkResult, str | None]:
-    direct = direct_link(claim.claim_id, results_text)
+    from ..statistic_metadata import canonical_aggregation
+    direct = direct_link(claim.claim_id, results_text, quantity_kind=claim.quantity_kind,
+                         comparator=getattr(claim, "comparator", None),
+                         aggregation=canonical_aggregation(claim), member_ids=claim.member_ids)
     if direct is not None:
         return direct, None
     if results_keyed(results_text):
@@ -283,61 +279,103 @@ def results_keyed(results_text: str) -> bool:
     return any(isinstance(e, dict) and e.get("claim_id") for e in entries)
 
 
-def direct_link(claim_id: str, results_text: str) -> LinkResult | None:
-    """The replica's own results entry for this claim_id, when it wrote one with a value.
-
-    Replicas are asked to key results by claim_id, so the entry is the link; the model
-    call is reserved for claims the replica did not key (or keyed without a value).
-    """
+def direct_link(claim_id: str, results_text: str, *, quantity_kind=None, comparator=None, aggregation="scalar", member_ids=None) -> LinkResult | None:
+    """Link a shared source claim only when its repeated numerical outputs agree."""
     try:
         entries = json.loads(results_text).get("results", [])
     except (json.JSONDecodeError, AttributeError):
         return None
-    for e in entries:
-        if isinstance(e, dict) and e.get("claim_id") == claim_id and e.get("value") is not None:
+    rows = [e for e in entries if isinstance(e, dict) and e.get("claim_id") == claim_id]
+    valued = [e for e in rows if e.get("value") is not None]
+    if not valued:
+        return None
+    aggregations = []
+    normalised = []
+    for row in valued:
+        raw = row["value"]
+        if aggregation != "scalar":
+            expected_members = member_ids or []
+            got = row.get("member_ids") or []
+            if not expected_members or len(got) != len(set(got)) or set(got) != set(expected_members):
+                return LinkResult(error="aggregate membership absent or inconsistent", error_kind="invalid")
+            if not isinstance(raw, list):
+                return LinkResult(error="aggregate target requires values for every declared member", error_kind="invalid")
+        if isinstance(raw, list):
+            # "All p > c" is a minimum-p claim; "all p < c" is a maximum-p
+            # claim. The bound defines the aggregation, never numerical agreement.
+            if (aggregation not in {"all", "any", "min", "max"} or len(raw) != len(member_ids or [])
+                    or quantity_kind not in {"p_value", "r", "t", "d"} or not raw
+                    or (aggregation in {"all", "any"} and comparator not in {"<", "<=", ">", ">="})):
+                return LinkResult(error="vector output has no supported explicit bound", error_kind="ambiguous")
             try:
-                value = float(e["value"])
-            except (TypeError, ValueError):
-                return None
-            def _f(k):
-                try:
-                    return float(e[k]) if e.get(k) is not None else None
-                except (TypeError, ValueError):
-                    return None
-            n = e.get("n")
-            return LinkResult(
-                found=True, value=value, se=_f("se"), ci_lower=_f("ci_lower"),
-                ci_upper=_f("ci_upper"), n=int(n) if isinstance(n, (int, float)) else None,
-                unit_note="none", note="direct: replica keyed this claim_id in results.json",
-            )
-    return None
+                vector = [float(x) for x in raw]
+                lower, upper = (0, 1) if quantity_kind == "p_value" else (-1, 1) if quantity_kind == "r" else (-math.inf, math.inf)
+                if any(isinstance(x, bool) for x in raw) or any(not math.isfinite(x) or not lower <= x <= upper for x in vector):
+                    raise ValueError("invalid bounded statistic")
+            except (TypeError, ValueError, OverflowError):
+                return LinkResult(error=f"invalid {quantity_kind} vector", error_kind="invalid")
+            use_minimum = aggregation == "min" or (aggregation == "all" and comparator.startswith(">")) or (aggregation == "any" and comparator.startswith("<"))
+            row = {**row, "value": min(vector) if use_minimum else max(vector)}
+            aggregations.append(("min" if use_minimum else "max") + f"({quantity_kind}) from declared aggregation and bound")
+        normalised.append(row)
+    valued = normalised
+    analyses = sorted({str(e["analysis_id"]) for e in valued if e.get("analysis_id") is not None})
+    from ..execution import equal
+    merged = {}
+    for field in ("value", "se", "ci_lower", "ci_upper", "n"):
+        values = []
+        for row in valued:
+            raw = row.get(field)
+            if raw is None:
+                continue
+            try:
+                value = float(raw)
+                if isinstance(raw, bool) or not math.isfinite(value) or (field == "n" and value != int(value)):
+                    raise ValueError("invalid numeric value")
+            except (ValueError, TypeError, OverflowError):
+                return LinkResult(error=f"invalid {field} in keyed result for {claim_id}", error_kind="invalid",
+                                  source_analysis_ids=analyses)
+            values.append(value)
+        if values and any(not equal(values[0], value) for value in values[1:]):
+            return LinkResult(error=f"conflicting repeated {field} outputs for {claim_id}", error_kind="ambiguous",
+                              note=json.dumps({"analysis_ids": analyses, "field": field, "values": values}),
+                              source_analysis_ids=analyses)
+        merged[field] = values[0] if values else None
+    if merged["n"] is not None:
+        merged["n"] = int(merged["n"])
+    return LinkResult(found=True, **merged, unit_note="none", source_analysis_ids=analyses,
+                      note="direct: agreeing keyed outputs from analyses " + ", ".join(analyses)
+                           + ("; " + "; ".join(sorted(set(aggregations))) if aggregations else ""))
 
 
 def trace_equivalence(paper_id: str, traces: list[artifacts.ReplicaDecisionTrace]):
-    """One cheap call over the two fields that carry the analytical choices.
-
-    `open_choices` and `model_formula` are where replicas actually diverge; the rest of
-    a trace is bookkeeping that costs tokens without moving the agreement score.
-    """
-    if len(traces) < 2:
-        return TraceEquivalence(agreement=None, notable_divergences=[]), None
-    payload = json.dumps(
-        [
-            {
-                "replica_id": t.replica_id,
-                "open_choices": t.open_choices,
-                "model_formula": t.model_formula,
-            }
-            for t in traces
-        ],
-        indent=2,
-        default=str,
-    )
-    r = llm.call("trace_choices", fill("stage1_trace_choices", traces=payload[:60_000]),
-                 paper_id=paper_id, stage="1", tier="cheap", schema=TraceEquivalence)
-    if r.parsed is None:
-        return TraceEquivalence(agreement=None, notable_divergences=[]), r.ledger_id
-    return r.parsed, r.ledger_id  # type: ignore[return-value]
+    """Deterministic agreement among independently checked execution fields."""
+    fields, proportions = [], []
+    keys = ("family", "x", "y", "alternative", "n", "effect_metric", "included_ids")
+    evidence = {t.replica_id: getattr(t, "execution_evidence", {}) for t in traces}
+    analyses = sorted({a for e in evidence.values() for a in e.get("analyses", {})})
+    for aid in analyses:
+        for key in keys:
+            groups, unknown = {}, []
+            for trace in traces:
+                item = evidence[trace.replica_id].get("analyses", {}).get(aid, {})
+                if item.get("status") != "verified" or item.get(key) is None:
+                    unknown.append(trace.replica_id)
+                else:
+                    raw = sorted(item[key], key=str) if key == "included_ids" else item[key]
+                    value = json.dumps(raw, sort_keys=True)
+                    groups.setdefault(value, []).append(trace.replica_id)
+            known = sum(map(len, groups.values()))
+            agreement = max(map(len, groups.values())) / known if known >= 2 else None
+            if agreement is not None:
+                proportions.append(agreement)
+            fields.append({"analysis_id": aid, "field": key, "groups": list(groups.values()),
+                           "unknown": unknown, "known": known, "planned": len(traces),
+                           "agreement": agreement})
+    return TraceEquivalence(fields=fields,
+        agreement=sum(proportions)/len(proportions) if proportions else None,
+        notable_divergences=[], basis="verified structured execution; unknowns excluded explicitly",
+        replica_status={t.replica_id: {"ran": t.ran, "audit": audit.acceptance(t.hardcoding_audit)} for t in traces}), None
 
 
 # --- the stage step -------------------------------------------------------
@@ -395,88 +433,33 @@ def mirror_ci_bounds(
     claims_by_id: dict[str, artifacts.ClaimRecord],
     analysis_of: dict[str, str | None],
 ) -> None:
-    """Regrade the CI bounds of a direction-flipped contrast on the mirrored interval.
+    """Compatibility entry point: result-selected mirroring is prohibited.
 
-    An estimate that came out with the opposite sign brings its confidence interval with
-    it: the replica's lower bound is minus the reported upper bound, and its upper bound
-    minus the reported lower bound. Each `ci_bound` row of an analysis and replica whose
-    estimate row flipped is therefore regraded on the mirrored value: the negation of the
-    replica's counterpart bound, found in one of three ways, in order.
-
-    1. The flipped estimate's own link recorded `ci_lower` and `ci_upper`, and this row's
-       value is one of them; the counterpart is the other.
-    2. The analysis's ci_bound rows split by the sample size their link reported, and this
-       row's group of that size holds exactly two rows; the counterpart is the other one.
-       This separates the intervals of two analyses run on different samples.
-    3. Neither identifies a counterpart, so the row's own value is negated.
-
-    The new grade is kept only when it lands in a better band, so a bound that mirroring
-    does not explain stays as it was.
+    Use apply_declared_transform before grading when an intake-authorised mapping
+    defines the orientation. A neighbouring estimate's match cannot authorise it.
     """
-    groups: dict[tuple[str | None, str], list[artifacts.ComparableRow]] = {}
-    for row in rows:
-        groups.setdefault((analysis_of.get(row.claim_id), row.replica_id), []).append(row)
+    return None
 
-    for group in groups.values():
-        flipped = [r for r in group
-                   if r.direction_flipped and r.quantity_kind != "ci_bound"]
-        if not flipped:
-            continue
-        intervals = []
-        for r in flipped:
-            link = links.get((r.claim_id, r.replica_id))
-            if link and link.ci_lower is not None and link.ci_upper is not None:
-                intervals.append((link.ci_lower, link.ci_upper))
 
-        # The values as linked, read before any row is regraded in place: a bound whose
-        # counterpart has already been mirrored must still pair with the linked value.
-        bounds = [r for r in group if r.quantity_kind == "ci_bound" and r.replicated is not None]
-        raw = {r.claim_id: r.replicated for r in bounds}
-        by_n: dict[int | None, list[str]] = {}
-        for r in bounds:
-            link = links.get((r.claim_id, r.replica_id))
-            by_n.setdefault(link.n if link else None, []).append(r.claim_id)
-
-        for row in bounds:
-            value = raw[row.claim_id]
-            link = links.get((row.claim_id, row.replica_id))
-            mirrored = -value
-            for lower, upper in intervals:
-                if math.isclose(value, lower, rel_tol=1e-9):
-                    mirrored = -upper
-                    break
-                if math.isclose(value, upper, rel_tol=1e-9):
-                    mirrored = -lower
-                    break
-            else:
-                pair = by_n[link.n if link else None]
-                if len(pair) == 2:
-                    other = next(cid for cid in pair if cid != row.claim_id)
-                    mirrored = -raw[other]
-            claim = claims_by_id[row.claim_id]
-            graded = grade_with_unit_check(
-                row.quantity_kind, row.reported, mirrored,
-                precision=claim.precision, se=link.se if link else None,
-                comparator=getattr(row, "comparator", None),
-            )
-            if BAND_ORDER[graded["band"]] >= BAND_ORDER[row.band]:
-                continue
-            row.replicated = graded["replicated_used"]
-            row.raw_diff = graded["raw_diff"]
-            row.std_diff = graded["std_diff"]
-            row.sign_match = False
-            row.direction_flipped = True
-            row.band = graded["band"]
-            row.sigma_rule = graded["sigma_rule"]
-            row.rule = f"CI mirrored about zero with the flipped estimate; {graded['rule']}"
+def apply_declared_transform(value, *, scale=1., ci=None, se=None, provenance=None):
+    if not provenance or not math.isfinite(scale) or scale == 0:
+        raise ValueError("normalisation requires a finite nonzero scale and intake provenance")
+    return {"value": value * scale, "se": abs(scale) * se if se is not None else None,
+            "ci": sorted(x * scale for x in ci) if ci is not None else None,
+            "normalisation": {"scale": scale, "provenance": provenance}}
 
 
 def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
     out_path = paths.run_dir(paper_id, 1) / "match.json"
     claims = blind.claims(paper_id)
     contracts = blind.contracts(paper_id)
-    traces = [t for t in replicas.load_traces(paper_id) if t.ran]
-    fingerprint = replica_fingerprint(paper_id, traces)
+    from .. import source_direction, provenance
+    direction_record = source_direction.run(paper_id)
+    directions = {r['analysis_id']: r for r in direction_record['items']}
+    traces = replicas.load_traces(paper_id)
+    from . import inputs as stage_inputs
+    fingerprint = {**stage_inputs(paper_id), **replica_fingerprint(paper_id, traces)}
+    fingerprint['source_direction'] = provenance.digest(direction_record)
 
     if out_path.exists() and not force:
         loaded = artifacts.load(artifacts.ComparableResult, out_path)
@@ -491,11 +474,19 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
     if eq_call:
         call_ids.append(eq_call)
     analysis_of = {cid: c.analysis_id for c in contracts for cid in c.claim_ids}
+    assignment_path = blind.stage0_dir(paper_id) / "contract_assignments.json"
+    assignment_reasons = {u["claim_id"]: u["reason"] + ": " + u["note"] for u in json.loads(assignment_path.read_text()).get("unassigned", [])} if assignment_path.exists() else {}
+    readiness_file = blind.stage0_dir(paper_id) / "readiness.json"
+    readiness_reasons = json.loads(readiness_file.read_text()).get("per_analysis_reasons", {}) if readiness_file.exists() else {}
+    readiness_outcomes = json.loads(readiness_file.read_text()).get("per_analysis_outcome", {}) if readiness_file.exists() else {}
 
     # Only claims the replicas were asked about are linked; claims from analyses that
     # abstained at intake (no data) get an abstained summary and no model call.
     s0 = blind.stage0_dir(paper_id)
-    bound_ids = blind.bound_claim_ids(blind.blind_packet(paper_id, s0 / "blind_contract.json"))
+    packet = blind.blind_packet(paper_id, s0 / "blind_contract.json")
+    bound_ids = blind.bound_claim_ids(packet)
+    packet_quantities = {q["claim_id"]: q for a in packet["analyses"] for q in a["quantities"]}
+    claims = [c.model_copy(update={"member_ids": packet_quantities.get(c.claim_id, {}).get("member_ids", c.member_ids)}) for c in claims]
     results_texts = {t.replica_id: _results_text(paper_id, t.replica_id) for t in traces}
     trace_json = {t.replica_id: t.model_dump_json() for t in traces}
 
@@ -504,8 +495,13 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
 
     from concurrent.futures import ThreadPoolExecutor
     pool = ThreadPoolExecutor(max_workers=6)
-    linkable = [c for c in claims if c.claim_id in bound_ids]
-    futures = {(c.claim_id, t.replica_id): pool.submit(_link, c, t) for c in linkable for t in traces}
+    from ..source_integrity import source_status
+    source = source_status(claims)
+    linkable = [c for c in claims if c.claim_id in bound_ids and c.claim_id not in source["invalid_claims"]
+                and c.quantity_role != "supplied_fact"]
+    futures = {(c.claim_id, t.replica_id): pool.submit(_link, c, t)
+               for c in linkable for t in traces if t.ran
+               and audit.acceptance(t.hardcoding_audit) == "accepted"}
 
     # Grade every claim x replica pair first. The CI-mirroring pass below needs a whole
     # analysis's rows, and the per-claim summaries are counted from the rows it leaves.
@@ -520,6 +516,31 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
         if claim.claim_id not in bound_ids:
             continue
         for trace in traces:
+            source_reason = source["invalid_claims"].get(claim.claim_id)
+            if source_reason or claim.quantity_role == "supplied_fact":
+                rows.append(artifacts.ComparableRow(claim_id=claim.claim_id, replica_id=trace.replica_id,
+                    analysis_id=analysis_of.get(claim.claim_id), quantity_kind=claim.quantity_kind,
+                    reported=reported, state="abstained", band=None,
+                    outcome_status="input_invalid" if source_reason else "supplied_fact",
+                    abstain_reason=source_reason or "supplied fact; no independent computation credit"))
+                continue
+            invalid_claims = (trace.hardcoding_audit.get("adjudication") or {}).get("invalid_claims") or {}
+            if claim.claim_id in invalid_claims:
+                rows.append(artifacts.ComparableRow(
+                    claim_id=claim.claim_id, replica_id=trace.replica_id,
+                    analysis_id=analysis_of.get(claim.claim_id), quantity_kind=claim.quantity_kind,
+                    reported=reported, state="abstained", band=None, outcome_status="invalid",
+                    abstain_reason=str(invalid_claims[claim.claim_id])))
+                continue
+            if not trace.ran or audit.acceptance(trace.hardcoding_audit) != "accepted":
+                rejected = audit.acceptance(trace.hardcoding_audit) == "rejected"
+                rows.append(artifacts.ComparableRow(
+                    claim_id=claim.claim_id, replica_id=trace.replica_id,
+                    analysis_id=analysis_of.get(claim.claim_id), quantity_kind=claim.quantity_kind,
+                    reported=reported, state="abstained", band=None,
+                    outcome_status="replica_failed" if not trace.ran else "invalid" if rejected else "audit_unresolved",
+                    abstain_reason=(trace.abstain_reason or "replica failed") if not trace.ran else "audit rejected statistical outputs" if rejected else "audit requires adjudication"))
+                continue
             linked, call = futures[(claim.claim_id, trace.replica_id)].result()
             links[(claim.claim_id, trace.replica_id)] = linked
             if call:
@@ -532,6 +553,9 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                     artifacts.ComparableRow(
                         claim_id=claim.claim_id,
                         replica_id=trace.replica_id,
+                        analysis_id=analysis_of.get(claim.claim_id),
+                        outcome_status="invalid" if linked.error_kind == "invalid" else "link_failed" if linked.error else "omitted",
+                        link_error_kind=linked.error_kind,
                         quantity_kind=claim.quantity_kind,
                         reported=reported,
                         comparator=comparator,
@@ -540,8 +564,15 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                         abstain_reason=linked.error
                         or "replica produced no value for this claim",
                         link_note=linked.note,
+                        source_analysis_ids=linked.source_analysis_ids,
                     )
                 )
+                continue
+            if linked.value is None or not math.isfinite(linked.value):
+                rows.append(artifacts.ComparableRow(
+                    claim_id=claim.claim_id, replica_id=trace.replica_id,
+                    analysis_id=analysis_of.get(claim.claim_id), state="abstained",
+                    outcome_status="invalid", abstain_reason="non-finite result", reported=reported))
                 continue
             graded = grade_with_unit_check(
                 claim.quantity_kind, reported,
@@ -549,10 +580,29 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                 precision=claim.precision, se=linked.se, comparator=comparator,
                 unit_note=linked.unit_note,
             )
+            aid = analysis_of.get(claim.claim_id)
+            evidence = (getattr(trace, 'execution_evidence', None) or {}).get('analyses', {}).get(aid, {})
+            graded = source_direction.grade_paired(graded, kind=claim.quantity_kind,
+                reported=reported, computed=linked.value, precision=claim.precision,
+                comparator=comparator, direction=directions.get(aid), evidence=evidence)
+            from ..statistic_metadata import check as check_df
+            df_check = check_df(claim, evidence)
+            if df_check and df_check['status'] == 'mismatch':
+                graded['band'] = 'fail'
+                graded['rule'] += '; reported degrees of freedom disagree with the verified sample'
             rows.append(
                 artifacts.ComparableRow(
                     claim_id=claim.claim_id,
                     replica_id=trace.replica_id,
+                    analysis_id=analysis_of.get(claim.claim_id),
+                    **{k: graded.get(k) for k in ('sign_convention_status', 'magnitude_band',
+                        'magnitude_exact_reported_precision', 'substantive_direction_match',
+                        'raw_sign_match', 'raw_signed_difference', 'comparison_basis', 'direction_evidence',
+                        'author_aligned_statistic', 'author_order_sign_match')},
+                    outcome_status="direction_unverified" if graded['band'] is None else "graded",
+                    degrees_of_freedom=df_check,
+                    exact_reported_precision=(_round_to(linked.value, claim.precision) == _round_to(reported, claim.precision)
+                        if isinstance(claim.precision, int) and reported is not None and comparator is None else None),
                     quantity_kind=claim.quantity_kind,
                     reported=reported,
                     replicated=graded["replicated_used"],
@@ -565,25 +615,33 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                     sigma_rule=graded["sigma_rule"],
                     comparator=comparator,
                     rule=graded["rule"],
+                    bound_satisfied=graded.get("bound_satisfied"),
+                    bound_rounding_compatible=graded.get("bound_rounding_compatible"),
                     se=linked.se,
                     n=linked.n,
                     link_note=linked.note,
+                    source_analysis_ids=linked.source_analysis_ids,
                 )
             )
-    mirror_ci_bounds(rows, links, claims_by_id, analysis_of)
+    # No result-selected CI mirroring: orientation must be fixed before grading.
 
     summaries: list[artifacts.MatchSummary] = []
+    from ..computation_coverage import review as computation_review
+    accounting = {r['claim_id']: r for r in computation_review(paths.run_dir(paper_id, 1).parent)['rows']}
     rows_by_claim: dict[str, list[artifacts.ComparableRow]] = {}
     for row in rows:
         rows_by_claim.setdefault(row.claim_id, []).append(row)
     for claim in claims:
         if claim.claim_id not in bound_ids:
+            disposition = accounting.get(claim.claim_id, {})
+            handled = disposition.get('status') in {'computed', 'unavailable', 'invalid_input'}
             summaries.append(
                 artifacts.MatchSummary(
                     claim_id=claim.claim_id, n_ran=0, n_found=0, n_matched=0,
                     importance=claim.importance, analysis_id=analysis_of.get(claim.claim_id),
-                    state="abstained",
-                    abstain_reason="analysis abstained at intake: no data file covers it",
+                    state="complete" if disposition.get('status') == 'computed' else "abstained",
+                    abstain_reason=(disposition['reason'] if handled else source["invalid_claims"].get(claim.claim_id) or assignment_reasons.get(claim.claim_id) or "analysis abstained at intake: " + str(readiness_reasons.get(analysis_of.get(claim.claim_id), "binding unresolved"))),
+                    outcome_status=(disposition['status'] if handled else "input_invalid" if claim.claim_id in source["invalid_claims"] or readiness_outcomes.get(analysis_of.get(claim.claim_id)) == "source_unresolved" else "unbound"),
                 )
             )
             continue
@@ -606,6 +664,9 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
                 n_matched=matched,
                 fraction_matched=(matched / n_ran) if n_ran else None,
                 fraction_a=(matched_a / n_ran) if n_ran else None,
+                n_requested=len(claim_rows),
+                coverage=n_ran / len(claim_rows) if claim_rows else None,
+                end_to_end_matched=matched / len(claim_rows) if claim_rows else None,
                 importance=claim.importance,
                 dispersion=artifacts.Dispersion(
                     decision_agreement=equivalence.agreement, numeric_cv=cv
@@ -620,6 +681,9 @@ def run(paper_id: str, force: bool = False) -> artifacts.ComparableResult:
         rows=rows,
         summaries=summaries,
         trace_equivalence=equivalence.model_dump(),
+        source_coverage=source,
+        method_fidelity={t.replica_id: getattr(t, "execution_evidence", {"status": "unverified"}) for t in traces},
+        unique_quantities=len({c.quantity_id or c.claim_id for c in claims}),
         state="complete" if traces else "abstained",
         abstain_reason=None if traces else "no replica produced runnable results",
         meta=artifacts.ArtifactMeta(
@@ -643,7 +707,15 @@ def targeted_trigger(
     wanted = set(claim_ids)
     reasons = []
     for s in result.summaries:
-        if s.claim_id not in wanted or not s.n_ran:
+        if s.claim_id not in wanted:
+            continue
+        claim_rows=[r for r in result.rows if r.claim_id==s.claim_id]
+        if claim_rows and all(r.outcome_status=='direction_unverified' and getattr(r,'magnitude_band',None) in {'A','B'} for r in claim_rows):
+            # A source interpretation gap is not a computational miss.
+            continue
+        if not s.n_ran:
+            if getattr(s, "n_requested", 0):
+                reasons.append(f"{s.claim_id}: no accepted focal result")
             continue
         if s.fraction_matched is None:  # abstained at intake: nothing to reconstruct
             continue

@@ -28,6 +28,9 @@ import random
 import re
 import shutil
 import subprocess
+import tempfile
+import sys
+import copy
 from collections import Counter
 from itertools import product
 from pathlib import Path
@@ -35,7 +38,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from .. import artifacts, llm, paths
+from .. import artifacts, llm, paths, provenance
+from ..statistical import validate_result
 from ..artifacts import ClaimRecord, EstimandContract
 from ..focal import QUANTITY_PREFERENCE, _TSTAT_KINDS, _as_float, _norm, bind_focal_claim  # noqa: F401
 
@@ -69,6 +73,7 @@ class ProposedFactor(BaseModel):
     field: str | None = None
     levels: list[ProposedLevel] = []
     paper_level: str | None = None
+    author_evidence: str | None = None
 
 
 class Unimplementable(BaseModel):
@@ -92,11 +97,21 @@ class ScreenedLevel(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     value: str
+    reference_settings: dict[str, Any] = {}
+    ci_reference_settings: dict[str, Any] = {}
+    role: Literal["comparable_effect", "related_effect", "inference_only", "diagnostic"] = "comparable_effect"
+    effect_group: str = "focal"
+    null_group: str = "focal"
+    estimator: str = "unspecified"
+    effect_metric: str | None = None
+    comparability_rationale: str = ""
     verdict: Literal["defensible", "rejected"]
     # What varying the level can change. A screen output written before this field
     # existed says nothing, and the level is taken to bear on the estimate.
     affects: Literal["estimate", "inference", "reporting"] = "estimate"
     rationale: str | None = None
+    rejection_kind: Literal['substantive','operational','nonstandard'] | None = None
+    missing_details: list[Literal['algorithm','parameters','variables','order','uncertainty','null','scale','dependencies']] = []
 
 
 class ScreenedFactor(BaseModel):
@@ -114,13 +129,48 @@ class Incompatible(BaseModel):
     why: str | None = None
 
 
+class ScreenAdjustment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["merge_levels", "pin_level", "rewrite_how", "add_level", "unresolved"]
+    factor: str
+    levels: list[str] = []
+    canonical: str | None = None
+    how: str | None = None
+    rationale: str
+    mandatory: bool = True
+
+
+class PrimaryEffect(BaseModel):
+    metric: str
+    effect_group: str
+    rationale: str
+
+
+class ReportingRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    when: dict[str, list[str]]
+    effect_group: str
+    effect_metric: str
+    null_group: str
+    role: Literal["comparable_effect", "related_effect", "inference_only"]
+    rationale: str
+
+
+class ReportingRules(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reporting_rules: list[ReportingRule]
+
+
 class ScreenOut(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     factors: list[ScreenedFactor] = []
     incompatible: list[Incompatible] = []
-    adjustments: list[str] = []
+    adjustments: list[ScreenAdjustment] = []
     grid_size_after_screen: int | None = None
+    primary_effect: PrimaryEffect | None = None
+    reporting_rules: list[ReportingRule] = []
 
 
 class PaperLevel(BaseModel):
@@ -160,75 +210,81 @@ def _truthy(x: Any) -> bool:
 def derive_paper_levels(
     paper_id: str, proposed: dict[str, Any], focal: dict[str, Any]
 ) -> dict[str, Any]:
-    """Read the paper's own level for each factor off the best-matching replica.
+    """Document author choices from explicit source evidence, independently of matches."""
+    from ..stage1.blind import paper_text
 
-    The enumerator marks a `paper_level` per factor, but it only ever sees the contract,
-    so it guesses whenever the methods leave the choice open. A replica that landed in
-    band A on the focal claim reproduced the paper's number, so its script and trace are
-    the better evidence for what the paper actually did, and they override the guess.
-    Any other band leaves the enumerator's mark standing.
-    """
-    stage1 = paths.run_dir(paper_id, 1)
-    rid, script, why, band = _best_replica(paper_id, focal)
-    fallback = {
-        pf.get("name", ""): pf.get("paper_level")
-        for pf in proposed.get("factors", []) if pf.get("paper_level")
-    }
-    out: dict[str, Any] = {
-        "levels": fallback, "source": "enumerator", "replica_id": rid, "band": band,
-        "replica_reason": why, "evidence": {}, "notes": [],
-    }
-    if band != "A" or script is None:
-        out["notes"].append(
-            f"no band-A replica on the focal claim ({why}); the enumerator's marks stand"
-        )
-        return out
-
-    trace_path = stage1 / "replicas" / str(rid) / "trace.json"
-    factors = [{"name": pf.get("name"), "levels": [lv.get("value") for lv in pf.get("levels", [])]}
-               for pf in proposed.get("factors", [])]
+    source = paper_text(paper_id)
     prompt = artifacts.load_prompt(
-        "stage3_paper_level",
-        factors=json.dumps(factors, indent=2),
-        trace=trace_path.read_text()[:12000] if trace_path.exists() else "(no trace)",
-        script=script.read_text()[:20000],
+        "stage3_paper_level", factors=json.dumps(proposed.get("factors", [])),
+        source=source + "\n\nFOCAL ANALYSIS CONTEXT (scope only, not source evidence):\n" + json.dumps(focal, default=str),
     )
     r = llm.call("paper_level", prompt, paper_id=paper_id, stage="3",
-                 tier="cheap", schema=PaperLevelsOut)
+                 tier="cheap", schema=PaperLevelsOut,
+                 log_path=paths.run_dir(paper_id, 3) / "logs/paper_level.log")
     if not r.ok or r.parsed is None:
-        out["notes"].append(f"reading the replica's levels failed ({r.error}); "
-                            "the enumerator's marks stand")
-        return out
-
-    # Map the model's answers back onto the enumerator's exact factor and level strings.
-    by_factor = {_norm(pf.get("name", "")): pf for pf in proposed.get("factors", [])}
-    levels = dict(fallback)
-    for item in r.parsed.levels:
-        pf = by_factor.get(_norm(item.factor))
-        if pf is None or item.level is None:
-            continue
-        canonical = next((lv.get("value") for lv in pf.get("levels", [])
-                          if _norm(lv.get("value", "")) == _norm(item.level)), None)
-        if canonical is None:
-            out["notes"].append(
-                f"{pf.get('name')}: replica level {item.level!r} matches no enumerated level"
-            )
-            continue
-        name = pf.get("name", "")
-        if fallback.get(name) and _norm(fallback[name]) != _norm(canonical):
-            out["notes"].append(
-                f"{name}: the enumerator guessed {fallback[name]!r}; replica {rid} "
-                f"(band A) shows {canonical!r}"
-            )
-        levels[name] = canonical
-        out["evidence"][name] = item.evidence
-    out["levels"] = levels
-    out["source"] = f"replica {rid} (band A)"
-    out["_ledger_id"] = r.ledger_id
+        raise llm.LLMError(f"author-method evidence call failed: {r.error}")
+    out = {"levels": {}, "source": "documented author evidence", "evidence": {},
+           "notes": [], "unresolved": [], "diagnostics": {},
+           "raw_response": r.parsed.model_dump(), "focal_context": focal, "_ledger_id": r.ledger_id}
+    answers = {item.factor: item for item in r.parsed.levels} if r.ok and r.parsed else {}
+    if len(answers) != len(r.parsed.levels) or not set(answers) <= {f["name"] for f in proposed.get("factors", [])}:
+        out["notes"].append("duplicate or unknown attribution factor IDs; candidates rejected")
+        answers = {}
+    for factor in proposed.get("factors", []):
+        name = factor["name"]
+        item = answers.get(name)
+        options = {lv["value"] for lv in factor.get("levels", [])}
+        # A quote is necessary, but cannot establish that it entails the claimed
+        # method. Keep the source visible for human/reference validation.
+        if (item and item.level in options and len(item.evidence.strip()) >= 20
+                and " ".join(item.evidence.casefold().split()) in " ".join(source.casefold().split())):
+            out["levels"][name] = item.level
+            out["evidence"][name] = item.evidence
+            out["diagnostics"][name] = {"status": "documented_candidate", "entailment": "requires_validation"}
+        else:
+            out["unresolved"].append(name)
+            out["diagnostics"][name] = {"status": "missing_response" if item is None else
+                "not_documented_or_ambiguous" if item.level is None else
+                "invalid_level" if item.level not in options else "source_quote_rejected",
+                "candidate": item.model_dump() if item else None}
+    if out["unresolved"]:
+        out["notes"].append("author specification undetermined for: " + ", ".join(out["unresolved"]))
     return out
 
 
-# --- step 3b: deterministic grid build ------------------------------------
+def apply_adjustments(proposed: dict, screen: dict) -> tuple[dict, list[dict], list[str]]:
+    """Apply the screen's executable amendments once; unresolved requirements block."""
+    proposed = copy.deepcopy(proposed)
+    records, blocking = [], []
+    factors = {f["name"]: f for f in proposed.get("factors", [])}
+    for raw in screen.get("adjustments", []):
+        try:
+            change = ScreenAdjustment.model_validate(raw)
+            factor = factors[change.factor]
+            levels = {lv["value"]: lv for lv in factor["levels"]}
+            if change.kind == "rewrite_how" and change.canonical in levels and change.how:
+                levels[change.canonical]["how"] = change.how
+            elif change.kind in {"merge_levels", "pin_level"} and change.canonical in levels:
+                if not set(change.levels) <= levels.keys():
+                    raise ValueError("unknown level in adjustment")
+                if change.kind == "pin_level":
+                    factor["levels"] = [levels[change.canonical]]
+                else:
+                    removed = set(change.levels) - {change.canonical}
+                    factor["levels"] = [lv for lv in factor["levels"] if lv["value"] not in removed]
+                    levels[change.canonical]["equivalent_levels"] = sorted(removed)
+            elif change.kind == "add_level" and change.canonical and change.how:
+                if change.canonical in levels:
+                    raise ValueError("added level already exists")
+                factor["levels"].append({"value": change.canonical, "how": change.how})
+            else:
+                raise ValueError("unresolved or incomplete screen adjustment")
+            records.append({**change.model_dump(), "status": "applied"})
+        except (ValueError, KeyError, TypeError) as exc:
+            records.append({"instruction": raw, "status": "unresolved", "reason": str(exc)})
+            if not isinstance(raw, dict) or raw.get("mandatory", True):
+                blocking.append(f"unresolved mandatory screen adjustment: {raw}")
+    return proposed, records, blocking
 
 
 def _verdicts(screen: dict[str, Any]) -> dict[tuple[str, str], ScreenedLevel]:
@@ -256,36 +312,36 @@ def build_grid(
     paper_id: str | None = None,
     paper_levels: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Turn the enumerator's factors plus the screen's verdicts into the executor's GRID.json.
-
-    Levels the screen rejected are dropped, with one exception: the paper's own level
-    always stays in the grid, carrying the verdict `paper` and the screen's rationale, so
-    the reported estimate has a place on the curve even when the screen calls it
-    indefensible. Those cases are listed in `paper_level_flagged`.
-
-    Factors left with no level disappear; a factor left with one level stays (it
-    constrains the analysis but does not multiply the grid). Incompatible pairs are
-    counted out exactly. If the surviving grid is still larger than `cap`, multi-level
-    factors are dropped from the end of the enumerator's list, which is where it was
-    asked to put the choices least likely to move the estimate.
-
-    A grid still larger than `exec_cap` after that is executed as a stratified fraction:
-    `grid_size` stays the full count, `n_specs` says how many specifications run, and
-    `sampled_spec_ids` names them.
-
-    `paper_levels` maps factor name to the level the paper itself used, read off the
-    best-matching replica; it overrides the enumerator's own `paper_level` mark.
-    """
+    """Build an explicitly screened grid; documented rejected choices are references."""
+    original_proposed = proposed
+    proposed, adjustments, blocking = apply_adjustments(proposed, screen)
     verdicts = _verdicts(screen)
     notes: list[str] = []
     factors: list[dict[str, Any]] = []
     rejected: list[dict[str, str]] = []
     flagged: list[dict[str, str]] = []
-    paper_levels = paper_levels or {}
+    # Preserve explicit rejections even when a pin or merge removes the level
+    # before grid construction. The exclusion record describes the full screen.
+    retained_keys = {(_norm(f['name']), _norm(lv['value']))
+                     for f in proposed.get('factors', []) for lv in f.get('levels', [])}
+    for f in original_proposed.get('factors', []):
+        for lv in f.get('levels', []):
+            key = (_norm(f['name']), _norm(lv['value']))
+            verdict = verdicts.get(key)
+            if key not in retained_keys and verdict and verdict.verdict == 'rejected':
+                rejected.append({'factor': f['name'], 'level': lv['value'],
+                                 'rationale': verdict.rationale or ''})
+    original_author_levels = dict(paper_levels or {})
+    paper_levels = dict(original_author_levels)
+    for change in adjustments:
+        if change.get("status") == "applied" and change.get("kind") == "merge_levels":
+            name = change["factor"]
+            if paper_levels.get(name) in change.get("levels", []):
+                paper_levels[name] = change["canonical"]
 
     for pf in proposed.get("factors", []):
         name = pf.get("name", "")
-        paper_level = paper_levels.get(name, pf.get("paper_level"))
+        paper_level = paper_levels.get(name)
         levels: list[dict[str, Any]] = []
         for lv in pf.get("levels", []):
             value = lv.get("value", "")
@@ -293,29 +349,33 @@ def build_grid(
             is_paper = bool(paper_level) and _norm(paper_level) == _norm(value)
             sv = verdicts.get((_norm(name), _norm(value)))
             if sv is None:
-                notes.append(f"{name}={value}: not returned by the screen; kept by default")
-                levels.append({"value": value, "how": lv.get("how", ""), **alpha,
-                               "verdict": "paper" if is_paper else "defensible",
-                               "affects": "estimate", "rationale": "not screened"})
-            elif sv.verdict == "rejected" and is_paper:
-                # Never drop the paper's own choice: the curve must have room for the
-                # estimate the paper reported, labelled for what the screen thinks of it.
-                flagged.append({"factor": name, "level": value,
-                                "rationale": sv.rationale or ""})
-                notes.append(f"factor {name!r}: the screen rejected the paper's own level "
-                             f"{value!r}; kept in the grid with verdict 'paper'")
-                levels.append({"value": value, "how": lv.get("how", ""), **alpha,
-                               "verdict": "paper", "affects": sv.affects,
-                               "rationale": sv.rationale or "",
-                               "screen_verdict": "rejected"})
-            elif sv.verdict == "rejected":
+                blocking.append(f"{name}={value}: no explicit screen verdict")
+                continue
+            diagnostic = sv.role == "diagnostic" or bool(re.search(r"leave[ _-]one[ _-]out|jackknife|bootstrap[ _-]replicate|random[ _-]seed", name+" "+value, re.I))
+            if diagnostic:
+                rejected.append({"factor": name, "level": value, "rationale": "Diagnostic or internal computational control; excluded from analytical dimensions"})
+                continue
+            if sv.verdict == "rejected":
                 rejected.append({"factor": name, "level": value, "rationale": sv.rationale or ""})
+                if is_paper:
+                    flagged.append({"factor": name, "level": value, "rationale": sv.rationale or ""})
+                continue
             else:
-                levels.append({"value": value, "how": lv.get("how", ""), **alpha,
+                levels.append({"value": value, "how": lv.get("how", "") + (
+                    " Report once-adjusted p in p, declare the raw p family and adjustment; compare against family alpha .05."
+                    if alpha else ""),
                                "verdict": "paper" if is_paper else "defensible",
-                               "affects": sv.affects, "rationale": sv.rationale or ""})
+                               "affects": sv.affects, "rationale": sv.rationale or "",
+                               "equivalent_levels": lv.get("equivalent_levels", []),
+                               "reference_settings": sv.reference_settings,
+                               "ci_reference_settings": sv.ci_reference_settings,
+                               **{k: getattr(sv, k) for k in ("role", "effect_group", "null_group", "estimator", "effect_metric", "comparability_rationale")}})
+        if not levels and all((verdicts.get((_norm(name), _norm(lv.get("value", "")))) and verdicts[(_norm(name), _norm(lv.get("value", "")))].role == "diagnostic") or re.search(r"leave[ _-]one[ _-]out|jackknife|bootstrap[ _-]replicate|random[ _-]seed", name+" "+lv.get("value", ""), re.I) for lv in pf.get("levels", [])):
+            notes.append(f"{name}: diagnostic/computational factor omitted from analytical grid")
+            continue
         if not levels:
-            notes.append(f"factor {name!r} dropped: every level was rejected")
+            blocking.append(f"required factor {name!r} has no defensible level")
+            factors.append({"name": name, "levels": [], "paper_level": None})
             continue
         paper_kept = any(_norm(paper_level) == _norm(lv["value"]) for lv in levels)
         if paper_level and not paper_kept:
@@ -349,44 +409,23 @@ def build_grid(
         f = by_name.get(fn)
         return f is not None and any(_norm(x["value"]) == lv for x in f["levels"])
 
+    original_refs = {(_norm(f["name"]), _norm(lv["value"]))
+                     for f in original_proposed.get("factors", []) for lv in f["levels"]}
     incompatible: list[dict[str, Any]] = []
     for inc in screen.get("incompatible", []):
         a, b = inc.get("a", ""), inc.get("b", "")
         if resolves(a) and resolves(b):
             incompatible.append({"a": a, "b": b, "why": inc.get("why")})
+        elif _parse_ref(a) not in original_refs or _parse_ref(b) not in original_refs:
+            blocking.append(f"incompatibility contains an unknown factor or level: {a!r}, {b!r}")
         else:
             notes.append(f"incompatibility {a!r} x {b!r} ignored: it does not resolve to two "
                          "surviving levels")
 
     dropped: list[str] = []
-    while True:
-        size = _grid_size(factors, incompatible)
-        if size <= cap:
-            break
-        multi = [i for i, f in enumerate(factors) if len(f["levels"]) > 1]
-        if not multi:
-            break
-        i = multi[-1]  # lowest priority: last in the enumerator's list
-        f = factors[i]
-        dropped.append(f["name"])
-        # Pin the factor to the paper's level rather than removing it, so the paper's own
-        # specification stays reachable and the executor still implements the choice.
-        keep = next((lv for lv in f["levels"] if _norm(lv["value"]) == _norm(f["paper_level"])),
-                    None) if f.get("paper_level") else None
-        if keep is not None:
-            notes.append(
-                f"factor {f['name']!r} pinned to the paper's level {keep['value']!r} to bring "
-                f"the grid under the cap of {cap} (was {size} specifications)"
-            )
-            f["levels"] = [keep]
-        else:
-            notes.append(
-                f"factor {f['name']!r} dropped to bring the grid under the cap of {cap} "
-                f"(was {size} specifications); it has no paper level to pin to"
-            )
-            factors.pop(i)
-        by_name = {_norm(f2["name"]): f2 for f2 in factors}
-        incompatible = [inc for inc in incompatible if resolves(inc["a"]) and resolves(inc["b"])]
+    size = _grid_size(factors,incompatible)
+    if size>cap:
+        notes.append(f"Screened grid has {size} compatible specifications; all analytical dimensions retained, execution sampling applies.")
 
     grid = {
         "factors": factors,
@@ -398,10 +437,31 @@ def build_grid(
         "dropped_factors": dropped,
         "unimplementable": [dict(u) for u in proposed.get("unimplementable", [])],
         "cap": cap,
-        "adjustments": screen.get("adjustments", []),
+        "adjustments": adjustments,
+        "blocking_issues": blocking,
+        "author_levels": paper_levels,
+        "reference_specs": [],
         "notes": notes,
     }
+    if grid["full_factorial"]>200_000:
+        blocking.append("screened Cartesian grid exceeds the 200,000-combination enumeration limit; reduce redundant levels or implement a sparse design without dropping analytical dimensions")
+    if blocking:
+        grid["grid_size"] = 0
+        grid["n_specs"] = 0
+        grid["sampled_spec_ids"] = []
+        return grid
+    for factor in factors:
+        author = paper_levels.get(factor["name"])
+        if author and not any(_norm(lv["value"]) == _norm(author) for lv in factor["levels"]):
+            if not any(x["factor"] == factor["name"] for x in flagged):
+                flagged.append({"factor": factor["name"], "level": author,
+                                "rationale": "documented level removed by a screen amendment"})
+    if flagged and len(original_author_levels) == len(original_proposed.get("factors", [])):
+        grid["reference_specs"] = [{"spec_id": "reference_author", "levels": original_author_levels,
+                                    "role": "author_reference", "is_paper_level": True}]
+        grid["reference_factors"] = original_proposed.get("factors", [])
     apply_exec_cap(grid, paper_id=paper_id, exec_cap=exec_cap)
+    grid["n_reference_specs"] = len(grid["reference_specs"])
     return grid
 
 
@@ -431,9 +491,11 @@ def apply_exec_cap(
     `grid_size` keeps the full count of the pruned grid. `n_specs` is what runs,
     `sampled` says whether that is a fraction, and `sample_fraction` how large a one.
     """
-    specs = enumerate_specs(grid)
+    specs = [s for s in enumerate_specs(grid) if s.get("role") != "author_reference"]
     grid["exec_cap"] = exec_cap
     grid["n_specs"] = len(specs)
+    varying = [f for f in grid.get("factors", []) if len(f.get("levels", [])) > 1]
+    grid["sensitivity_scope"] = "inference_only" if varying and all(lv.get("affects") == "inference" for f in varying for lv in f["levels"]) else "estimate_and_inference" if varying else "single_specification"
     grid["sampled"] = False
     grid["sample_fraction"] = 1.0
     if exec_cap is None or len(specs) <= exec_cap:
@@ -508,7 +570,7 @@ def _grid_size(factors: list[dict[str, Any]], incompatible: list[dict[str, Any]]
     full = math.prod(len(f["levels"]) for f in factors)
     if not incompatible:
         return full
-    if full > 200_000:  # too big to enumerate; the cap loop will shrink it first
+    if full > 200_000:  # exact constrained count unavailable; the bounded-enumeration gate will stop this grid
         return full
     pairs = []
     for inc in incompatible:
@@ -561,6 +623,8 @@ def enumerate_specs(grid: dict[str, Any]) -> list[dict[str, Any]]:
     Ids still come from the full enumeration, so a sampled specification keeps the id it
     would have had in the whole grid.
     """
+    if grid.get("sampled_spec_ids") == []:
+        return grid.get("reference_specs",[])
     combos = grid_specs(grid)
     width = max(3, len(str(len(combos))))
     factors = grid.get("factors", [])
@@ -576,7 +640,7 @@ def enumerate_specs(grid: dict[str, Any]) -> list[dict[str, Any]]:
     if sampled is not None:
         keep = set(sampled)
         out = [s for s in out if s["spec_id"] in keep]
-    return out
+    return out + grid.get("reference_specs", [])
 
 
 # --- step 5: rank ---------------------------------------------------------
@@ -587,7 +651,10 @@ def _norm_name(name: str) -> str:
 
 
 RESULT_COLUMNS = ("spec_id", "estimate", "se", "p", "n", "converged", "error",
-                  "p_threshold")
+                  "p_threshold", "effect_metric", "se_metric", "p_raw", "p_adjustment",
+                  "p_family", "p_index", "inference_method", "draws", "exceedances",
+                  "effect_group", "null_group", "estimator", "ci_lower", "ci_upper",
+                  "ci_method", "ci_level", "per_test_alpha")
 DEFAULT_ALPHA = 0.05
 
 
@@ -602,19 +669,31 @@ def read_specs(path: Path, grid: dict[str, Any] | None = None) -> list[dict[str,
     Without a `spec_id` column the factor columns themselves are matched, allowing for
     the normalised names (snake_case, punctuation dropped) an executor tends to write.
     """
-    rows = list(csv.DictReader(io.StringIO(Path(path).read_text())))
     if grid is None:
         grid_path = Path(path).parents[2] / "grid.json"
         grid = json.loads(grid_path.read_text()) if grid_path.exists() else None
+    return read_specs_text(Path(path).read_text(), grid)
 
+
+def read_specs_text(text: str, grid: dict | None = None) -> list[dict]:
+    """Canonical result/factor decoding shared by verification and interpretation."""
+    rows = list(csv.DictReader(io.StringIO(text)))
     if rows and "spec_id" in rows[0]:
         by_id = {s["spec_id"]: s["levels"] for s in enumerate_specs(grid or {})}
+        roles = {s["spec_id"]: s.get("role", "defensible") for s in enumerate_specs(grid or {})}
         for r in rows:
             sid = (r.get("spec_id") or "").strip()
             r["_spec_id"] = sid
             levels = by_id.get(sid)
+            r["_role"] = roles.get(sid, "unknown")
+            r["_factor_mismatches"] = [k for k, v in (levels or {}).items()
+                for supplied, actual in r.items() if (_norm_name(supplied) == _norm_name('factor_'+k)
+                    or (k not in RESULT_COLUMNS and _norm_name(supplied) == _norm_name(k)))
+                and _norm(actual) != _norm(v)]
+            r['_factor_mismatches'] += [k for k in (levels or {}) if k in RESULT_COLUMNS and 'factor_'+k not in r]
             if levels:
-                r.update(levels)
+                r['_factor_levels']=dict(levels)
+                r.update({k:v for k,v in levels.items() if k not in RESULT_COLUMNS})
     elif grid and rows:
         by_norm = {_norm_name(f["name"]): f["name"] for f in grid.get("factors", [])}
         rename = {}
@@ -640,7 +719,7 @@ def read_specs(path: Path, grid: dict[str, Any] | None = None) -> list[dict[str,
         alpha = _as_float(r.get("p_threshold"))
         r["_alpha"] = alpha if alpha else DEFAULT_ALPHA
         n = _as_float(r.get("n"))
-        r["_n"] = int(n) if n is not None else None
+        r["_n"] = int(n) if n is not None and math.isfinite(n) and n.is_integer() else None
     return rows
 
 
@@ -650,6 +729,7 @@ def rank_reported(
     grid: dict[str, Any] | None = None,
     *,
     precision: int | None = None,
+    quantity_kind: str | None = None,
 ) -> dict[str, Any]:
     """Where the paper's estimate sits in the curve, plus the sign/significance shares.
 
@@ -664,7 +744,10 @@ def rank_reported(
     of the curve, near 0.5 when it sits in the middle. `rank` counts the estimates below
     the reported value plus one, and is kept for information.
     """
-    ok = [r for r in rows if r["_converged"] and r["_estimate"] is not None]
+    reference_rows = [r for r in rows if r.get("_role") == "author_reference"]
+    rows = [r for r in rows if r.get("_role") != "author_reference"]
+    ok = [r for r in rows if r["_converged"] and r["_estimate"] is not None
+          and math.isfinite(r["_estimate"])]
     est = sorted(r["_estimate"] for r in ok)
     n = len(est)
     out: dict[str, Any] = {
@@ -686,11 +769,13 @@ def rank_reported(
         out["share_below"] = round(below / n, 6)
         out["share_above"] = round(above / n, 6)
         out["share_tied"] = round((n - below - above) / n, 6)
-        out["extremeness"] = round(min(below, above) / n, 6)
+        out["rank_interval"] = [below + 1, n - above] if below + above < n else [below + 1, below + 1]
+        out["curve_state"] = "all_tied" if below == above == 0 else "varying"
+        out["extremeness"] = None if below == above == 0 else round(min(below, above) / n, 6)
         sign = (reported > 0) - (reported < 0)
-        out["share_same_sign"] = round(
+        out["share_same_sign"] = (round(
             sum(1 for e in est if ((e > 0) - (e < 0)) == sign) / n, 6
-        )
+        ) if quantity_kind not in {"F", "chi2", "sd", "n", "eta2"} else None)
         closest = min(ok, key=lambda r: abs(r["_estimate"] - reported))
         out["closest_spec"] = {
             "estimate": closest["_estimate"],
@@ -704,6 +789,8 @@ def rank_reported(
             sum(1 for r in with_p if r["_p"] < r.get("_alpha", DEFAULT_ALPHA)) / len(with_p), 6)
         out["alphas"] = sorted({r.get("_alpha", DEFAULT_ALPHA) for r in with_p})
 
+    out["author_reference"] = [{"estimate": r["_estimate"], "converged": r["_converged"]}
+                               for r in reference_rows]
     if grid:
         paper = {f["name"]: f["paper_level"] for f in grid.get("factors", [])
                  if f.get("paper_level")}
@@ -718,7 +805,7 @@ def rank_reported(
                 None,
             ) or next(
                 (r for r in ok
-                 if all(_norm(r.get(k, "")) == _norm(v) for k, v in paper.items())), None
+                 if all(_norm(r.get('_factor_levels',r).get(k, "")) == _norm(v) for k, v in paper.items())), None
             )
             out["paper_level_estimate"] = hit["_estimate"] if hit else None
             if hit is None:
@@ -741,7 +828,8 @@ def st_median(values: list[float]) -> float | None:
 
 def _spec_of(row: dict[str, Any], grid: dict[str, Any] | None) -> dict[str, str]:
     names = [f["name"] for f in (grid or {}).get("factors", [])]
-    return {k: row[k] for k in names if k in row}
+    levels = row.get("_factor_levels", row)
+    return {k: levels[k] for k in names if k in levels}
 
 
 # --- work-directory assembly ---------------------------------------------
@@ -753,8 +841,8 @@ def _best_replica(
     """The replica whose script Stage 3 builds on.
 
     Returns (replica_id, script path, why, band on the focal claim). The band is None
-    when no match row picked the replica; only a band-A replica is trusted to say what
-    the paper itself did.
+    when no match row picked the replica. Selection uses stable replica order among
+    accepted focal-producing implementations; numerical agreement does not determine author choices.
     """
     stage1 = paths.run_dir(paper_id, 1)
     reps = sorted(p for p in (stage1 / "replicas").glob("*") if p.is_dir()) \
@@ -772,34 +860,22 @@ def _best_replica(
                     return out / name
             return None
 
-    order = {"A": 0, "B": 1, "C": 2, "fail": 3}
-    match_path = stage1 / "match.json"
-    if match_path.exists():
-        claim_ids = set(focal.get("claim_ids", []))
-        focal_id = focal["focal_quantity"]["claim_id"]
-        rows = _read_json(match_path).get("rows", [])
-        cands = [r for r in rows if r.get("claim_id") == focal_id] \
-            or [r for r in rows if r.get("claim_id") in claim_ids]
-        def closeness(r: dict[str, Any]) -> tuple[int, float, float]:
-            sd, rd = _as_float(r.get("std_diff")), _as_float(r.get("raw_diff"))
-            return (order.get(r.get("band"), 4),
-                    9e9 if sd is None else abs(sd),
-                    9e9 if rd is None else abs(rd))
-
-        cands.sort(key=closeness)
-        for r in cands:
-            s = script_of(r.get("replica_id", ""))
-            if s:
-                return (r["replica_id"], s,
-                        f"best match on {focal_id} (band {r.get('band')})", r.get("band"))
-
+    from ..stage1.audit import acceptance
+    comparison = _read_json(stage1 / "match.json") if (stage1 / "match.json").exists() else {}
+    focal_rows = {r["replica_id"]: r for r in comparison.get("rows", [])
+                  if r.get("claim_id") == focal["focal_quantity"]["claim_id"]
+                  and r.get("replicated") is not None and r.get("state", "complete") == "complete"}
     for p in reps:
         trace = p / "trace.json"
-        if trace.exists() and not _read_json(trace).get("ran", False):
+        if not trace.exists():
+            continue
+        record = _read_json(trace)
+        if (p.name not in focal_rows or not record.get("ran")
+                or acceptance(record.get("hardcoding_audit") or {}) != "accepted"):
             continue
         s = script_of(p.name)
         if s:
-            return p.name, s, "fallback: first replica that ran with a script", None
+            return p.name, s, "first runnable, audit-accepted focal implementation; independent of numerical proximity", focal_rows[p.name].get("band")
     return None, None, "no replica script found", None
 
 
@@ -821,6 +897,11 @@ def assemble_work(paper_id: str, focal: dict[str, Any], grid: dict[str, Any]) ->
     )
     scan_hits: list[str] = []
 
+    if work.exists():
+        import uuid
+        archive = stage3 / "work_superseded" / uuid.uuid4().hex
+        archive.parent.mkdir(exist_ok=True)
+        shutil.move(str(work), archive)
     (work / "out").mkdir(parents=True, exist_ok=True)
     base_name = "BASE_ANALYSIS" + script.suffix
     shutil.copy2(script, work / base_name)
@@ -828,18 +909,16 @@ def assemble_work(paper_id: str, focal: dict[str, Any], grid: dict[str, Any]) ->
 
     data_dir = work / "data"
     data_dir.mkdir(exist_ok=True)
-    copied = []
-    for rel in list(manifest.data_files) + ([manifest.codebook] if manifest.codebook else []):
-        src = manifest.path(rel)
-        if src.exists():
-            shutil.copy2(src, data_dir / Path(rel).name)
-            copied.append(f"data/{Path(rel).name}")
+    from ..stage1.blind import copy_data
+    copied = ['data/'+name for name in copy_data(paper_id,data_dir)]
 
     contracts = _load_contracts(paper_id, blind_first=True)
     focal_contract = next(
         (c for c in contracts if c.analysis_id == focal["analysis_id"]),
-        contracts[0] if contracts else None,
+        None,
     )
+    if focal_contract is None:
+        raise ValueError("focal analysis has no matching blind contract")
     # `description` is the paper's results sentence: it carries the group means and the
     # test statistic even after the focal value itself is scrubbed. The executor needs the
     # quantity, not the sentence.
@@ -874,19 +953,28 @@ def executor_grid(grid: dict[str, Any]) -> dict[str, Any]:
     paper's own specification, so the work copy carries only what a level is and how to
     implement it. Screening rationales stay in `grid.json`.
     """
+    factors = copy.deepcopy(grid.get("factors", []))
+    for source in grid.get("reference_factors", []):
+        target = next((f for f in factors if f["name"] == source["name"]), None)
+        needed = {s["levels"].get(source["name"]) for s in grid.get("reference_specs", [])}
+        if target is not None:
+            present = {lv["value"] for lv in target["levels"]}
+            target["levels"] += [lv for lv in source["levels"] if lv["value"] in needed - present]
     return {
+        "result_contract_version": grid.get("result_contract_version"),
+        "effect_metric": grid.get("effect_metric"),
         "factors": [
             {"name": f["name"], "field": f.get("field"),
-             "levels": [{"value": lv["value"], "how": lv.get("how", ""),
-                         **({"p_threshold": lv["p_threshold"]} if lv.get("p_threshold") else {})}
+             "levels": [{"value": lv["value"], "how": lv.get("how", ""), "reference_settings": lv.get("reference_settings", {}), "ci_reference_settings":lv.get("ci_reference_settings",{}), **{k:lv.get(k) for k in ("role","effect_group","null_group","estimator","effect_metric")}}
                         for lv in f["levels"]]}
-            for f in grid.get("factors", [])
+            for f in factors
         ],
         # The executor gets ids and levels only; which spec is the paper's stays out of its view.
-        "specs": [{k: v for k, v in s.items() if k != "is_paper_level"} for s in enumerate_specs(grid)],
+        "specs": [{k: v for k, v in s.items() if k not in {"is_paper_level", "role"}} for s in enumerate_specs(grid)],
         "incompatible": grid.get("incompatible", []),
         "grid_size": grid.get("grid_size"),
-        "n_specs": grid.get("n_specs"),
+        "n_specs": len(enumerate_specs(grid)),
+        "reporting_contracts": grid.get("reporting_contracts", {}),
         "cap": grid.get("cap"),
     }
 
@@ -952,16 +1040,38 @@ def verify_execution(work: Path, grid: dict[str, Any], paper_id: str) -> dict[st
     out = work / "out"
     specs_path = out / "specs.csv"
     report: dict[str, Any] = {"specs_csv": str(specs_path), "checks": {}, "problems": []}
+    from ..generation_access import review as review_generation_access
+    report["generation_access"] = review_generation_access(work.parent / "logs/execute.log", work)
+    if report["generation_access"]["status"] == "violated":
+        report["problems"].append("generation read files outside its supplied work directory")
 
     if not specs_path.exists():
         report["problems"].append("out/specs.csv does not exist")
         report["ok"] = False
         return report
 
+    from ..execution import external_file_literals
+    path_problems = external_file_literals(work)
+    if path_problems:
+        report["problems"].extend(path_problems)
+        report.update(ok=False, acceptance="rejected")
+        return report
     rows = read_specs(specs_path, grid)
-    specs = enumerate_specs(grid)
+    try:
+        specs = reference_specifications(grid)
+        if grid.get("result_contract_version") and grid.get("reporting_contracts") and paper_id:
+            bind_independent_recipes(work, grid, specs, paper_id)
+    except ValueError as exc:
+        report["problems"].append(str(exc))
+        report.update(ok=False, acceptance="rejected",
+                      reference={"status": "blocked", "reason": str(exc)},
+                      output_fingerprint=executor_outputs(work))
+        report["checks"]["n_rows"] = len(rows)
+        return report
     # The executed count, not the grid size: above the execution cap only a sample runs.
-    expected = grid.get("n_specs", len(specs))
+    from ..multiverse_contract import checks as reporting_checks
+    report["problems"].extend(reporting_checks(rows,specs))
+    expected = len(specs)
     report["checks"]["n_rows"] = len(rows)
     report["checks"]["n_expected"] = expected
     report["checks"]["grid_size"] = grid.get("grid_size")
@@ -1027,55 +1137,128 @@ def verify_execution(work: Path, grid: dict[str, Any], paper_id: str) -> dict[st
     bad = [i for i, r in enumerate(conv) if r["_estimate"] is None]
     report["checks"]["n_converged"] = len(conv)
     report["checks"]["converged_rows_numeric"] = not bad
+    if not conv:
+        report["problems"].append("no specification converged")
     if bad:
         report["problems"].append(f"{len(bad)} converged rows have a non-numeric estimate")
     report["checks"]["distinct_estimates"] = len({r["_estimate"] for r in conv
                                                   if r["_estimate"] is not None})
 
-    # Re-run the executor's own script once and compare.
+    strict = bool(grid.get("result_contract_version"))
+    for row in rows:
+        for problem in validate_result(row, strict=strict):
+            report["problems"].append(f"{row.get('_spec_id')}: {problem}")
+        if row.get("_factor_mismatches"):
+            report["problems"].append(f"{row.get('_spec_id')}: factor labels disagree with the grid")
+        if (strict and row.get("_converged") and grid.get("effect_metric")
+                and row.get("effect_metric") != grid["effect_metric"]
+                and not any(lv.get("role")=="related_effect" and lv.get("effect_metric")==row.get("effect_metric") for f in grid.get("factors",[]) for lv in f["levels"] if row.get('_factor_levels',row).get(f["name"])==lv["value"])):
+            report["problems"].append(f"{row.get('_spec_id')}: effect metric differs from focal contract")
+
+    # A fresh work tree carries declared inputs and source files, never previous
+    # results. The authoritative agent output is not changed by verification.
     script = next((out / n for n in ("multiverse.R", "multiverse.py") if (out / n).exists()), None)
     if script is None:
         report["problems"].append("no out/multiverse.R or out/multiverse.py to re-run")
         report["checks"]["rerun_reproduces"] = False
     else:
-        kept = specs_path.with_name("specs_agent.csv")
-        shutil.copy2(specs_path, kept)
-        cmd = ["Rscript", str(script.relative_to(work))] if script.suffix == ".R" \
-            else ["python3", str(script.relative_to(work))]
         try:
-            proc = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=1800)
-            (out / "rerun.log").write_text((proc.stdout or "") + "\n[stderr]\n" + (proc.stderr or ""))
-            report["checks"]["rerun_exit_code"] = proc.returncode
-            new = read_specs(specs_path, grid) if specs_path.exists() else []
-            old = read_specs(kept, grid)
-            if by_spec_id:
-                # Pair the two runs by spec id: a script that reorders its rows still
-                # reproduces the same specifications.
-                new_by_id = {r["_spec_id"]: r for r in new}
-                pairs = [(a, new_by_id.get(a["_spec_id"])) for a in old]
-                same = len(new) == len(old) and all(b is not None for _, b in pairs)
-            else:
-                pairs = list(zip(old, new))
-                same = len(new) == len(old)
-            same = same and all(
-                (a["_estimate"] is None and b["_estimate"] is None)
-                or (a["_estimate"] is not None and b["_estimate"] is not None
-                    and abs(a["_estimate"] - b["_estimate"]) < 1e-6)
-                for a, b in pairs if b is not None
-            )
-            report["checks"]["rerun_reproduces"] = bool(proc.returncode == 0 and same)
-            if not report["checks"]["rerun_reproduces"]:
-                report["problems"].append(
-                    "re-running the executor's script did not reproduce specs.csv"
-                )
-            rows = new or old
-        except subprocess.TimeoutExpired:
-            report["checks"]["rerun_reproduces"] = False
-            report["problems"].append("re-run of the executor's script timed out")
+            with tempfile.TemporaryDirectory(prefix="reproscope_verify_") as folder:
+                fresh = Path(folder)
+                from ..execution import copy_inputs
+                from ..stage1.replicas import prepare_env, script_command
+                copy_inputs(work, fresh)
+                environment = prepare_env(out, work.parent / "verification_environment")
+                if environment["error"]:
+                    raise ValueError(environment["error"])
+                cmd = script_command(fresh / "out" / script.name, fresh, environment["interpreter"])
+                from ..isolation import command as isolated_command, clean_environment
+                cmd, report["verification_isolation"] = isolated_command(cmd, fresh, environment["env"])
+                import os
+                run_env = clean_environment({**os.environ, **environment["env"]}, fresh)
+                proc = subprocess.run(cmd, cwd=fresh, capture_output=True, text=True, timeout=EXECUTOR_TIMEOUT_S, env=run_env)
+                (out / "rerun.log").write_text((proc.stdout or "") + "\n[stderr]\n" + (proc.stderr or ""))
+                report["checks"]["rerun_exit_code"] = proc.returncode
+                generated = fresh / "out" / "specs.csv"
+                report["checks"]["regenerated_results"] = generated.exists()
+                new = read_specs(generated, grid) if generated.exists() else []
+                new_by_id = {r.get("_spec_id"): r for r in new}
+                same = len(new) == len(rows) and len(new_by_id) == len(new)
+                same = same and all(same_result(row, new_by_id.get(row.get("_spec_id"))) for row in rows)
+                report["checks"]["rerun_reproduces"] = bool(proc.returncode == 0 and same and generated.exists())
+                if not report["checks"]["rerun_reproduces"]:
+                    report["problems"].append("fresh execution did not regenerate every result field")
+                if strict and report["checks"]["rerun_reproduces"]:
+                    from .. import reference
+                    report["reference"] = reference.check(fresh, new, specs)
+                    report["problems"].extend(report["reference"]["problems"])
+                    from ..multiverse_perturbation import resample_records
+                    if not report["reference"]["problems"] and resample_records(fresh, recipes=[s["independent_recipe"] for s in specs] if specs and specs[0].get("independent_recipe") else None):
+                        generated.unlink()
+                        (fresh / "out/analysis_plan.json").unlink()
+                        perturbed = subprocess.run(cmd, cwd=fresh, capture_output=True, text=True, timeout=EXECUTOR_TIMEOUT_S, env=run_env)
+                        perturbed_rows = read_specs(generated, grid) if generated.exists() else []
+                        perturb_check = reference.check(fresh, perturbed_rows, specs)
+                        changed = any(a.get("_estimate") != b.get("_estimate") for a, b in zip(new, perturbed_rows))
+                        perturb_ok = (perturbed.returncode == 0 and len(perturbed_rows) == len(new)
+                                      and changed and not perturb_check["problems"]
+                                      and perturb_check["checked"] == report["reference"]["checked"]
+                                      and perturb_check["checked"] > 0)
+                        fully_checked = all(r.get('status') == 'verified'
+                                            for r in (report['reference'], perturb_check))
+                        report["perturbation"] = {"status": ("verified" if fully_checked else "partial") if perturb_ok else "failed",
+                                                   "checked": perturb_check['checked'],
+                                                   "total": len(new),
+                                                   "reference": perturb_check}
+                        if not perturb_ok:
+                            report["problems"].append("input perturbation did not reproduce independent reference results")
+                    else:
+                        report["perturbation"] = {"status": "unsupported", "reason": "no validated direct CSV outcome to perturb"}
 
+        except (subprocess.TimeoutExpired, OSError, ValueError, RuntimeError) as exc:
+            report["checks"]["rerun_reproduces"] = False
+            report["problems"].append(f"fresh re-execution failed: {exc}")
+
+    if strict:
+        for component in ("reference", "perturbation"):
+            if report.get(component, {}).get("status") != "verified":
+                report["problems"].append(f"Complete independent {component} verification is required for acceptance")
     report["audit"] = hardcoding_audit(script, specs_path, paper_id)
+    from ..stage1.audit import acceptance
     report["ok"] = not report["problems"]
+    report["acceptance"] = acceptance(report["audit"]) if report["ok"] else "rejected"
+    report["output_fingerprint"] = executor_outputs(work)
     return report
+
+
+
+def executor_outputs(work: Path) -> dict[str, str]:
+    out = work / "out"
+    return provenance.files({p.name: p for p in out.glob("*") if p.is_file()
+                             and (p.suffix.lower() in {".py", ".r"}
+                                  or p.name in {"specs.csv", "analysis_plan.json", "requirements.txt", "r_packages.txt"})})
+
+def same_result(a: dict, b: dict | None) -> bool:
+    if b is None:
+        return False
+    contract_fields = {"spec_id", "estimate", "se", "p", "n", "converged", "p_threshold",
+                       "effect_metric", "se_metric", "p_raw", "p_adjustment", "p_family", "p_index",
+                       "inference_method", "exceedances", "draws", "ci_lower", "ci_upper"}
+    keys = contract_fields & (a.keys() | b.keys())
+    if (contract_fields & a.keys()) != (contract_fields & b.keys()):
+        return False
+    if a.get("_factor_mismatches") or b.get("_factor_mismatches"):
+        return False
+    for key in keys:
+        av, bv = a[key], b[key]
+        if av == bv:
+            continue
+        try:
+            if not math.isclose(float(av), float(bv), rel_tol=1e-6, abs_tol=1e-12):
+                return False
+        except (ValueError, TypeError):
+            return False
+    return True
 
 
 def hardcoding_audit(script: Path | None, specs_path: Path, paper_id: str) -> dict[str, Any]:
@@ -1116,28 +1299,22 @@ _JSON_BLOCK = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 SPECS_CAP = 60000
 
 
-def interpretation_prompt(specs_text: str, reported: Any, grid: dict[str, Any]) -> str:
-    """Assemble the step-6 prompt.
-
-    The reader gets the executed specifications, the factor names and levels, whether
-    those specifications are the whole grid or a sample of it, and the paper's reported
-    estimate. Where the reported estimate ranks and how extreme it is are computed
-    deterministically in rank.json and belong to the report, so they stay out of here.
-    """
-    return artifacts.load_prompt(
-        "stage3_interpret",
-        specs=specs_text[:SPECS_CAP],
-        reported=reported,
-        factors=json.dumps(
-            [{"name": f["name"], "levels": [lv["value"] for lv in f["levels"]]}
-             for f in grid.get("factors", [])], indent=2),
-        coverage=(
-            "the specifications below are a stratified sample of a larger grid; describe "
-            "them as a sample of the multiverse, not as the whole of it"
-            if grid.get("sampled") else
-            "the specifications below are the whole grid"
-        ),
-    )
+def interpretation_prompt(specs_text: str, reported: Any, grid: dict[str, Any], *, method_context=None) -> str:
+    """Supply deterministic, scale-separated summaries to the narrative reader."""
+    import io
+    from ..report.findings import sensitivity
+    names=[f['name'] for f in grid.get('factors',[])]
+    rows=[]
+    for r in read_specs_text(specs_text, grid):
+        rows.append({**r,'spec':{n:r.get('_factor_levels',r).get(n,'') for n in names},
+                     'converged':r['_converged']})
+    summary=sensitivity(rows,grid.get('factors',[]))
+    for group in summary['groups']:group.pop('rows',None)
+    return artifacts.load_prompt('stage3_interpret',specs=specs_text[:SPECS_CAP],
+        methods=json.dumps(method_context or {'primary_effect':grid.get('primary_effect')}),
+        summary=json.dumps(summary,indent=2), reported=json.dumps(grid.get('curve_reference') or {'value':reported}),
+        factors=json.dumps([{'name':f['name'],'levels':[lv['value'] for lv in f['levels']]} for f in grid.get('factors',[])]),
+        coverage='a sample of the multiverse' if grid.get('sampled') else 'the whole screened compatible grid')
 
 
 def parse_interpretation(text: str) -> dict[str, Any]:
@@ -1152,3 +1329,124 @@ def parse_interpretation(text: str) -> dict[str, Any]:
         return json.loads(blob)
     except json.JSONDecodeError:
         return {}
+
+
+def defensible_csv(path: Path, grid: dict) -> str:
+    """Keep reference-only executions out of the interpreter's curve input."""
+    import io
+    excluded = {s["spec_id"] for s in grid.get("reference_specs", [])}
+    reader = csv.DictReader(path.read_text().splitlines())
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=reader.fieldnames or [])
+    writer.writeheader()
+    writer.writerows(r for r in reader if r.get("spec_id") not in excluded)
+    return buf.getvalue()
+
+
+def reference_specifications(grid: dict) -> list[dict]:
+    specs = copy.deepcopy(enumerate_specs(grid))
+    for spec in specs:
+        required = {}
+        ci_required = {}
+        for factor in grid.get("factors", []):
+            value = spec["levels"].get(factor["name"])
+            level = next((lv for lv in factor["levels"] if lv["value"] == value), {})
+            for key, setting in level.get("reference_settings", {}).items():
+                # Optional schema fields are unknown constraints, not instructions
+                # to erase a value supplied by another factor.
+                if setting is None:
+                    continue
+                if key in required and required[key] != setting:
+                    raise ValueError(f"conflicting screened reference settings for {spec['spec_id']}: {key}")
+                required[key] = setting
+            for key,setting in level.get('ci_reference_settings',{}).items():
+                if setting is None:continue
+                if key in ci_required and ci_required[key]!=setting:
+                    raise ValueError(f"conflicting screened interval settings for {spec['spec_id']}: {key}")
+                ci_required[key]=setting
+        if ci_required:required['ci_settings']=ci_required
+        spec["reference_settings"] = required
+        spec["reporting_contract"] = grid.get("reporting_contracts", {}).get(spec["spec_id"])
+    return specs
+
+
+def bind_independent_recipes(work, grid, specs, paper_id=None):
+    """Use the same source-only reference in generation and final verification."""
+    if not grid.get('reporting_contracts'):return
+    from ..verification_recipe import prepare, compile_book
+    record=prepare(Path(work),grid,paper_id or Path(work).parent.parent.name)
+    compiled=compile_book(record['book'],grid)
+    for specification in specs:
+        specification['independent_recipe']=compiled[specification['spec_id']]
+        specification['recipe_record']=record
+
+
+def generation_checks(work, grid):
+    """Feed mechanical contract/method failures back to the generator, never source targets."""
+    path=Path(work)/'out/specs.csv'
+    if not path.exists():return ['Missing out/specs.csv']
+    rows=read_specs(path,grid)
+    specs=reference_specifications(grid)
+    bind_independent_recipes(work,grid,specs)
+    want={s['spec_id'] for s in specs}
+    got=[r.get('_spec_id') for r in rows]
+    errors=[]
+    if set(got)!=want or len(got)!=len(want):errors.append('CSV must cover every grid spec exactly once')
+    for row in rows:
+        if not row.get('_converged'):
+            errors.append(str(row.get('_spec_id'))+': generated calculation failed: '+str(row.get('error') or 'no error reason supplied')[:500])
+        errors += [str(row.get('_spec_id'))+': '+e for e in validate_result(row,strict=True)]
+        if row.get('_factor_mismatches'):errors.append(str(row.get('_spec_id'))+': factor labels differ from grid; result columns are reserved, so use factor_<name> for colliding factors: '+', '.join(row['_factor_mismatches']))
+        for k in ('ci_lower','ci_upper'):
+            if row.get(k) not in (None,''):
+                try:
+                    if not math.isfinite(float(row[k])):raise ValueError()
+                except (ValueError,TypeError):errors.append(str(row.get('_spec_id'))+': invalid '+k)
+        if bool(row.get('ci_lower'))!=bool(row.get('ci_upper')):errors.append(str(row.get('_spec_id'))+': incomplete interval')
+        if row.get('ci_lower') not in (None,'') and row.get('ci_upper') not in (None,''):
+            if float(row['ci_lower'])>float(row['ci_upper']):errors.append(str(row.get('_spec_id'))+': reversed interval')
+    from ..multiverse_contract import checks as reporting_checks
+    errors.extend(reporting_checks(rows,specs))
+    if errors:return errors[:40]
+    from ..reference import check
+    errors=check(Path(work),rows,specs)['problems']
+    if errors:return errors[:40]
+    return generation_perturbation_checks(Path(work), grid, specs)
+
+
+def generation_perturbation_checks(work, grid, specs):
+    """Repair data-dependent implementation errors inside bounded generation.
+
+    Only a private input copy is changed. Feedback contains contract failures,
+    never paper targets or the private replacement data.
+    """
+    import os
+    from .. import reference
+    from ..execution import copy_inputs
+    from ..stage1.replicas import prepare_env, script_command
+    from ..isolation import command, clean_environment
+    script=next((work/'out'/n for n in ('multiverse.py','multiverse.R') if (work/'out'/n).exists()),None)
+    if script is None:return ['Missing executable multiverse source']
+    with tempfile.TemporaryDirectory(prefix='reproscope_generation_check_') as folder:
+        fresh=Path(folder)
+        copy_inputs(work,fresh)
+        # The perturbation constructor reads only declared source-column bindings.
+        # copy_inputs deliberately omits generated result and plan files.
+        import shutil
+        shutil.copy2(work/'out/analysis_plan.json',fresh/'out/analysis_plan.json')
+        from ..multiverse_perturbation import resample_records
+        recipes=[s['independent_recipe'] for s in specs] if specs and specs[0].get('independent_recipe') else None
+        if not resample_records(fresh, recipes=recipes):return []
+        (fresh/'out/analysis_plan.json').unlink()
+        environment=prepare_env(work/'out',work.parent/'verification_environment')
+        if environment['error']:return ['Perturbation environment unavailable: '+environment['error']]
+        cmd,_=command(script_command(fresh/'out'/script.name,fresh,environment['interpreter']),fresh,environment['env'])
+        try:
+            proc=subprocess.run(cmd,cwd=fresh,capture_output=True,text=True,timeout=300,
+                env=clean_environment({**os.environ,**environment['env']},fresh))
+        except subprocess.TimeoutExpired:return ['Private input perturbation exceeded the execution budget']
+        if proc.returncode!=0:return ['Script failed on private perturbed inputs; implement the declared sample and method for changed observations']
+        path=fresh/'out/specs.csv'
+        if not path.exists():return ['Private input perturbation did not regenerate specs.csv']
+        checked=reference.check(fresh,read_specs(path,grid),specs)
+        return ['Private input perturbation: '+e for e in checked['problems'][:40]]

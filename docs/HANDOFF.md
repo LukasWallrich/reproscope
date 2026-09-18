@@ -1,35 +1,35 @@
-# Handoff — reproscope pilot (2026-09-11)
+# Pipeline development status
 
-Read this first in a new session. It states where the pilot stands and what waits on Lukas. Background: `docs/PILOT_DESIGN.md` (mechanics, current), `docs/PILOT_NOTES.md` (dated findings), `docs/evaluation/PILOT_EVALUATION.html` (the pilot writeup, from the 2026-09-03 runs), `docs/EFFICIENCY_AUDIT.html`, `SCOPE.html`.
+The shared pipeline requires complete numerical verification for both reproduction replicas and every multiverse specification. Independent source-only method recipes determine the expected calculations; generated executor plans cannot define their own verification coverage. Reports present source quotes, recalculations, diagnoses, combined methods and component-level numerical comparisons.
 
-## State
+| Case | Development source recall / precision | Computation accounting | Original-analysis verification | Multiverse verification |
+|---|---|---|---|---|
+| Hurst cheap v2 | 252/258 (97.67%) / 252/265 (95.09%) | 163 computed, 102 unavailable, 0 unresolved | Both replicas: 65/65 analyses and 123 inferential quantities; 40 descriptive readouts | 40/40 specifications on original and private inputs; 5 active dimensions |
+| Petersen v7 | 135/136 (99.26%) / 100% | 124 computed, 9 unavailable, 2 invalid inputs, 0 unresolved | Both replicas: 28/28 executable analyses; 44 descriptive readouts | 12/12 specifications on original and private inputs; 5 active dimensions |
+| Hurst v1 | 258/258 (100%) / 98.47% | 158 computed, 104 unavailable, 0 unresolved | Both replicas: 65/65 analyses; 40 descriptive readouts | 36/36 specifications on original and private inputs; 5 active dimensions |
+| Ohtsubo v3 | Availability case | Missing studies and unresolved sample/condition/scoring correspondence | Does not count as a successful executable case | No accepted executable multiverse |
 
-- Package `reproscope/` implements Stages 0–3, the report and the evaluation; 228 offline tests pass (`.venv/bin/python -m pytest tests -q`). Working tree clean, everything pushed to origin.
-- Three papers have complete end-to-end runs on the current code under fresh ids: `Hertel_ClinPsychSci_2018_YabW_v2`, `Ohtsubo_EvoHumanBehavior_2014_zlm2_v2`, `Petersen_Cognition_2017_yJwG_v2` (`runs/<id>/`, gitignored; `corpus/<id>/manifest.json` committed). Hurst and Axt have not run on the current code. The 2026-09-03 pilot runs stay on disk under the original ids, with Stage 0 output from the 2026-09-02 code.
-- Results of the v2 runs: Hertel 63 specifications all converged, F 5.40–7.46, reported 6.20 at rank 37, every specification significant; Ohtsubo 8 specifications, d 2.14–2.20, reported 2.2 at rank 5; Petersen 9 specifications all equal to the reported 0.89. Replicas: Hertel 8/8, Ohtsubo 8/8, Petersen 6/8 (deepseek_2 script error at the end of its run; glm_2 returned nothing through opencode twice).
-- Models: no call goes to Claude Sonnet; the `mid` tier (readiness) is Opus. The Stage 3 executor is deepseek-v4.1-flash through opencode: on Hertel's 63-specification grid it produced the same 63 estimates as glm-5.3-flash in 2 min 17 s for USD 0.05, against 40 min and 0.11.
-- Spend per paper including every failed pass: Hertel USD 0.77 metered / 12.6 list-equivalent, Ohtsubo 0.55 / 14.0, Petersen 0.59 / 11.4. OpenRouter credit left: about USD 3.9 of 45. The Claude subscription hit its session limit once during the runs (2026-09-07, about 18:00, reset 19:40).
-- `docs/evaluation/` (evaluation, cost table, writeup) has not been regenerated over the v2 runs.
-- No pipeline process is running.
+The extraction benchmark is model-assisted development validation, not human or held-out accuracy. All divergence groups have diagnoses (22 Petersen; 123 Hurst); an assigned diagnosis does not imply a resolved cause. Hurst v1 retains structural blinding limitations; the fresh cheap v2 packet has no detected numeric leak. Private perturbations test changed observations while preserving within-person records; exact untied signed-rank recipes use a subset without replacement to stay inside their declared domain. These are implementation diagnostics, not analytical choices.
 
-## Guards added on 2026-09-07 to 09-11
+## Reproduce and inspect
 
-Every fresh run failed first in a stage that one model call gated silently. The stages now refuse or escalate on the degenerate outcomes: an extraction chunk with no claims on pages that print results is retried once then fails, and an extractor empty while the other is not is rerun once then refused; Stage 0 fails on a dirty leak scan and writes no done marker; readiness that binds no analysis is repeated once on the strong tier then refused; Stage 1 refuses when no replica re-executes; Stage 3 refuses a failed or mismatching execution before ranking. Cache keys follow the artifacts a step reads (Stage 0 steps on their upstream artifacts, the targeted arm and diagnosis on the focal binding). The leak scan no longer forbids degrees of freedom; the focal binder anchors on the reported statistic and binds companions from its own analysis. Route handling: four attempts with backoff, OpenRouter retries skip the host that just failed, a host-ended reply is transient, scrub chunks are 40 items, the claude route reports the API error it received, ledger rows carry provider and finish reason. The retry runner waits 30 min on a session limit and gives up after two passes with nothing to force.
+Run IDs are `Petersen_Cognition_2017_yJwG_v7_20260914` and `Hurst_EvoHumanBehavior_2017_yypJ_v1_20260915`. The current full-controller logs are `specr_final_refresh.log` in each run. Each run stores its current acceptance receipt in `end_to_end_validation.json`.
 
-## Decisions waiting on Lukas
-
-- **OpenRouter credit.** About USD 3.9 left. Hurst and Axt need about 0.6 metered each; the evaluation rerun and any retries come on top. Top up before launching them.
-- **One readiness call per paper.** Readiness is now one Opus call, repeated once at the same tier when it binds nothing. A wrong but non-empty binding still passes. Options: a second independent readiness call with the union of bindings, a stronger prompt (consider column subsets and reversed items; treat a file whose row count is within a few of a study's sample as that study's data), or leave it.
-- **Writeup.** Regenerate `docs/evaluation/` over the five v2 runs once Hurst and Axt exist; until then the evaluation mixes pilot and v2 runs.
-
-## How to run
-
-```
-.venv/bin/python -m reproscope run <paper_id> --stages 0 1 2 3 report
-./scripts/fullchain.sh <paper_id>                  # Stage 0 (3 attempts) then the retry runner; S0_ARGS='--force-step readiness' passes flags to Stage 0
-.venv/bin/python scripts/chain_retry.py <paper_id> # Stages 1-3 + report with retries
-.venv/bin/python -m reproscope ledger <paper_id>
-.venv/bin/python -m reproscope.evaluate && .venv/bin/python docs/evaluation/cost_table.py && .venv/bin/python docs/evaluation/build_writeup.py
+```sh
+REPROSCOPE_MODELS=runs/<paper_id>/models.toml REPROSCOPE_REVIEW_BACKEND=strong_alt REPROSCOPE_SPECR_EXPORT=1 .venv/bin/python -m reproscope run <paper_id>
+REPROSCOPE_MODELS=runs/<paper_id>/models.toml REPROSCOPE_REVIEW_BACKEND=strong_alt .venv/bin/python -m reproscope.end_to_end_validation <paper_id>
 ```
 
-Logs go under `runs/logs/` (`fullchain_<id>.log`, `stage0_<id>.log`, `rerun_<id>.log`). To run a paper on the current code, copy `corpus/<id>` to `corpus/<id>_v2` and set `paper_id` (and `multi100.paper_id`) in its manifest; Stage 0 renumbers claim ids, so never rerun it in place on a paper with replica outputs. Keep at most two papers in flight on the Claude subscription. A replica that must be relaunched is moved out of `runs/<id>/stage1/replicas/` (the checker only re-verifies a replica whose results file exists); `runs/<id>/stage1/replicas_superseded/` holds the ones set aside so far, and `runs/Hertel_ClinPsychSci_2018_YabW_v2/stage3/executor_glm_20260908/` holds the glm executor's outputs from the comparison.
+No paper-specific calculation scripts or hand-edited result tables were supplied. Bounded source repair uses approved inputs and verifier failures without reported numeric targets. Cached replicas require exact generation-input provenance, intact output hashes and verified execution evidence. Do not run concurrent writers on the same stage or change benchmark answers to meet acceptance.
+
+The [specification-curve and clarity validation record](validation/2026-09-17/REVIEW_DISPOSITION.md) supplements the [numerical verification record](validation/2026-09-15/VERIFICATION_REPORTING.md) with regression results, browser QA and publication receipts. The [stage specification](E2E_ANALYSIS_REPORTING_SPEC_2026-09-14.md) and [multiverse literature review](../research/multiverse_scope_literature_review_2026-09-14.md) document the analysis scope. Leave-one-out diagnostics, seeds and draws are excluded from analytical dimensions. Raw trimming/outlier variants can share a substantive raw-effect group with exact estimator labels; different scales and nulls remain separate.
+
+Next validation should use held-out papers and independent human extraction annotation. Add independently anchored numerical methods when newly screened defensible choices require them; unsupported combinations must remain acceptance blockers. Computational agreement does not establish the substantive appropriateness of every reconstruction assumption.
+
+The fresh inexpensive Hurst run is complete and published: `Hurst_EvoHumanBehavior_2017_yypJ_cheap_v2_20260917`. Its final ordinary controller refresh includes stages 0–3 and report generation; `end_to_end_validation.json` passes with no blockers. The run-specific `models.toml` uses Haiku and Luna for general replicas, with targeted Sonnet repairs and focused source review; no general Opus/Fable replica is used. Both numerical replicas and all 40 multiverse specifications pass original/private-input checks. All 122 required diagnosis groups have located source evidence. The unchanged source benchmark remains development validation. See the [fresh-run validation record](validation/2026-09-17/CHEAP_HURST_VALIDATION.md) for methods, checks and limits.
+
+The fresh US$3 metered allowance has US$0.709687 confirmed and US$0.6645216 conservatively reserved, totalling US$1.3742086 against the cap. OpenRouter payment rejection triggered a bounded subscription patch to the existing executor. Subscription consumption and development retries are separate; this run is not a normal per-paper efficiency benchmark. The final offline suite passes 692 tests, and desktop/mobile browser checks and the actual R/specr SVG inspection pass.
+
+ The preceding metered allowance remains US$0.707303 confirmed plus US$1.182020 reserved for an interrupted request with unknown charge: US$1.889323 conservatively, below the authorised US$3 cap. The opt-in budget file is `docs/validation/2026-09-14/e2e_review/metered_budget.json`; do not reset it or reuse the allowance for unrelated work.
+
+Public report destinations are [fresh inexpensive Hurst](https://reproscope-hurst-2017-cheap-v2.surge.sh/), [Petersen](https://reproscope-petersen-2017-v7.surge.sh/) and [Hurst](https://reproscope-hurst-2017-v1.surge.sh/). Exports contain standalone HTML without participant records, run archives or local paths. Preserve substantial pre-existing workspace changes; no commit or repository push was requested.

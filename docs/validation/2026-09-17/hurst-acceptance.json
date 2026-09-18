@@ -1,0 +1,173 @@
+{
+  "paper_id": "Hurst_EvoHumanBehavior_2017_yypJ_v1_20260915",
+  "passed": true,
+  "blockers": [],
+  "limitations": [
+    "Replica packet withholds numerical targets but retains structural cues about which statistics were reported"
+  ],
+  "scope": "Development integration validation; model-assisted extraction benchmark, not human or held-out accuracy.",
+  "benchmark_current": true,
+  "extraction": {
+    "clean_source_occurrences": 258,
+    "accepted_correct": 258,
+    "accepted_count": 262,
+    "accepted_recall": 1.0,
+    "accepted_precision": 0.9847328244274809,
+    "correct_metadata_fields": 0,
+    "scope": "Two source-only model readings; original inventory retained. Review model saw no pipeline output or grades. Development benchmark, not human or held-out validation."
+  },
+  "computation": {
+    "counts": {
+      "computed": 158,
+      "unavailable": 104
+    },
+    "unresolved_claim_ids": []
+  },
+  "replicas": {
+    "sonnet_1": {
+      "accepted": true,
+      "methods": {
+        "verified": 65
+      }
+    },
+    "opus_1": {
+      "accepted": true,
+      "methods": {
+        "verified": 65
+      }
+    }
+  },
+  "diagnosis": {
+    "complete": true,
+    "expected_groups": 123,
+    "missing": [],
+    "extra": [],
+    "stale": false
+  },
+  "multiverse": {
+    "generator": "general",
+    "state": "complete",
+    "dimensions": {
+      "corr_type": [
+        "pearson_partial",
+        "spearman_partial"
+      ],
+      "ci_method": [
+        "bootstrap_ci",
+        "fisher_z_ci"
+      ],
+      "null_test": [
+        "parametric_t",
+        "permutation_test"
+      ],
+      "age_form": [
+        "linear_age",
+        "spline_age"
+      ],
+      "item_imputation": [
+        "complete_item_cases",
+        "deposited_mean_imputed",
+        "prorated_person_mean"
+      ]
+    },
+    "n_specs": 36,
+    "grid_size": 36,
+    "groups": [
+      {
+        "name": "age_adjusted_dsm5_total_minik_total_linear_rawscore_association",
+        "metric": "r",
+        "n": 24,
+        "min": -0.5169585496904038,
+        "max": -0.447864681530761,
+        "median": -0.48503669206400085,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "zero_linear_partial_correlation",
+            "n": 24,
+            "n_p": 24,
+            "p_min": 2.493591822231778e-09,
+            "p_max": 0.0025,
+            "significant": 24
+          }
+        ],
+        "changes": [
+          {
+            "factor": "ci_method",
+            "matched_sets": 12,
+            "max_change": 0.0,
+            "max_p_change": 0.0,
+            "max_interval_width_change": 0.04678501219346631
+          },
+          {
+            "factor": "null_test",
+            "matched_sets": 12,
+            "max_change": 0.0,
+            "max_p_change": 0.002499997506408178,
+            "max_interval_width_change": 0.0
+          },
+          {
+            "factor": "age_form",
+            "matched_sets": 12,
+            "max_change": 0.04097402103052422,
+            "max_p_change": 8.755832433959601e-06,
+            "max_interval_width_change": 0.03443971987012584
+          },
+          {
+            "factor": "item_imputation",
+            "matched_sets": 8,
+            "max_change": 0.03337000003595553,
+            "max_p_change": 9.103947531309254e-06,
+            "max_interval_width_change": 0.04717575064188334
+          }
+        ]
+      },
+      {
+        "name": "age_adjusted_dsm5_total_minik_total_monotonic_rank_association",
+        "metric": "r",
+        "n": 12,
+        "min": -0.4819102411991211,
+        "max": -0.4386678723488477,
+        "median": -0.47513510409358933,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "zero_monotonic_partial_rank_correlation",
+            "n": 12,
+            "n_p": 12,
+            "p_min": 7.124663104523985e-08,
+            "p_max": 0.0025,
+            "significant": 12
+          }
+        ],
+        "changes": [
+          {
+            "factor": "null_test",
+            "matched_sets": 6,
+            "max_change": 0.0,
+            "max_p_change": 0.0024999287533689547,
+            "max_interval_width_change": 0.0
+          },
+          {
+            "factor": "age_form",
+            "matched_sets": 6,
+            "max_change": 0.0058588170291359876,
+            "max_p_change": 1.3552245525937026e-06,
+            "max_interval_width_change": 0.0015661115647467305
+          },
+          {
+            "factor": "item_imputation",
+            "matched_sets": 4,
+            "max_change": 0.040109955217443205,
+            "max_p_change": 1.4984222318669568e-05,
+            "max_interval_width_change": 0.03290282398071681
+          }
+        ]
+      }
+    ],
+    "reference_status": "verified",
+    "perturbation_status": "verified"
+  },
+  "metered_cost_usd": 1.7635645000000002,
+  "report": "/Users/lukaswallrich/Documents/Coding/reproduction_pipeline/runs/Hurst_EvoHumanBehavior_2017_yypJ_v1_20260915/report/report.html"
+}

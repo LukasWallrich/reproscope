@@ -1,0 +1,360 @@
+{
+  "paper_id": "Hurst_EvoHumanBehavior_2017_yypJ_cheap_v2_20260917",
+  "passed": true,
+  "blockers": [],
+  "limitations": [],
+  "scope": "Development integration validation; model-assisted extraction benchmark, not human or held-out accuracy.",
+  "benchmark_current": true,
+  "extraction": {
+    "clean_source_occurrences": 258,
+    "accepted_correct": 252,
+    "accepted_count": 265,
+    "accepted_recall": 0.9767441860465116,
+    "accepted_precision": 0.9509433962264151,
+    "correct_metadata_fields": 0,
+    "scope": "Two source-only model readings; original inventory retained. Review model saw no pipeline output or grades. Development benchmark, not human or held-out validation."
+  },
+  "computation": {
+    "counts": {
+      "computed": 163,
+      "unavailable": 102
+    },
+    "unresolved_claim_ids": []
+  },
+  "replicas": {
+    "haiku_1": {
+      "accepted": true,
+      "methods": {
+        "verified": 65
+      }
+    },
+    "luna_1": {
+      "accepted": true,
+      "methods": {
+        "verified": 65
+      }
+    }
+  },
+  "diagnosis": {
+    "complete": true,
+    "expected_groups": 122,
+    "missing": [],
+    "extra": [],
+    "stale": false
+  },
+  "multiverse": {
+    "generator": "general",
+    "state": "complete",
+    "dimensions": {
+      "correlation_estimator": [
+        "Pearson",
+        "Spearman"
+      ],
+      "inference_procedure": [
+        "Bootstrap_CI",
+        "Classical_analytical",
+        "Permutation_test"
+      ],
+      "covariate_adjustment": [
+        "Age_and_Sex",
+        "Age_only"
+      ],
+      "outlier_treatment": [
+        "Complete_cases",
+        "Trim_5_percent"
+      ],
+      "partial_correlation_specification": [
+        "full_partial",
+        "semi-partial"
+      ]
+    },
+    "n_specs": 40,
+    "grid_size": 40,
+    "groups": [
+      {
+        "name": "rank_partial_correlation",
+        "metric": "r",
+        "n": 6,
+        "min": -0.4742187840171936,
+        "max": -0.4003930971606811,
+        "median": -0.43730594058893735,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "zero_rank_full_partial_association",
+            "n": 6,
+            "n_p": 6,
+            "p_min": 4.807757406908234e-09,
+            "p_max": 4.999750012499375e-05,
+            "significant": 6
+          }
+        ],
+        "changes": [
+          {
+            "factor": "inference_procedure",
+            "matched_sets": 2,
+            "max_change": 0.0,
+            "max_p_change": 4.999269236758684e-05,
+            "max_interval_width_change": 0.05169861759791655
+          },
+          {
+            "factor": "outlier_treatment",
+            "matched_sets": 3,
+            "max_change": 0.07382568685651247,
+            "max_p_change": 2.3525760126846664e-06,
+            "max_interval_width_change": 0.02889203076944885
+          }
+        ]
+      },
+      {
+        "name": "rank_partial_correlation_age_sex_adjusted",
+        "metric": "r",
+        "n": 6,
+        "min": -0.4725864033115792,
+        "max": -0.39875223026583273,
+        "median": -0.43566931678870596,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "zero_rank_age_sex_adjusted_association",
+            "n": 6,
+            "n_p": 6,
+            "p_min": 6.283000492653145e-09,
+            "p_max": 4.999750012499375e-05,
+            "significant": 6
+          }
+        ],
+        "changes": [
+          {
+            "factor": "inference_procedure",
+            "matched_sets": 2,
+            "max_change": 0.0,
+            "max_p_change": 4.9991217124501094e-05,
+            "max_interval_width_change": 0.054505516548145116
+          },
+          {
+            "factor": "outlier_treatment",
+            "matched_sets": 3,
+            "max_change": 0.07383417304574647,
+            "max_p_change": 2.855418107597263e-06,
+            "max_interval_width_change": 0.02898693472883629
+          }
+        ]
+      },
+      {
+        "name": "rank_semipartial_correlation",
+        "metric": "r",
+        "n": 4,
+        "min": -0.41009793346233686,
+        "max": -0.34465157564832494,
+        "median": -0.37737475455533087,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "zero_unique_rank_predictor_association",
+            "n": 4,
+            "n_p": 4,
+            "p_min": 4.807757406908343e-09,
+            "p_max": 4.999750012499375e-05,
+            "significant": 4
+          }
+        ],
+        "changes": [
+          {
+            "factor": "inference_procedure",
+            "matched_sets": 2,
+            "max_change": 0.0,
+            "max_p_change": 4.999269236758684e-05,
+            "max_interval_width_change": 0.0
+          },
+          {
+            "factor": "outlier_treatment",
+            "matched_sets": 2,
+            "max_change": 0.06544635781401192,
+            "max_p_change": 2.352576012684695e-06,
+            "max_interval_width_change": 0.001352380778631257
+          }
+        ]
+      },
+      {
+        "name": "rank_semipartial_correlation_age_sex_adjusted",
+        "metric": "r",
+        "n": 4,
+        "min": -0.40827903360276746,
+        "max": -0.34297105274731393,
+        "median": -0.3756250431750407,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "zero_unique_rank_predictor_age_sex_adjusted",
+            "n": 4,
+            "n_p": 4,
+            "p_min": 6.283000492653096e-09,
+            "p_max": 4.999750012499375e-05,
+            "significant": 4
+          }
+        ],
+        "changes": [
+          {
+            "factor": "inference_procedure",
+            "matched_sets": 2,
+            "max_change": 0.0,
+            "max_p_change": 4.9991217124501094e-05,
+            "max_interval_width_change": 0.0
+          },
+          {
+            "factor": "outlier_treatment",
+            "matched_sets": 2,
+            "max_change": 0.06530798085545353,
+            "max_p_change": 2.855418107597263e-06,
+            "max_interval_width_change": 0.0001368474708414169
+          }
+        ]
+      },
+      {
+        "name": "raw_partial_correlation",
+        "metric": "r",
+        "n": 6,
+        "min": -0.5133967089581963,
+        "max": -0.437877962257579,
+        "median": -0.4756373356078877,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "zero_full_partial_association",
+            "n": 6,
+            "n_p": 6,
+            "p_min": 1.4066721060768596e-10,
+            "p_max": 4.999750012499375e-05,
+            "significant": 6
+          }
+        ],
+        "changes": [
+          {
+            "factor": "inference_procedure",
+            "matched_sets": 2,
+            "max_change": 0.0,
+            "max_p_change": 4.999735945778314e-05,
+            "max_interval_width_change": 0.03513349380716607
+          },
+          {
+            "factor": "outlier_treatment",
+            "matched_sets": 3,
+            "max_change": 0.07551874670061731,
+            "max_p_change": 1.8883140544935677e-07,
+            "max_interval_width_change": 0.04968614710392
+          }
+        ]
+      },
+      {
+        "name": "raw_partial_correlation_age_sex_adjusted",
+        "metric": "r",
+        "n": 6,
+        "min": -0.5119110630714246,
+        "max": -0.4364403957055544,
+        "median": -0.4741757293884895,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "zero_age_sex_adjusted_association",
+            "n": 6,
+            "n_p": 6,
+            "p_min": 1.8945103395178614e-10,
+            "p_max": 4.999750012499375e-05,
+            "significant": 6
+          }
+        ],
+        "changes": [
+          {
+            "factor": "inference_procedure",
+            "matched_sets": 2,
+            "max_change": 0.0,
+            "max_p_change": 4.99973106739598e-05,
+            "max_interval_width_change": 0.035244540056841744
+          },
+          {
+            "factor": "outlier_treatment",
+            "matched_sets": 3,
+            "max_change": 0.07547066736587027,
+            "max_p_change": 2.3337230872492546e-07,
+            "max_interval_width_change": 0.04484110511553335
+          }
+        ]
+      },
+      {
+        "name": "raw_semipartial_correlation",
+        "metric": "r",
+        "n": 4,
+        "min": -0.4627188388339083,
+        "max": -0.38975523317457444,
+        "median": -0.42623703600424134,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "zero_unique_predictor_association",
+            "n": 4,
+            "n_p": 4,
+            "p_min": 1.4066721060768596e-10,
+            "p_max": 4.999750012499375e-05,
+            "significant": 4
+          }
+        ],
+        "changes": [
+          {
+            "factor": "inference_procedure",
+            "matched_sets": 2,
+            "max_change": 0.0,
+            "max_p_change": 4.999735945778314e-05,
+            "max_interval_width_change": 0.0
+          },
+          {
+            "factor": "outlier_treatment",
+            "matched_sets": 2,
+            "max_change": 0.07296360565933385,
+            "max_p_change": 1.888314054493606e-07,
+            "max_interval_width_change": 0.027727973505376646
+          }
+        ]
+      },
+      {
+        "name": "raw_semipartial_correlation_age_sex_adjusted",
+        "metric": "r",
+        "n": 4,
+        "min": -0.46087253460071836,
+        "max": -0.3881239095476091,
+        "median": -0.42449822207416377,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "zero_unique_predictor_age_sex_adjusted",
+            "n": 4,
+            "n_p": 4,
+            "p_min": 1.8945103395179232e-10,
+            "p_max": 4.999750012499375e-05,
+            "significant": 4
+          }
+        ],
+        "changes": [
+          {
+            "factor": "inference_procedure",
+            "matched_sets": 2,
+            "max_change": 0.0,
+            "max_p_change": 4.99973106739598e-05,
+            "max_interval_width_change": 0.0
+          },
+          {
+            "factor": "outlier_treatment",
+            "matched_sets": 2,
+            "max_change": 0.07274862505310925,
+            "max_p_change": 2.333723087249341e-07,
+            "max_interval_width_change": 0.022942150676804274
+          }
+        ]
+      }
+    ],
+    "reference_status": "verified",
+    "perturbation_status": "verified"
+  },
+  "metered_cost_usd": 1.3742086,
+  "report": "/Users/lukaswallrich/Documents/Coding/reproduction_pipeline/runs/Hurst_EvoHumanBehavior_2017_yypJ_cheap_v2_20260917/report/report.html"
+}

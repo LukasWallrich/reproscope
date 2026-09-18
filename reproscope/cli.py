@@ -14,7 +14,7 @@ STAGES = ("0", "1", "2", "3", "report")
 STAGE_STEPS = {
     "0": ("extract", "arbitrate", "contracts", "readiness", "redact"),
     "1": ("replicas", "match", "targeted", "rerun", "diagnose"),
-    "2": ("causal_language", "mde", "alignment", "broad"),
+    "2": ("correctness",),
     "3": ("focal", "enumerate", "paper_level", "screen", "execute", "rank", "interpret"),
 }
 
@@ -37,10 +37,31 @@ def cmd_run(args: argparse.Namespace) -> int:
         # Only the steps that belong to this stage apply; a name for another stage is
         # simply not present here, so mixing --stages 0 1 --force-step match works.
         stage_force_steps = force_steps & set(STAGE_STEPS.get(stage, ()))
-        if stage_force_steps:
-            mod.run(args.paper_id, force=args.force, force_steps=stage_force_steps)
+        from pathlib import Path
+        from . import paths
+        import json
+        status_path=paths.run_dir(args.paper_id)/'pipeline_status.json'
+        status=json.loads(status_path.read_text()) if status_path.exists() else {'stages':{}}
+        status['stages'][stage]={'status':'running'}
+        status_path.write_text(json.dumps(status,indent=2)+'\n')
+        try:
+            if stage_force_steps:
+                mod.run(args.paper_id, force=args.force, force_steps=stage_force_steps)
+            else:
+                mod.run(args.paper_id, force=args.force)
+        except Exception as exc:
+            status['stages'][stage]={'status':'failed','error':str(exc)}
+            status_path.write_text(json.dumps(status,indent=2)+'\n')
+            if stage!='report':
+                try:
+                    from .report.build import run as report_failure
+                    report_failure(args.paper_id)
+                except Exception as report_exc:
+                    print(f'Partial report could not render: {report_exc}',file=sys.stderr)
+            raise
         else:
-            mod.run(args.paper_id, force=args.force)
+            status['stages'][stage]={'status':'finished'}
+            status_path.write_text(json.dumps(status,indent=2)+'\n')
     print(ledger.format_summary(args.paper_id))
     return 0
 
@@ -75,6 +96,15 @@ def cmd_probe(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="reproscope")
     sub = p.add_subparsers(dest="cmd", required=True)
+
+    intake = sub.add_parser("prepare", help="prepare a fresh run from original PDF/deposits")
+    intake.add_argument("source_id")
+    intake.add_argument("run_id")
+    def prepare(args):
+        from .intake import prepare as create
+        print(create(args.source_id, args.run_id))
+        return 0
+    intake.set_defaults(func=prepare)
 
     run = sub.add_parser("run", help="run pipeline stages for one paper")
     run.add_argument("paper_id")

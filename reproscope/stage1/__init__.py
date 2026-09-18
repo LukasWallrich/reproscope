@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from .. import artifacts, config, paths
+from .. import artifacts, config, paths, provenance
 from . import audit, blind, diagnose, match, replicas, rerun, targeted
 
 __all__ = ["run", "audit", "blind", "diagnose", "match", "replicas", "rerun", "targeted"]
 
-STAGE0_INPUTS = ("claims.json", "contracts.json", "redacted_methods.md", "blind_contract.json")
+STAGE0_INPUTS = ("claims.json", "contracts.json", "readiness.json", "redacted_methods.md", "blind_contract.json", "leak_audit.json")
 
 # Artifact files carry `meta` (a timestamp and call ids that change on every re-save
 # without changing the content); hash them on their analytical payload instead of the
@@ -22,6 +22,7 @@ STAGE0_INPUTS = ("claims.json", "contracts.json", "redacted_methods.md", "blind_
 STAGE0_ARTIFACT_CLASSES = {
     "claims.json": artifacts.ClaimRecord,
     "contracts.json": artifacts.EstimandContract,
+    "readiness.json": artifacts.DataReadinessRecord,
 }
 
 
@@ -38,8 +39,15 @@ def inputs(paper_id: str) -> dict[str, str]:
             if cls is not None
             else artifacts.sha256_file(path)
         )
+    from .. import review_backend
+    hashes["review_backend"] = review_backend.fingerprint()
+    hashes["active_models"] = provenance.digest(config.config().model_dump())
     hashes["models.toml"] = artifacts.sha256_file(paths.ROOT / "models.toml")
     hashes["manifest"] = artifacts.sha256_file(paths.corpus_dir(paper_id) / "manifest.json")
+    hashes.update(provenance.corpus(paper_id))
+    hashes["implementation"] = provenance.implementation()
+    for prompt in paths.ROOT.joinpath("reproscope/prompts").glob("stage1_*.md"):
+        hashes[f"prompt:{prompt.stem}"] = artifacts.sha256_file(prompt)
     return hashes
 
 
@@ -72,6 +80,8 @@ def run(
     def fstep(name: str) -> bool:
         return force or name in force_steps
 
+    from .blind import validate_packet_audit
+    validate_packet_audit(paper_id)
     stage_dir = paths.run_dir(paper_id, 1)
     ins = inputs(paper_id)
     # A replica counts as run once it has a trace; a script that failed its
@@ -82,6 +92,10 @@ def run(
     if paths.is_done(stage_dir, ins) and not missing and not force and not force_steps:
         print(f"stage 1 already done for {paper_id} (use --force to rerun)", flush=True)
         return {"skipped": True}
+
+    if config.config().descriptive_readouts:
+        from ..descriptive_reproduction import run as reproduce_descriptives
+        reproduce_descriptives(paper_id)
 
     traces = replicas.run(paper_id, force=fstep("replicas"), families=families, only=only)
     ran = [t for t in traces if t.ran]
@@ -104,7 +118,9 @@ def run(
     original = rerun.run(paper_id, force=fstep("rerun"))
     diagnosis = diagnose.run(paper_id, force=fstep("diagnose"))
 
-    complete = not missing
+    unresolved = [t.replica_id for t in replicas.load_traces(paper_id)
+                  if t.ran and audit.acceptance(t.hardcoding_audit or {}) == "unresolved"]
+    complete = not missing and not unresolved
     if complete:
         paths.mark_done(stage_dir, ins)
     else:

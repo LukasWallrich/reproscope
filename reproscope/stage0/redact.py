@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +21,8 @@ from . import leakcheck
 
 # Everything a replica must not see.
 BLIND_DROP = (
+    "source_quote", "source_anchor_quote", "source_anchor_scope", "source_region", "figure_panel", "figure_endpoints", "legend_quote", "source_validation", "abstain_reason",
+    "occurrence_id", "quantity_id",
     "value",
     "precision",
     "uncertainty",
@@ -63,8 +65,11 @@ comparison, sample, model or analytical choice — and nothing about the outcome
   every statement that an effect was or was not found;
 - every word revealing whether a finding supported a hypothesis.
 
-Keep design numbers: scale ranges, item counts, numbers of conditions, thresholds, and the
-recruited and analysed sample sizes that define who is in the analysis. Where a fragment
+Keep design parameters: scale ranges, item counts, numbers of conditions and eligibility or
+scoring thresholds. Remove recruited, excluded and analysed participant counts, group counts,
+observed sample percentages and descriptive sample summaries (including observed mean/SD age).
+Keep the actual eligibility rule, study/condition labels, pairing and missingness procedure.
+The analyst must derive realised sample sizes from the data; published N must not be a target. Where a fragment
 describes a choice the authors justified by a result ("sex was dropped because ..."), keep the
 choice and drop the justification. Keep the wording otherwise close to the original, and keep
 each fragment's id unchanged. Return every id you were given.
@@ -214,24 +219,52 @@ def repair(
         items = repair_items(files, hits)
         if not items:
             break
-        payload = [{"id": i["id"], "text": i["text"], "remove": i["forms"]} for i in items]
-        r = llm.call(
-            f"leak_repair:{round_no}",
-            artifacts.load_prompt(
-                "stage0_leak_repair", items=json.dumps(payload, indent=1, ensure_ascii=False)
-            ),
-            paper_id=manifest.paper_id,
-            stage="0",
-            tier="cheap",
-            schema=ScrubOut,
-            cwd=manifest.dir,
-            timeout_s=900,
-            log_path=stage_dir / "logs" / f"leak_repair{round_no}.log",
-        )
-        calls.append(r.ledger_id or "")
-        if r.parsed is None:
+        # Model-facing identifiers are opaque: file names and JSON paths are easy
+        # to alter accidentally. Only this mapping decides where a rewrite lands.
+        id_map = {f"r{n:04d}": item for n, item in enumerate(items)}
+        payload = [{"id": key, "text": i["text"], "remove": i["forms"]}
+                   for key, i in id_map.items()]
+        def repair_chunk(chunk):
+            from .. import provenance, response_cache
+            prompt = artifacts.load_prompt(
+                "stage0_leak_repair", items=json.dumps(chunk, indent=1, ensure_ascii=False))
+            if round_no > 1:
+                prompt += "\nA prior rewrite left the flagged results in these passages. Remove each flagged result while preserving methods."
+            key = provenance.digest(prompt)[:16]
+            fingerprint = response_cache.key(prompt, ScrubOut, [], "cheap")
+            cache_path = stage_dir / "logs" / f"leak_repair_{key}.response.json"
+            cached = response_cache.read(cache_path, fingerprint, ScrubOut)
+            if cached is not None:
+                return llm.LLMResult(text=cached[0].model_dump_json(), parsed=cached[0], ledger_id=cached[1])
+            result = llm.call(
+                f"leak_repair:{round_no}:{key}",
+                prompt,
+                paper_id=manifest.paper_id,
+                stage="0",
+                tier="cheap",
+                schema=ScrubOut,
+                cwd=manifest.dir,
+                timeout_s=900,
+                log_path=stage_dir / "logs" / f"leak_repair_{key}.log",
+            )
+            if result.parsed is not None:
+                response_cache.write(cache_path, fingerprint, result.parsed, result.ledger_id)
+            return result
+        chunks = [payload[i:i+SCRUB_CHUNK] for i in range(0,len(payload),SCRUB_CHUNK)]
+        with ThreadPoolExecutor(max_workers=min(4,len(chunks))) as pool:
+            results = list(pool.map(repair_chunk, chunks))
+        calls.extend(r.ledger_id or "" for r in results)
+        if any(r.parsed is None for r in results):
             break
-        apply_repairs(files, items, {t.id: t.text for t in r.parsed.items})  # type: ignore[attr-defined]
+        for chunk, result in zip(chunks, results):
+            ids = [item.id for item in result.parsed.items]
+            if len(ids) != len(set(ids)) or set(ids) != {item["id"] for item in chunk}:
+                raise llm.LLMError("leak repair returned missing, duplicate or unknown item IDs; no rewrites applied")
+        returned = [t for r in results for t in r.parsed.items]
+        returned_ids = [t.id for t in returned]
+        if len(returned_ids) != len(set(returned_ids)) or set(returned_ids) != set(id_map):
+            raise llm.LLMError("leak repair returned missing, duplicate or unknown item IDs; no rewrites applied")
+        apply_repairs(files, items, {id_map[t.id]["id"]: t.text for t in returned})
         hits = leakcheck.scan(files, claims, design, result_claim_ids=result_ids)
     return hits, calls
 
@@ -253,6 +286,8 @@ def _scrub_chunk(manifest, items: list[dict[str, str]], index: int):
     )
     if r.parsed is None:
         raise llm.LLMError(f"text scrub failed on chunk {index}: {r.error}")
+    if len(r.parsed.items)!=len(items) or {x.id for x in r.parsed.items}!={x['id'] for x in items}:
+        raise llm.LLMError(f'text scrub changed the exact requested item scope in chunk {index}')
     return r.parsed, (r.ledger_id or "")
 
 
@@ -271,30 +306,34 @@ def scrub_texts(manifest, items: list[dict[str, str]]) -> tuple[dict[str, str], 
             cache = json.loads(cache_path.read_text())
         except json.JSONDecodeError:
             cache = {}
-    done = {
-        i["id"]: cache[i["id"]]["text"]
-        for i in items
-        if cache.get(i["id"], {}).get("source") == i["text"]
-    }
-    items = [i for i in items if i["id"] not in done]
-    if not items:
-        return done, []
-    chunks = [items[i : i + SCRUB_CHUNK] for i in range(0, len(items), SCRUB_CHUNK)]
-    out: dict[str, str] = {}
-    calls: list[str] = []
-    with ThreadPoolExecutor(max_workers=min(4, len(chunks))) as pool:
-        futures = [pool.submit(_scrub_chunk, manifest, c, i) for i, c in enumerate(chunks)]
-        for f in futures:
-            parsed, call_id = f.result()
-            calls.append(call_id)
-            out.update({t.id: t.text for t in parsed.items})
-    missing = [i["id"] for i in items if i["id"] not in out]
-    if missing:
-        raise llm.LLMError(f"text scrub returned no rewrite for {len(missing)} items: {missing[:5]}")
-    cache.update({i["id"]: {"source": i["text"], "text": out[i["id"]]} for i in items})
-    cache_path.write_text(json.dumps(cache, indent=2, ensure_ascii=False) + "\n")
-    out.update(done)
-    return out, calls
+    from .. import config,provenance
+    fingerprint=provenance.digest({'prompt':SCRUB_PROMPT,'model':config.tier('cheap').model_dump(),
+        'schema':ScrubOut.model_json_schema(),'route_protocol':llm.ROUTE_PROTOCOL_VERSIONS.get(config.tier('cheap').route)})
+    done={i['id']:cache[i['id']]['text'] for i in items if (cache.get(i['id'],{}).get('source')==i['text']
+          or (i['id']=='methods_document' and cache.get(i['id'],{}).get('text','').strip()==i['text'].strip()))
+          and cache[i['id']].get('fingerprint')==fingerprint}
+    pending=[i for i in items if i['id'] not in done]
+    if not pending:return done,[]
+    if cache_path.exists():
+        archive=cache_path.parent/'scrub_cache_superseded';archive.mkdir(exist_ok=True)
+        shutil.copy2(cache_path,archive/(artifacts.sha256_file(cache_path)+'.json'))
+    # The prompt sees fragments independently; identical text needs one rewrite.
+    groups={}
+    for item in pending:groups.setdefault(item['text'],[]).append(item)
+    unique=[group[0] for group in groups.values()]
+    by_id={item['id']:groups[item['text']] for item in unique}
+    chunks=[unique[i:i+SCRUB_CHUNK] for i in range(0,len(unique),SCRUB_CHUNK)]
+    calls=[];out=dict(done)
+    with ThreadPoolExecutor(max_workers=min(4,len(chunks))) as pool:
+        futures=[pool.submit(_scrub_chunk,manifest,chunk,index) for index,chunk in enumerate(chunks)]
+        for future in as_completed(futures):
+            parsed,cid=future.result();calls.append(cid)
+            for entry in parsed.items:
+                for original in by_id[entry.id]:
+                    out[original['id']]=entry.text
+                    cache[original['id']]={'source':original['text'],'text':entry.text,'fingerprint':fingerprint,'ledger_id':cid}
+            cache_path.write_text(json.dumps(cache,indent=2,ensure_ascii=False)+'\n')
+    return out,calls
 
 
 def scrub_items(
@@ -315,6 +354,20 @@ def scrub_items(
         for i, a in enumerate(c.ambiguities):
             if a.note:
                 items.append({"id": f"contract:{c.analysis_id}:ambiguities:{i}", "text": a.note})
+        # Nested design evidence is prose, even though its surrounding structure is
+        # typed. Source quotations can contain result verbs after numbers are removed.
+        if c.design:
+            for field in ("evidence", "contrast", "independent_unit"):
+                value = getattr(c.design, field, None)
+                if value:
+                    items.append({"id": f"contract:{c.analysis_id}:design:{field}", "text": value})
+        for field in ("analysis_label", "predictors", "covariates"):
+            value = getattr(c, field, None)
+            if isinstance(value, str) and value:
+                items.append({"id": f"contract:{c.analysis_id}:{field}", "text": value})
+            elif isinstance(value, list):
+                items.extend({"id": f"contract:{c.analysis_id}:{field}:{i}", "text": text}
+                             for i, text in enumerate(value) if text)
     return items
 
 
@@ -324,6 +377,11 @@ def blind_contracts(
     out = []
     for c in contract_records:
         d = {k: v for k, v in c.model_dump(exclude_none=True).items() if k != "meta"}
+        # Canonical grouping keys are intake provenance, not analyst instructions.
+        d.pop("identity", None)
+        if isinstance(d.get('design'),dict):
+            d['design'].pop('n_total',None)
+            d['design'].pop('group_ns',None)
         for field in CONTRACT_TEXT_FIELDS:
             key = f"contract:{c.analysis_id}:{field}"
             if key in scrubbed:
@@ -336,6 +394,16 @@ def blind_contracts(
             key = f"contract:{c.analysis_id}:ambiguities:{i}"
             if key in scrubbed:
                 a["note"] = scrubbed[key]
+        for field in ("evidence", "contrast", "independent_unit"):
+            key = f"contract:{c.analysis_id}:design:{field}"
+            if key in scrubbed:
+                d["design"][field] = scrubbed[key]
+        for field in ("analysis_label", "predictors", "covariates"):
+            key = f"contract:{c.analysis_id}:{field}"
+            if isinstance(d.get(field), str) and key in scrubbed:
+                d[field] = scrubbed[key]
+            elif isinstance(d.get(field), list):
+                d[field] = [scrubbed.get(f"{key}:{i}", text) for i, text in enumerate(d[field])]
         out.append(d)
     return out
 
@@ -374,13 +442,46 @@ def build_blind_dir(stage_dir: Path) -> Path:
     if blind.exists():
         shutil.rmtree(blind)
     blind.mkdir(parents=True)
-    for name in ("redacted_methods.md", "blind_contract.json"):
-        shutil.copy2(stage_dir / name, blind / name)
+    from ..stage1.blind import blind_packet
+    shutil.copy2(stage_dir / "redacted_methods.md", blind / "METHODS.md")
+    (blind / "CONTRACT.json").write_text(json.dumps(
+        blind_packet(stage_dir.parent.name, stage_dir / "blind_contract.json"), indent=2, ensure_ascii=False))
+    from ..stage1.blind import replica_task
+    (blind / "TASK.md").write_text(replica_task(stage_dir.parent.name))
     return blind
 
 
+def audit_covers_packet(packet: dict, audited) -> bool:
+    required = {a["analysis_id"] for a in packet.get("analyses", [])}
+    visible = required | set(packet.get("analyses_without_data", []))
+    return (isinstance(audited, list) and all(isinstance(a, str) for a in audited)
+            and len(audited) == len(set(audited)) and required <= set(audited) <= visible)
+
+
+def text_leaves(value,location='$'):
+    if isinstance(value,str):yield location,value
+    elif isinstance(value,dict):
+        for key,child in value.items():yield from text_leaves(child,location+'.'+key)
+    elif isinstance(value,list):
+        for index,child in enumerate(value):yield from text_leaves(child,f'{location}[{index}]')
+
+
+def semantic_repair_items(files,audit):
+    """Locate exact audited leaks in prose; typed execution fields are never edited."""
+    quotes=[p['quote'] for p in audit.get('passage_checks',[]) if p.get('anchored') and p.get('kind') in {'numeric_result','directional_result'}]
+    norm=lambda s:' '.join(s.casefold().split())
+    items=[]
+    for path in files:
+        leaves=list(text_leaves(json.loads(path.read_text()))) if path.suffix=='.json' else [(None,path.read_text())]
+        for location,text in leaves:
+            matches=[q for q in quotes if norm(q) in norm(text)]
+            if matches:items.append({'id':f'{path.name}|{location or "document"}','file':path.name,'location':location,
+                'span':None if location else (0,len(text)),'text':text,'forms':matches})
+    return items
+
+
 def leak_audit(manifest, blind_dir: Path) -> tuple[dict[str, Any], str]:
-    """Ask a model that has not seen the paper what it can infer. Recorded, not load-bearing."""
+    """Audit the delivered packet; anchored result leaks block analytical acceptance."""
     stage_dir = paths.run_dir(manifest.paper_id, 0)
     out_path = stage_dir / "leak_audit.json"
     material = "\n\n".join(
@@ -395,6 +496,7 @@ def leak_audit(manifest, blind_dir: Path) -> tuple[dict[str, Any], str]:
         cwd=blind_dir,
         timeout_s=900,
         log_path=stage_dir / "logs" / "leak_audit.log",
+        large_context=True,
     )
     verdict: dict[str, Any]
     if not r.ok:
@@ -404,6 +506,24 @@ def leak_audit(manifest, blind_dir: Path) -> tuple[dict[str, Any], str]:
             verdict = json.loads(llm.first_json_object(r.text))
         except json.JSONDecodeError:
             verdict = {"error": "audit reply was not JSON", "raw": r.text[:2000], "leak_rating": None}
+    from .. import provenance
+    verdict["packet_fingerprint"] = provenance.files({p.name: p for p in blind_dir.iterdir() if p.is_file()})
+    decoded_material=material+'\n'+'\n'.join(text for _,text in text_leaves(json.loads((blind_dir/'CONTRACT.json').read_text())))
+    verified = []
+    for passage in verdict.get("leaking_passages", []):
+        quote = passage.get("quote", "") if isinstance(passage, dict) else passage
+        kind = passage.get("kind", "unclassified") if isinstance(passage, dict) else "unclassified"
+        anchored = bool(quote) and " ".join(str(quote).casefold().split()) in " ".join(decoded_material.casefold().split())
+        verified.append({"quote": quote, "kind": kind, "anchored": anchored})
+    verdict["passage_checks"] = verified
+    packet = json.loads((blind_dir / "CONTRACT.json").read_text())
+    audited = verdict.get("audited_analysis_ids")
+    coverage_ok = audit_covers_packet(packet, audited)
+    verdict["analysis_coverage_verified"] = coverage_ok
+    explicit = any(x["anchored"] and x["kind"] in {"numeric_result", "directional_result"} for x in verified)
+    verdict["blinding_status"] = ("blocked" if explicit else "unresolved" if not coverage_ok or verdict.get("leak_rating") is None
+                                  else "limited" if verdict.get("leak_rating") != "none" else "no_leak_detected")
+    verdict["isolation_status"] = "working-directory separation; OS access restrictions not established"
     out_path.write_text(json.dumps(verdict, indent=2) + "\n")
     return verdict, (r.ledger_id or "")
 
@@ -425,17 +545,28 @@ def run(
     design = leakcheck.design_numbers_from_manifest(manifest)
     calls: list[str] = []
 
-    if report_path.exists() and blind_path.exists() and not force:
+    from ..stage1.blind import packet_fingerprint
+    packet_audit_path = stage_dir / "leak_audit.json"
+    packet_audit = json.loads(packet_audit_path.read_text()) if packet_audit_path.exists() else {}
+    audit_matches = (blind_path.exists() and methods_path.exists()
+                     and packet_audit.get("packet_fingerprint") == packet_fingerprint(manifest.paper_id))
+    if report_path.exists() and blind_path.exists() and not force and audit_matches:
         existing = artifacts.load(artifacts.RedactionReport, report_path)
         if (
             not artifacts.prompt_stale(existing, PROMPTS)  # type: ignore[arg-type]
             and existing.meta is not None  # type: ignore[union-attr]
             and existing.meta.inputs == (inputs or {})  # type: ignore[union-attr]
+            and (stage_dir / "leak_audit.json").exists()
+            and json.loads((stage_dir / "leak_audit.json").read_text()).get("blinding_status") in {"limited", "no_leak_detected"}
         ):
             return existing, []  # type: ignore[return-value]
 
     scrubbed, scrub_calls = scrub_texts(manifest, scrub_items(claims, contract_records))
     calls += scrub_calls
+    methods_key='methods_document'
+    method_scrub,method_calls=scrub_texts(manifest,[{'id':methods_key,'text':methods_path.read_text()}])
+    calls+=method_calls
+    methods_path.write_text(method_scrub[methods_key].rstrip()+'\n')
     blind_path.write_text(
         json.dumps(
             {
@@ -454,11 +585,35 @@ def run(
 
     forbidden, skipped = leakcheck.forbidden_strings(claims, design, result_ids)
     blind_dir = build_blind_dir(stage_dir)
+    delivered_files = [blind_dir / name for name in ("METHODS.md", "CONTRACT.json", "TASK.md")]
+    method_collisions=[]
+    delivered_hits = leakcheck.scan(delivered_files, claims, design, result_claim_ids=result_ids,method_collisions=method_collisions)
+    hits += delivered_hits
     audit: dict[str, Any] = {}
     if not hits:
         audit, audit_call = leak_audit(manifest, blind_dir)
         if audit_call:
             calls.append(audit_call)
+        for round_no in range(REPAIR_ROUNDS):
+            if audit.get('blinding_status')!='blocked':break
+            files=[methods_path,blind_path]
+            items=semantic_repair_items(files,audit)
+            if not items:break
+            payload=[{'id':f'r{i}','text':item['text'],'remove':item['forms']} for i,item in enumerate(items)]
+            result=llm.call('semantic_leak_repair',artifacts.load_prompt('stage0_leak_repair',items=json.dumps(payload)),
+                paper_id=manifest.paper_id,stage='0',tier='cheap',schema=ScrubOut,timeout_s=900,
+                log_path=stage_dir/'logs'/f'semantic_leak_repair{round_no+1}.log')
+            if result.ledger_id:calls.append(result.ledger_id)
+            expected={p['id'] for p in payload}
+            if result.parsed is None or len(result.parsed.items)!=len(expected) or {p.id for p in result.parsed.items}!=expected:
+                raise llm.LLMError('semantic leak repair failed exact requested scope')
+            mapping={f'r{i}':item['id'] for i,item in enumerate(items)}
+            apply_repairs(files,items,{mapping[p.id]:p.text for p in result.parsed.items})
+            blind_dir=build_blind_dir(stage_dir)
+            hits=leakcheck.scan([blind_dir/name for name in ('METHODS.md','CONTRACT.json','TASK.md')],claims,design,result_claim_ids=result_ids)
+            if hits:break
+            audit,audit_call=leak_audit(manifest,blind_dir)
+            if audit_call:calls.append(audit_call)
 
     report = artifacts.RedactionReport.model_validate(
         {
@@ -475,7 +630,9 @@ def run(
             "forbidden_count": len(forbidden),
             "forbidden_strings": sorted(forbidden),
             "skipped_values": skipped,
-            "scanned_files": [methods_path.name, blind_path.name],
+            "scanned_files": [methods_path.name, blind_path.name, *["blind/" + p.name for p in delivered_files]],
+            "delivered_packet_scan_hits": delivered_hits,
+            "registered_method_parameter_collisions":method_collisions,
             "leakage_audit_verdict": audit.get("leak_rating"),
             "leakage_audit_note": json.dumps(audit.get("leaking_passages") or audit.get("error"))
             if audit

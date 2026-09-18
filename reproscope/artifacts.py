@@ -16,6 +16,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import paths
+from .statistical import AnalysisDesign
 
 ARTIFACT_VERSION = "0.1"
 
@@ -27,6 +28,7 @@ QuantityKind = Literal[
     "coefficient", "p_value", "t", "F", "chi2", "d", "r", "OR", "HR",
     "mean", "sd", "n", "ci_bound", "eta2", "z", "se", "percent", "other",
 ]
+Comparator = Literal["=", "<", ">", "<=", ">="]
 
 
 def _now() -> str:
@@ -76,6 +78,7 @@ class ClaimExtraction(BaseModel):
     model_b: str | None = None
     agreed: bool | None = None
     arbiter_note: str | None = None
+    source_adjudicated: bool = False
 
 
 class ClaimRecord(Artifact):
@@ -85,6 +88,22 @@ class ClaimRecord(Artifact):
     importance: Literal["headline", "supporting"] | None = None
     quantity_kind: QuantityKind | None = None
     value: float | str | None = None
+    comparator: Comparator | None = None
+    source_quote: str | None = None
+    source_region: str | None = None
+    source_token_id: str | None = None
+    figure_panel: str | None = None
+    figure_endpoints: list[str] = []
+    legend_quote: str | None = None
+    source_validation: Literal["unverified", "text_anchored", "visual_adjudicated", "unresolved"] = "unverified"
+    occurrence_id: str | None = None
+    quantity_id: str | None = None
+    quantity_role: Literal["inferential", "descriptive", "supplied_fact", "unknown"] = "unknown"
+    aggregation: Literal["scalar", "all", "any", "min", "max", "vector"] = "scalar"
+    member_ids: list[str] = []
+    target_outcome: str | None = None
+    target_contrast: str | None = None
+    target_model: str | None = None
     precision: int | None = None  # decimals as reported
     uncertainty: dict[str, Any] | None = None  # se / ci as reported alongside
     location: ClaimLocation | None = None
@@ -96,6 +115,7 @@ class ContractAmbiguity(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     field: str
+    kind: Literal["method", "source_identity"] | None = None
     options: list[str] = []
     note: str | None = None
 
@@ -117,6 +137,7 @@ class EstimandContract(Artifact):
     software_named: list[str] = []
     versions_named: dict[str, str] = {}
     ambiguities: list[ContractAmbiguity] = []
+    design: AnalysisDesign | None = None
 
 
 class DataFileRecord(BaseModel):
@@ -238,9 +259,7 @@ class ComparableRow(BaseModel):
     raw_diff: float | None = None
     std_diff: float | None = None
     sign_match: bool | None = None
-    # True when the two-group contrast was graded on the sign-flipped value: the replica
-    # coded the groups the other way round, so the magnitude is comparable and the sign
-    # is not. `sign_match` stays False, and `replicated` holds the flipped value.
+    # Legacy artifact compatibility; current matching never selects a sign flip.
     direction_flipped: bool = False
     band: Band | None = None
     sigma_rule: Literal["within", "outside", "na"] = "na"
@@ -248,6 +267,9 @@ class ComparableRow(BaseModel):
     # it is abstained, with band None, and stays out of every denominator.
     state: State = "complete"
     abstain_reason: str | None = None
+    outcome_status: Literal["graded", "omitted", "link_failed", "replica_failed", "invalid",
+                            "audit_unresolved", "no_data", "unbound", "input_invalid", "supplied_fact", "direction_unverified"] = "graded"
+    analysis_id: str | None = None
 
 
 class Dispersion(BaseModel):

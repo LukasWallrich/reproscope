@@ -21,8 +21,8 @@ MAX_TURNS = 40
 PROMPTS = ("stage1_targeted",)
 
 # A heading line: optionally numbered, short, and naming a methods or a closing section.
-_METHODS_HEAD = re.compile(r"^(\d+\.?\s*)?(methods?|materials and methods|participants)\b", re.I)
-_END_HEAD = re.compile(r"^(\d+\.?\s*)?(general\s+)?(results?|discussion)\b", re.I)
+_METHODS_HEAD = re.compile(r"^(\d+(?:\.\d+)*\.?\s*)?(methods?|materials and methods|participants)\b", re.I)
+_END_HEAD = re.compile(r"^(\d+(?:\.\d+)*\.?\s*)?(general\s+)?(results?|discussion)\b", re.I)
 _MAX_HEADING_CHARS = 60
 
 
@@ -175,6 +175,15 @@ def run(
             notes=f"the focal claim could not be bound, so no miss can be defined: {exc}",
             state="abstained", abstain_reason=f"focal binding failed: {exc}",
         )
+
+    source = getattr(result, "source_coverage", {})
+    fidelity = getattr(result, "method_fidelity", {})
+    focal_id = binding["focal_quantity"]["claim_id"]
+    known_method = any(e.get("analyses", {}).get(binding["analysis_id"], {}).get("status") == "verified" for e in fidelity.values())
+    if focal_id not in source.get("accepted_claim_ids", []) or not known_method:
+        return _record(out_path, key, triggered=False, outcome="not_triggered", state="abstained",
+            abstain_reason="source target or independent method fidelity unresolved",
+            notes="Targeted numerical reconstruction is ineligible until source and method validation pass.")
 
     # Only the focal quantity itself can trigger the arm. `binding["claim_ids"]` also
     # holds every claim that shares a number with the focal sentence (sample sizes,

@@ -146,6 +146,7 @@ def prepare_env(out_dir: Path, rdir: Path) -> dict[str, Any]:
         info["log"] += f"[{what}] {' '.join(cmd)}\n{proc.stdout or ''}{proc.stderr or ''}\n"
         return proc if proc.returncode == 0 else None
 
+    rdir.mkdir(parents=True, exist_ok=True)
     req = out_dir / "requirements.txt"
     if req.exists():
         declared = [
@@ -254,92 +255,90 @@ def count_loops(logs: list[str]) -> int:
     return max((c - 1 for c in counts.values()), default=0)
 
 
-def rerun_script(work: Path, script: Path, rdir: Path) -> dict[str, Any]:
+def rerun_script(work: Path, script: Path, rdir: Path, *, term_receipt=None) -> dict[str, Any]:
     """Re-execute the agent's script from the top and see whether it rebuilds results.
 
     The agent's own results.json is kept as results.agent.json and the file is
     removed before the run, so its presence afterwards proves the script wrote it.
     """
-    # Scripts often hard-code the absolute path of the directory the agent ran in, so
-    # the re-execution happens in that same isolation copy (recreated from work/ if it
-    # is gone) and the outputs are copied back afterwards.
-    repo_work = work
-    # The declarations are read from the agent's own output directory in the repository,
-    # which is authoritative; the isolation copy may predate the agent's last write.
-    env_info = prepare_env(repo_work / "out", rdir)
-    if env_info["error"]:
-        (rdir / "check.log").write_text(env_info["log"])
-        return {
-            "exit_code": None, "wall_s": None, "script": script.name, "ran_from": None,
-            "regenerated_results": False, "results_match_agent": None,
-            "results_from_script": False, "n_values": 0,
-            "env_error": env_info["error"], "interpreter": env_info["interpreter"],
-            "installed": env_info["installed"], "env_dir": env_info["env_dir"],
-        }
-    iso = blind.ISOLATION_ROOT / rdir.parents[2].name / rdir.name
-    if not iso.exists():
-        iso = blind.isolate(work, rdir.parents[2].name, rdir.name)
-    work = iso
-    script = iso / "out" / script.name
-    out_dir = work / "out"
-    results = out_dir / "results.json"
-    agent_copy = rdir / "results.agent.json"
-    agent_payload = None
-    if results.exists():
-        shutil.copy2(results, agent_copy)
-        agent_payload = _read_json(agent_copy)
-        results.unlink()
+    import tempfile
+    from ..execution import copy_inputs, equal, result_fields, external_file_literals
 
+    env_info = prepare_env(work / "out", rdir)
+    path_problems = external_file_literals(work)
+    if path_problems:
+        env_info["error"] = "; ".join(path_problems)
+    original = _read_json(work / "out" / "results.json")
+    regenerated_plan = None
+    isolation = {"enforced": False, "reason": "verification not executed"}
+    packet = _read_json(work / "CONTRACT.json") if (work / "CONTRACT.json").exists() else None
+    if term_receipt is not None:
+        from ..coefficient_identity import attach
+        packet=attach(packet or {},term_receipt)
     started = time.monotonic()
-    # The task does not fix a working directory, so a script may address the data
-    # relative to the work root (`data/...`) or to its own directory (`../data/...`).
-    # It is run from the work root first and, when that fails, from out/.
-    log, exit_code, ran_from = "", 1, work
-    for cwd in (work, out_dir):
-        ran_from = cwd
-        try:
-            proc = subprocess.run(
-                script_command(script, cwd, env_info["interpreter"]),
-                cwd=str(cwd),
-                capture_output=True,
-                text=True,
-                timeout=RERUN_TIMEOUT_S,
-                env={**os.environ, **env_info["env"]},
-            )
-            exit_code, attempt_log = proc.returncode, (proc.stdout or "") + (proc.stderr or "")
-        except subprocess.TimeoutExpired as e:
-            exit_code = 124
-            attempt_log = f"[re-execution timed out after {RERUN_TIMEOUT_S}s]\n{e.stdout or ''}{e.stderr or ''}"
-        except FileNotFoundError as e:
-            exit_code, attempt_log = 127, f"[interpreter not found] {e}"
-        log += f"[run from {cwd.name or cwd}]\n{attempt_log}\n"
-        if exit_code == 0 or exit_code == 124:
-            break
-    wall = time.monotonic() - started
+    exit_code, regenerated, same, values, log = None, False, False, {}, ""
+    output_protocol_error = None
+    if not env_info["error"]:
+        with tempfile.TemporaryDirectory(prefix="reproscope_replica_check_") as folder:
+            fresh = Path(folder)
+            copy_inputs(work, fresh)
+            target = fresh / "out" / script.name
+            for cwd in (fresh, fresh / "out"):
+                output = fresh / "out" / "results.json"
+                output.unlink(missing_ok=True)
+                (fresh / "out/analysis_plan.json").unlink(missing_ok=True)
+                try:
+                    from ..isolation import command as isolated_command, clean_environment
+                    cmd, isolation = isolated_command(script_command(target, cwd, env_info["interpreter"]), fresh, env_info["env"])
+                    proc = subprocess.run(cmd,
+                        cwd=cwd, capture_output=True, text=True, timeout=RERUN_TIMEOUT_S,
+                        env=clean_environment({**os.environ, **env_info["env"]}, fresh))
+                    exit_code = proc.returncode
+                    log += (proc.stdout or "") + (proc.stderr or "")
+                except subprocess.TimeoutExpired:
+                    exit_code, log = 124, log + "fresh execution timed out"
+                    break
+                except (OSError, RuntimeError) as exc:
+                    exit_code, log = 127, log + str(exc)
+                    break
+                if exit_code == 0:
+                    break
+            regenerated = output.is_file()
+            regenerated_plan = _read_json(fresh / "out/analysis_plan.json")
+            if regenerated:
+                try:
+                    values = result_fields(_read_json(output), packet)
+                    same = equal(result_fields(original, packet), values)
+                except (ValueError, TypeError, AttributeError) as exc:
+                    output_protocol_error = str(exc)
+                    log += str(exc)
+    from ..execution_evidence import check_replica
+    execution_evidence = check_replica(work, packet or {}, regenerated_plan=regenerated_plan) if regenerated and same else {"status": "unverified", "analyses": {}}
+    from ..execution_evidence import perturbation_checks
+    perturbation = perturbation_checks(work, script, packet or {}, env_info, rdir) if any(a.get("status") == "verified" for a in execution_evidence.get("analyses", {}).values()) else {"status": "unverified", "reason": "reference method not verified"}
+    if perturbation["status"] != "verified" and execution_evidence.get("status") == "verified":
+        execution_evidence["status"] = "partial"
+    for aid, item in execution_evidence.get("analyses", {}).items():
+        item["perturbation_status"] = (perturbation.get('per_analysis',{}).get(aid,{}).get('status',perturbation['status'])
+                                       if aid in perturbation.get("analysis_ids", []) else "unverified")
+        if item.get("status") == "verified" and item["perturbation_status"] != "verified":
+            item["status"] = "unverified"
+            item["reason"] = "independent reference passed; data-dependence perturbation incomplete"
+    execution_evidence["perturbation"] = perturbation
     (rdir / "check.log").write_text(env_info["log"] + log)
-
-    regenerated = results.exists()
-    new_payload = _read_json(results) if regenerated else None
-    if not regenerated and agent_copy.exists():
-        shutil.copy2(agent_copy, results)  # keep the agent's file for the match step
-    blind.collect(iso, repo_work)
-
-    agent_vals = _result_values(agent_payload) if agent_payload is not None else {}
-    new_vals = _result_values(new_payload) if new_payload is not None else {}
-    values = new_vals or agent_vals
     return {
-        "exit_code": exit_code,
-        "wall_s": round(wall, 2),
-        "script": script.name,
-        "ran_from": ran_from.name,
-        "regenerated_results": regenerated,
-        "results_match_agent": _same_values(agent_vals, new_vals) if regenerated else None,
-        "results_from_script": regenerated,
-        "n_values": sum(1 for v in values.values() if v is not None),
-        "env_error": None,
-        "interpreter": script_command(script, ran_from, env_info["interpreter"])[0],
-        "installed": env_info["installed"],
-        "env_dir": env_info["env_dir"],
+        "exit_code": exit_code, "wall_s": round(time.monotonic() - started, 2),
+        "script": script.name, "ran_from": "fresh declared-input directory",
+        "regenerated_results": regenerated, "results_match_agent": same,
+        "results_from_script": regenerated and same,
+        "script_execution_status": "executed" if exit_code == 0 else "not_run" if exit_code is None else "failed",
+        "output_protocol_status": "invalid" if output_protocol_error else "validated" if regenerated else "missing",
+        "output_protocol_error": output_protocol_error,
+        "execution_evidence": execution_evidence,
+        "isolation": isolation,
+        "n_values": sum(r.get("value") is not None for r in values.values()),
+        "env_error": env_info["error"], "interpreter": env_info["interpreter"],
+        "installed": env_info["installed"], "env_dir": env_info["env_dir"],
     }
 
 
@@ -424,48 +423,157 @@ def _steps_done(result: llm.LLMResult | None, log_text: str) -> int | None:
     return steps or None
 
 
+def generation_validation(work, *, term_receipt=None):
+    """Return blind protocol/method errors for a bounded code repair."""
+    from ..execution_evidence import check_replica
+    packet = json.loads((work / "CONTRACT.json").read_text())
+    if term_receipt is not None:
+        from ..coefficient_identity import attach
+        packet=attach(packet,term_receipt)
+    plan = _read_json(work / "out/analysis_plan.json")
+    evidence = check_replica(work, packet, regenerated_plan=plan)
+    errors = []
+    if evidence.get("status") == "invalid" or not evidence.get("analyses"):
+        if evidence.get("reason"):errors.append(evidence["reason"])
+    for aid, item in evidence.get("analyses", {}).items():
+        if item.get("status") != "verified":
+            reasons=item.get("problems", []) + ([item['reason']] if item.get('reason') else [])
+            if item.get('unverified_quantities'):reasons.append('Unverified requested quantities: '+', '.join(item['unverified_quantities']))
+            errors += [f"{aid}: {reason}" for reason in (reasons or ['Requested analysis lacks complete independent method verification'])]
+    if not errors and any(a.get('status')=='verified' for a in evidence.get('analyses',{}).values()):
+        from ..execution_evidence import perturbation_checks
+        script=find_script(work/'out')
+        environment=prepare_env(work/'out',work.parent)
+        if environment.get('error'):return [environment['error']]
+        if script:
+            check=perturbation_checks(work,script,packet,environment,work.parent)
+            if check.get('status') in {'failed','invalid'}:
+                for operation in check.get('checks',[]):
+                    if operation['status']=='verified':continue
+                    if operation.get('reason'):errors.append(operation['operation']+': '+operation['reason'])
+                    for aid,item in operation.get('reference',{}).get('analyses',{}).items():
+                        if item.get('status')!='verified':
+                            errors.append(f"{operation['operation']} / {aid}: "+'; '.join(item.get('problems',[])+([item['reason']] if item.get('reason') else [])))
+                if not errors:errors.append('Data perturbation did not preserve methods and independently correct outputs.')
+                errors.append('Regenerate method/sample traces from the actual execution. included_ids must name the rows actually analysed after applying the authorised sample rule to the available data, including private row-removal checks. Do not hardcode the original included-ID list as the realised sample.')
+    return errors
+
+
 def run_one(
-    paper_id: str, family: str, replica_id: str, spec: config.ReplicaSpec, force: bool = False
+    paper_id: str, family: str, replica_id: str, spec: config.ReplicaSpec, force: bool = False, *, term_receipt=None
 ) -> artifacts.ReplicaDecisionTrace:
     rdir = blind.replica_dir(paper_id, replica_id)
     work = rdir / "work"
     results_path = work / "out" / "results.json"
     trace_path = rdir / "trace.json"
-
-    if results_path.exists() and trace_path.exists() and not force:
-        loaded = artifacts.load(artifacts.ReplicaDecisionTrace, trace_path)
-        return loaded if isinstance(loaded, artifacts.ReplicaDecisionTrace) else loaded[0]
+    from .. import provenance
+    blind.validate_packet_audit(paper_id)
+    dependency_inputs = generation_inputs(paper_id, spec)
+    loaded=None
+    if trace_path.exists() and not force:
+        loaded=artifacts.load(artifacts.ReplicaDecisionTrace,trace_path)
+        loaded=loaded if isinstance(loaded,artifacts.ReplicaDecisionTrace) else loaded[0]
+        if loaded.meta and loaded.meta.inputs==dependency_inputs and not results_path.exists() and getattr(loaded,'output_fingerprint',None)==replica_outputs(work):
+            return loaded
+    from .. import coefficient_identity
+    if term_receipt is None:
+        term_receipt=coefficient_identity.resolve(paper_id,blind.blind_packet(paper_id,paths.run_dir(paper_id,0)/'blind_contract.json'))
+    from .. import review_backend
+    verification_inputs = {
+        "coefficient_identity": provenance.digest(term_receipt),
+        "source_repair_tier": provenance.digest(config.tier(os.environ['REPROSCOPE_REPLICA_REPAIR_TIER']).model_dump()) if os.environ.get('REPROSCOPE_REPLICA_REPAIR_TIER') else '',
+        "review_backend": review_backend.fingerprint(),
+        "code": provenance.implementation("stage1/replicas.py", "stage1/audit.py", "execution.py",
+                                           "execution_evidence.py", "extended_reference.py", "adjusted_reference.py", "coefficient_identity.py", "replica_repair.py", "plan_protocol.py", "reference.py", "isolation.py", "replica_env.py"),
+        "audit_prompt": artifacts.prompt_version("stage1_hardcoding_audit"),
+        "fix_prompt": artifacts.prompt_version("stage1_fix_severity"),
+        **provenance.files({"environment": paths.ROOT / "uv.lock"}),
+    }
+    previous = None
+    if trace_path.exists() and not force:
+        if not loaded.meta or loaded.meta.inputs != dependency_inputs:
+            force = True
+        elif (not results_path.exists()
+              and getattr(loaded, "output_fingerprint", None) == replica_outputs(work)):
+            # A completed attempt with no result is a recorded failure. Repeating it
+            # requires an explicit force, not an unrelated verification-code change.
+            return loaded
+        elif (getattr(loaded, "verification_inputs", None) == verification_inputs
+              and getattr(loaded, "output_fingerprint", None) == replica_outputs(work)
+              and (loaded.hardcoding_audit or {}).get("verdict") not in {None, "not_run"}):
+            return loaded
+        if not force:
+            previous = loaded
+        # A changed checker or edited implementation re-verifies existing work,
+        # without paying to generate it again.
+    receipt = _read_json(rdir / "generation_receipt.json")
+    recovery_receipt = (receipt if receipt and receipt.get("inputs") == dependency_inputs
+                        and receipt.get("outputs") == replica_outputs(work) else None)
+    if work.exists() and previous is None and recovery_receipt is None:
+        force = True
+    if force and rdir.exists():
+        import uuid
+        archive = rdir.parent.parent / "replicas_superseded" / uuid.uuid4().hex / replica_id
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(rdir), archive)
+        rdir.mkdir(parents=True, exist_ok=True)
 
     # The agent and the re-execution check share one interpreter and one package stack.
     replica_env.ensure_base_env()
 
     result: llm.LLMResult | None = None
-    if results_path.exists() and not force:
+    generation_receipt = recovery_receipt if not force else None
+    if (results_path.exists() or generation_receipt is not None) and not force:
         # Interrupted between the agent finishing and the trace being written:
         # keep the agent's work and redo the checks only.
-        pass
+        receipt = _read_json(rdir / "generation_receipt.json")
+        if receipt and receipt.get("inputs") == dependency_inputs and receipt.get("outputs") == replica_outputs(work):
+            generation_receipt = receipt
     else:
         work = blind.assemble(paper_id, replica_id)
         # The agent runs in a copy outside the repository, so relative paths reach neither
         # the paper nor the extracted claims; its outputs are copied back afterwards.
         iso = blind.isolate(work, paper_id, replica_id)
-        result = llm.call(
-            "replica",
-            (work / "TASK.md").read_text(),
-            paper_id=paper_id,
-            stage="1",
-            route=spec.route,
-            model=spec.model,
-            cwd=iso,
-            agentic=True,
-            env_extra=replica_env.agent_env(iso),
-            timeout_s=AGENT_TIMEOUT_S,
-            log_path=rdir / "agent.log",
-            extra={"replica_id": replica_id, "family": family},
-        )
+        if spec.generation_mode == "tool_free":
+            from ..bounded_generation import generate
+            result = generate(iso, paper_id=paper_id, stage="1", spec=spec,
+                prompt=(work / "TASK.md").read_text(), log_path=rdir / "agent.log",
+                script_stem="analysis", timeout_s=AGENT_TIMEOUT_S,
+                validate_outputs=lambda work:generation_validation(work,term_receipt=term_receipt))
+        else:
+            result = llm.call(
+                "replica",
+                (work / "TASK.md").read_text(),
+                paper_id=paper_id,
+                stage="1",
+                route=spec.route,
+                model=spec.model,
+                cwd=iso,
+                agentic=True,
+                env_extra=replica_env.agent_env(iso),
+                timeout_s=AGENT_TIMEOUT_S,
+                log_path=rdir / "agent.log",
+                extra={"replica_id": replica_id, "family": family},
+            )
         blind.collect(iso, work)
+        generation_receipt = {"inputs": dependency_inputs, "outputs": replica_outputs(work),
+            "model_calls": [result.ledger_id] if result.ledger_id else [],
+            "usage": {k:getattr(result,k) for k in ("route", "model", "tokens_in", "tokens_out", "tokens_reasoning",
+                                                   "cost_usd", "duration_s", "ok", "error")}}
+        (rdir / "generation_receipt.json").write_text(json.dumps(generation_receipt, indent=2) + "\n")
 
     out_dir = work / "out"
+    repair_events=[]
+    if spec.generation_mode=='tool_free' and os.environ.get('REPROSCOPE_REPLICA_REPAIR_TIER') and results_path.exists():
+        from ..replica_repair import repair
+        repair_events=repair(work,paper_id,rdir,term_receipt,generation_validation(work,term_receipt=term_receipt))
+        if repair_events:
+            generation_receipt=dict(generation_receipt or {})
+            generation_receipt.setdefault('before_source_repair',{'outputs':generation_receipt.get('outputs'), 'usage':generation_receipt.get('usage')})
+            generation_receipt['outputs']=replica_outputs(work)
+            generation_receipt['source_repairs']=repair_events
+            generation_receipt['model_calls']=list(dict.fromkeys(generation_receipt.get('model_calls',[])+[e['model_call'] for e in repair_events if e.get('model_call')]))
+            (rdir/'generation_receipt.json').write_text(json.dumps(generation_receipt,indent=2)+'\n')
     agent_log = (rdir / "agent.log").read_text() if (rdir / "agent.log").exists() else ""
     run_log = (out_dir / "run.log").read_text() if (out_dir / "run.log").exists() else ""
     script = find_script(out_dir)
@@ -481,7 +589,7 @@ def run_one(
         "steps_done": _steps_done(result, agent_log),
     }
     if script is not None:
-        checks.update(rerun_script(work, script, rdir))
+        checks.update(rerun_script(work, script, rdir,term_receipt=term_receipt))
     else:
         checks.update({"exit_code": None, "wall_s": None, "regenerated_results": False,
                        "results_match_agent": None, "n_values": 0, "env_error": None})
@@ -490,10 +598,14 @@ def run_one(
     )
 
     trace_fields = normalise_trace(_read_json(out_dir / "trace.json"))
+    trace_fields["execution_evidence"] = checks.get("execution_evidence", {"status": "unverified", "analyses": {}})
     fixes = trace_fields.pop("fixes", [])
     checks["n_fixes"] = len(fixes)
 
-    call_ids = [result.ledger_id] if result and result.ledger_id else []
+    call_ids = ([result.ledger_id] if result and result.ledger_id else
+                list(previous.meta.model_calls) if previous and previous.meta else
+                list(generation_receipt["model_calls"]) if generation_receipt else [])
+    call_ids=list(dict.fromkeys(call_ids+[e['model_call'] for e in repair_events if e.get('model_call')]))
     contracts_text = (work / "CONTRACT.json").read_text() if (work / "CONTRACT.json").exists() else ""
     fixes, fix_call = audit.fix_severity(paper_id, fixes, contracts_text)
     if fix_call:
@@ -509,6 +621,7 @@ def run_one(
     ran = bool(
         checks.get("exit_code") == 0
         and checks.get("regenerated_results")
+        and checks.get("results_match_agent")
         and checks.get("n_values", 0) >= 1
     )
     usage = (
@@ -524,7 +637,7 @@ def run_one(
             "error": result.error,
         }
         if result
-        else None
+        else previous.usage if previous else generation_receipt["usage"] if generation_receipt else None
     )
 
     trace = artifacts.ReplicaDecisionTrace(
@@ -536,14 +649,19 @@ def run_one(
         ran=ran,
         run_checks=artifacts.RunChecks(**checks),
         hardcoding_audit=hard,
+        acceptance=audit.acceptance(hard),
+        output_fingerprint=replica_outputs(work),
+        verification_inputs=verification_inputs,
         state="complete" if ran else "abstained",
         abstain_reason=None
         if ran
-        else (checks.get("env_error") or "script did not re-execute cleanly with results"),
+        else (checks.get("env_error") or ("output protocol: " + checks["output_protocol_error"] if checks.get("output_protocol_error") else None)
+              or "script did not regenerate matching, usable results"),
         usage=usage,
         meta=artifacts.ArtifactMeta(
             artifact="ReplicaDecisionTrace",
             stage="1",
+            inputs=dependency_inputs,
             model_calls=call_ids,
             prompt_versions={"replica_task": artifacts.prompt_version("stage1_replica_task")},
         ),
@@ -551,6 +669,27 @@ def run_one(
     )
     artifacts.save(trace, trace_path)
     return trace
+
+
+
+def generation_inputs(paper_id: str, spec) -> dict[str, str]:
+    from .. import provenance
+    s0 = paths.run_dir(paper_id, 0)
+    return {**provenance.corpus(paper_id),
+            "methods": artifacts.sha256_file(s0 / "redacted_methods.md"),
+            "packet": provenance.digest(blind.blind_packet(paper_id, s0 / "blind_contract.json")),
+            "task": (artifacts.prompt_version("stage1_replica_task") if blind.replica_task(paper_id)==artifacts.load_prompt("stage1_replica_task") else provenance.digest(blind.replica_task(paper_id))),
+            "replica_spec": provenance.digest(spec.model_dump(exclude={"runs"})),
+            "launch_version": "3",
+            "model_client": provenance.implementation("llm.py", "bounded_generation.py", "metered_generation.py", "plan_protocol.py"),
+            "environment_code": provenance.implementation("replica_env.py"),
+            **provenance.files({"environment": paths.ROOT / "uv.lock"})}
+
+def replica_outputs(work: Path) -> dict[str, str]:
+    from .. import provenance
+    return provenance.files({str(p.relative_to(work)): p for p in (work / "out").glob("*")
+                             if p.is_file() and (p.name in {"results.json", "analysis_plan.json", "trace.json", "requirements.txt", "r_packages.txt"}
+                                                 or p.suffix.lower() in {".py", ".r"})})
 
 
 def run(
@@ -562,9 +701,11 @@ def run(
     jobs = replica_ids(families, only)
     if not jobs:
         return []
+    from ..coefficient_identity import resolve
+    term_receipt=resolve(paper_id,blind.blind_packet(paper_id,paths.run_dir(paper_id,0)/'blind_contract.json'))
     with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(jobs))) as pool:
         futures = [
-            pool.submit(run_one, paper_id, family, rid, spec, force) for family, rid, spec in jobs
+            pool.submit(run_one, paper_id, family, rid, spec, force, term_receipt=term_receipt) for family, rid, spec in jobs
         ]
         return [f.result() for f in futures]
 

@@ -7,3 +7,5 @@ Results file the script writes (for reference):
 {{results}}
 
 Return JSON: {"hits": [{"line": n, "literal": "...", "used_as": "...", "severity": "suspicious"|"confirmed"}], "verdict": "clean"|"suspicious"|"hardcoded"}. Output only JSON.
+
+Use canonical quantity roles consistently across replicas. Supplied design facts may be repeated but receive no independent computation credit. Literal analysed sample sizes are not supplied facts unless the canonical role explicitly says so. Narrative-only numbers do not contaminate calculations. For every hit identify affected_claim_ids and dependency_scope (isolated, shared_computation, unknown), with evidence of the path to statistical outputs. Shared hard-coded computations invalidate descendants; isolated unsupported fields need not invalidate unrelated computations. A suspicious coincidence alone is not confirmed hardcoding.

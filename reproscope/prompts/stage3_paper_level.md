@@ -1,14 +1,12 @@
-You are identifying which level of each multiverse factor matches what the paper itself did. The evidence is the decision trace and the analysis script of the replica that reproduced the paper's focal estimate most closely, so its choices are the best available reconstruction of the paper's own specification.
-
-For every factor below, pick the level whose implementation the script and trace actually used, and quote the line or trace entry that shows it. Answer `null` for a factor the script and trace do not settle — do not fall back on what is conventional, and do not infer a level from what the paper's prose leaves open.
+Identify only the analytical choices explicitly documented by the authors. Neither numerical agreement with their results nor a replica's implementation establishes what the authors did. For each factor, choose a listed level only when an explicit passage establishes that method; quote that passage verbatim. Return null if the choice is ambiguous, conventional, inferred from matching numbers, or unsupported. Do not infer participant identity from sample margins or numerical agreement.
 
 Factors:
 {{factors}}
 
-Replica decision trace:
-{{trace}}
+Paper text (evidence for methods, not a target to match):
+{{source}}
 
-Replica analysis script:
-{{script}}
+Return JSON: {"levels": [{"factor": "...", "level": "..." or null, "evidence": "verbatim method passage, or empty when unresolved"}]}. Output only JSON.
 
-Return JSON: {"levels": [{"factor": "...", "level": "..." or null, "evidence": "..."}]}. Output only JSON.
+
+Use focal analysis context to scope each source statement by study, outcome and contrast. First identify an exact source method statement, then map it to a factor level. Never quote the supplied focal context as author evidence. Unknown, conflicting, and undocumented settings remain null. Preserve exact quotations without ellipses or reconstructed reading order.

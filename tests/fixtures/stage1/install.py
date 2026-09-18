@@ -14,7 +14,7 @@ from pathlib import Path
 
 FIXTURE = Path(__file__).resolve().parent
 PAPER_ID = "_fixture"
-BLIND_FIELDS = {"value", "precision", "uncertainty"}
+BLIND_FIELDS = {"value", "precision", "uncertainty", "source_quote"}
 
 
 def blind_contract(claims: list[dict], contracts: list[dict]) -> dict:

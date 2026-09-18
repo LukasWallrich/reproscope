@@ -1,0 +1,1 @@
+LLMError: claude reported an error (429): You've reached your Fable limit. Switch to another model, or manage usage credits at claude.ai/settings/usage?from=cc_cli_limit_message, to continue.

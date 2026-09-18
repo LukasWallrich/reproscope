@@ -1,0 +1,6 @@
+{
+  "provenance": "R WRS2::yuend(tr=.2), ppcor::pcor.test and ppcor::spcor.test, independently executed 2026-09-15. Inputs: study.csv; yuen(a,b), partial(y,x|z), semipartial(y,x|z).",
+  "yuen": {"estimate":0.5723643436172706,"se":0.3480909411301332,"df":24,"p_raw":0.113152268605087,"ci_lower":-0.146060049096957,"ci_upper":1.290788736331498},
+  "partial": {"estimate":0.3701719144939246,"p_raw":0.01871607572099568},
+  "semipartial": {"estimate":0.2068793483111054}
+}

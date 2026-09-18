@@ -1,0 +1,39 @@
+descriptive_readouts = true
+scoped_multiverse = false
+multiverse_min_active_dimensions = 5
+
+[tiers.vision_a]
+route = "claude_p"
+model = "sonnet"
+[tiers.vision_b]
+route = "claude_p"
+model = "opus"
+[tiers.arbiter]
+route = "claude_p"
+model = "sonnet"
+[tiers.cheap]
+route = "claude_p"
+model = "sonnet"
+[tiers.mid]
+route = "claude_p"
+model = "sonnet"
+[tiers.strong]
+route = "claude_p"
+model = "opus"
+[tiers.strong_alt]
+route = "codex"
+model = "gpt-5.6-sol"
+[replicas.sonnet]
+route = "claude_p"
+model = "sonnet"
+generation_mode = "tool_free"
+runs = 1
+[replicas.opus]
+route = "claude_p"
+model = "opus"
+generation_mode = "tool_free"
+runs = 1
+[executor]
+route = "claude_p"
+model = "sonnet"
+generation_mode = "tool_free"

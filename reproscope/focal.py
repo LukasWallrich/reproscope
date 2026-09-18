@@ -95,6 +95,8 @@ def bind_focal_claim(
     if override:
         matched = [c for c in claims if c.claim_id == override]
         notes.append(f"focal claim fixed by the manifest: {override}")
+    if override and not matched:
+        raise ValueError(f"manifest focal claim override {override!r} does not exist")
     if not matched and stat_value is not None:
         anchors = [c for c in claims if prints(c, [stat_value])]
         of_family = [c for c in anchors if family and c.quantity_kind == family]
@@ -108,6 +110,8 @@ def bind_focal_claim(
                 cid for ct in contracts if ct.analysis_id in analyses
                 for cid in (ct.claim_ids or [])
             }
+            if len(analyses) != 1:
+                raise ValueError("focal numeric anchor is ambiguous across analyses; specify claim_id")
             matched = anchors + [
                 c for c in claims
                 if c not in anchors and c.claim_id in in_analysis and prints(c, sentence_numbers)
@@ -144,6 +148,10 @@ def bind_focal_claim(
     if not matched:
         raise ValueError("could not bind the manifest focal claim to any claim in claims.json")
 
+    analyses = {ct.analysis_id for ct in contracts if any(c.claim_id in ct.claim_ids for c in matched)}
+    if len(analyses) != 1:
+        raise ValueError("focal candidates do not identify one analysis; specify claim_id")
+
     def rank_of(c: ClaimRecord) -> int:
         kind = c.quantity_kind or "other"
         return QUANTITY_PREFERENCE.index(kind) if kind in QUANTITY_PREFERENCE else 99
@@ -158,25 +166,13 @@ def bind_focal_claim(
     value = _as_float(chosen.value)
     derived = False
     if kind in _TSTAT_KINDS and value is not None:
-        # Only a test statistic is reported: convert to d so the curve is on an effect scale.
-        df = _as_float(reported.df if reported else None)
-        if kind == "t" and df and df > 0:
-            value = 2 * value / math.sqrt(df)
-            kind, derived = "d", True
-            notes.append(
-                f"only a t statistic was reported for the focal estimate; converted with "
-                f"d = 2t/sqrt(df) = {value:.4f}, which assumes two independent groups of "
-                f"equal size"
-            )
-        else:
-            notes.append(f"focal estimate stays on the {kind} scale; no conversion available")
+        notes.append(f"focal estimate stays on the {kind} scale; no design-verified conversion")
 
-    focal_contract = next(
-        (ct for ct in contracts if chosen.claim_id in (ct.claim_ids or [])), None
-    ) or next(
-        (ct for ct in contracts
-         if any(c.claim_id in (ct.claim_ids or []) for c in matched)), None
-    ) or (contracts[0] if contracts else None)
+    candidate_contracts = [ct for ct in contracts if chosen.claim_id in (ct.claim_ids or [])]
+    if len(candidate_contracts) > 1:
+        raise ValueError("focal claim belongs to multiple estimand contracts")
+    focal_contract = candidate_contracts[0] if candidate_contracts else None
+
     if focal_contract is None:
         raise ValueError("no estimand contract to hang the focal claim on")
 

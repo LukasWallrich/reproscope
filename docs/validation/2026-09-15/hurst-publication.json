@@ -1,0 +1,12 @@
+{
+  "url": "https://reproscope-hurst-2017-v1.surge.sh/",
+  "checks": {
+    "http_200": true,
+    "matches_validated_multiverse": true,
+    "complete_specs": true,
+    "numerical_evidence": true,
+    "comments": true,
+    "no_local_paths": true
+  },
+  "sha256": "d53220b67f7ea65406f239d95391199e780ed4af750efdb6f9e15dd59e9d5667"
+}

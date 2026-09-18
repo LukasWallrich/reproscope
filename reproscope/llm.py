@@ -14,6 +14,8 @@ import json
 import os
 import re
 import subprocess
+import shutil
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,11 +29,35 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 API_KEYS_ENV = Path.home() / ".claude" / "api_keys.env"
 
 ROUTES = ("openrouter", "claude_p", "codex", "opencode")
+ROUTE_PROTOCOL_VERSIONS = {"claude_p": "safe-mode-explicit-tools-1"}
 
 #: Estimated input tokens above which a non-agentic call is refused.
 MAX_INPUT_TOKENS = 60_000
 EARLY_FAILURE_S = 300  # an agentic call that fails within this is retried
 MAX_ATTEMPTS = 4  # transient route failures (gateway errors, overload) are retried with backoff
+PROVIDER_COOLDOWN_S = 900
+
+
+def recent_failed_providers(paper_id: str, model: str, *, now=None) -> list[str]:
+    """Reuse observed transport failures across calls without blacklisting a model."""
+    from datetime import datetime, timezone
+    now = now or datetime.now(timezone.utc)
+    try:
+        rows = ledger.rows(paper_id)
+    except (OSError, json.JSONDecodeError):
+        return []  # A partial concurrent ledger append must not prevent a call.
+    failed = set()
+    for row in rows:
+        if (row.get("route") != "openrouter" or row.get("model") != model
+                or row.get("finish_reason") != "error" or not row.get("provider")):
+            continue
+        try:
+            age = (now - datetime.fromisoformat(row["ts"])).total_seconds()
+        except (KeyError, TypeError, ValueError):
+            continue
+        if 0 <= age < PROVIDER_COOLDOWN_S:
+            failed.add(row["provider"])
+    return sorted(failed)
 
 
 class LLMError(RuntimeError):
@@ -286,10 +312,13 @@ def _claude_p(
     timeout_s: int,
     max_turns: int | None,
     env_extra: dict[str, str] | None,
+    effort: str | None = None,
 ) -> tuple[str, dict[str, Any], str]:
-    # Project settings only: the user's global CLAUDE.md would otherwise steer every call
-    # (orchestration, advisor, deviation flagging), which contaminates blind replicas.
-    cmd = ["claude", "-p", "--model", model, "--setting-sources", "project"]
+    # settings sources do not disable memory or restrict the available tool set.
+    # Safe mode retains subscription auth while disabling personal customizations.
+    cmd = ["claude", "-p", "--model", model, "--safe-mode", "--setting-sources", "project"]
+    if effort:
+        cmd += ["--effort", effort]
     if agentic and max_turns is not None:
         cmd += ["--max-turns", str(max_turns)]
     if agentic:
@@ -298,22 +327,43 @@ def _claude_p(
         cmd += [
             "--output-format", "stream-json", "--verbose",
             "--permission-mode", "bypassPermissions",
+            "--tools", "Bash,Read,Write,Edit,Glob,Grep",
             "--allowedTools", "Bash,Read,Write,Edit,Glob,Grep",
         ]
     else:
-        cmd += ["--output-format", "json", "--allowedTools", "Read"]
+        available = "Read" if images else ""
+        cmd += ["--output-format", "json", "--tools", available]
+        if images:
+            cmd += ["--restricted", "--allowedTools", "Read"]
     if system:
         cmd += ["--append-system-prompt", system]
     if schema is not None:
         payload, strict = schema_payload(schema)
         if strict:
             cmd += ["--json-schema", json.dumps(payload)]
+            prompt += ("\nStructured response: return the schema object itself, with these root keys: "
+                       + ", ".join(payload.get("properties", {}))
+                       + ". Use the StructuredOutput tool directly; do not first emit the JSON as ordinary text or fenced code. "
+                       "Do not serialize the object as a string or wrap it in a parameter field.")
         else:
             prompt += schema_instruction(schema)
-    if images:
-        listing = "\n".join(f"- {Path(p).resolve()}" for p in images)
-        prompt = f"{prompt}\n\nRead these image files with the Read tool before answering:\n{listing}"
-    proc = _run(cmd, prompt, cwd, timeout_s, _subprocess_env(env_extra))
+    if images and not agentic:
+        # The model-facing file tool sees only copies of the supplied images.
+        with tempfile.TemporaryDirectory(prefix="reproscope_vision_") as image_dir:
+            image_root = Path(image_dir)
+            copied = []
+            for i, source in enumerate(images, 1):
+                target = image_root / f"{i:03d}_{Path(source).name}"
+                shutil.copy2(source, target)
+                copied.append(target)
+            listing = "\n".join(f"- {p}" for p in copied)
+            image_prompt = f"{prompt}\n\nRead these image files with the Read tool before answering:\n{listing}"
+            proc = _run(cmd, image_prompt, image_root, timeout_s, _subprocess_env(env_extra))
+    else:
+        if images:
+            listing = "\n".join(f"- {Path(p).resolve()}" for p in images)
+            prompt = f"{prompt}\n\nRead these image files with the Read tool before answering:\n{listing}"
+        proc = _run(cmd, prompt, cwd, timeout_s, _subprocess_env(env_extra))
     log = (proc.stdout or "") + ("\n[stderr]\n" + proc.stderr if proc.stderr else "")
     # The result event is parsed before any failure is raised, so a crashed or
     # error-reporting session still ledgers the tokens it burned.
@@ -323,9 +373,10 @@ def _claude_p(
     # result with exit code 1 and an empty stderr, so the result text is the message.
     if data is not None and data.get("is_error"):
         status = data.get("api_error_status")
+        detail = data.get("result") or data.get("subtype") or data.get("errors") or "unclassified CLI failure"
         raise LLMError(
             f"claude reported an error{f' ({status})' if status else ''}: "
-            f"{str(data.get('result'))[:500]}",
+            f"{str(detail)[:500]}",
             stats=stats, log=log,
         )
     if proc.returncode != 0:
@@ -520,6 +571,7 @@ def call(
     max_turns: int | None = None,
     large_context: bool = False,
     reasoning_max_tokens: int | None = None,
+    claude_effort: str | None = None,
 ) -> LLMResult:
     """Route one call and ledger every attempt.
 
@@ -565,7 +617,7 @@ def call(
                 "duration_s": round(seconds, 2),
                 "ok": error is None,
                 "error": error,
-                **{k: stats[k] for k in ("provider", "finish_reason") if stats.get(k) is not None},
+                **{k: stats[k] for k in ("provider", "finish_reason", "usage_incomplete") if stats.get(k) is not None},
                 **(extra or {}),
             },
         )
@@ -598,17 +650,23 @@ def call(
         stats, error, retry_prompt, transient = {}, None, None, False
         try:
             if route == "openrouter":
+                ignored = sorted(set(failed_hosts) | set(recent_failed_providers(paper_id, model)))
                 text, stats = _openrouter(
                     attempt_prompt, model,
                     schema=schema, images=images, system=system, timeout_s=timeout_s,
-                    reasoning_max_tokens=reasoning_max_tokens, ignore_providers=failed_hosts,
+                    reasoning_max_tokens=reasoning_max_tokens, ignore_providers=ignored,
                 )
+                logs.append(json.dumps({"attempt": attempt, "response": text,
+                    "provider": stats.get("provider"), "finish_reason": stats.get("finish_reason")}, ensure_ascii=False))
+                if log_path is not None:
+                    Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+                    Path(log_path).write_text("\n\n---- next attempt ----\n\n".join(logs))
             elif route == "claude_p":
                 text, stats, log = _claude_p(
                     attempt_prompt, model,
                     schema=schema, images=images, system=system,
                     cwd=cwd, agentic=agentic, timeout_s=timeout_s, max_turns=max_turns,
-                    env_extra=env_extra,
+                    env_extra=env_extra, effort=claude_effort,
                 )
                 logs.append(log)
             elif route == "codex":
@@ -626,7 +684,11 @@ def call(
                 logs.append(log)
         except subprocess.TimeoutExpired as e:
             error = f"timeout after {timeout_s}s"
-            logs.append(_decode(e.stdout) + _decode(e.stderr))
+            partial = _decode(e.stdout)
+            if route == "opencode":
+                _, stats = _opencode_stream(partial)
+            stats["usage_incomplete"] = True  # A request still in flight may be unreported.
+            logs.append(partial + _decode(e.stderr))
         except Exception as e:  # noqa: BLE001 - every failure must still be ledgered
             error = f"{type(e).__name__}: {e}"
             stats = getattr(e, "stats", None) or {}
@@ -636,9 +698,12 @@ def call(
             # choices); retry with backoff. An agentic call retries only when it died
             # early, so a session that did real work before failing is not repeated blindly.
             early = time.monotonic() - attempt_started < EARLY_FAILURE_S
-            transient = not agentic or early
+            transient = (not agentic or early) and not any(term in error.lower() for term in (
+                "reached your", "usage limit", "out of extra usage", "insufficient credits",
+                "output token maximum", "max_structured_output_retries",
+            ))
         else:
-            if schema is not None and stats.get("finish_reason") == "error":
+            if stats.get("finish_reason") == "error":
                 # The host cut the stream: the truncated JSON is its failure, not the model's.
                 error = f"provider ended the reply with an error after {len(text)} chars"
                 transient = True

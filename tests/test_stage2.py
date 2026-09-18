@@ -64,7 +64,7 @@ def test_classify_design():
 @pytest.mark.skipif(not HAVE_R, reason="Rscript not on PATH")
 def test_mde_two_group_matches_r(tmp_path):
     # 128 analysed, 64 per group: power.t.test(n=64, delta=0.5) = 0.8014586
-    out = mde.compute(mde.TWO_GROUP, 128, script_path=tmp_path / "mde.R")
+    out = mde.compute(mde.TWO_GROUP, 128, script_path=tmp_path / "mde.R", n_per_group=64)
     powers = {row["effect"]: row["power"] for row in out["curve"]}
     assert powers[0.5] == pytest.approx(0.8014586, abs=1e-4)
     assert powers[0.1] < powers[0.2] < powers[0.3] < powers[0.5] < powers[0.8]
@@ -77,7 +77,7 @@ def test_mde_two_group_matches_r(tmp_path):
 @pytest.mark.skipif(not HAVE_R, reason="Rscript not on PATH")
 def test_mde_two_group_fixture_n(tmp_path):
     # the fixture analyses 58, i.e. 29 per group: MDE at 80% power = 0.7486596
-    out = mde.compute(mde.TWO_GROUP, 58, script_path=tmp_path / "mde.R")
+    out = mde.compute(mde.TWO_GROUP, 58, script_path=tmp_path / "mde.R", n_per_group=29)
     assert out["n_per_group"] == 29
     assert out["mde_standardised"] == pytest.approx(0.7486596, abs=1e-4)
 
@@ -189,19 +189,23 @@ def test_focal_dependent_checks_abstain_without_a_binding(fixture_root, monkeypa
         assert "focal claim not bound" in rec.abstain_reason
 
 
-def test_focal_n_prefers_replica_results(fixture_root):
+def test_focal_n_does_not_trust_unverified_replica_results(fixture_root):
     inp = review.gather("_fixture2")
     n, source = review._focal_n(inp)
-    assert n == 58
-    assert "replica results.json" in source
+    assert n is None
+    assert "no independently verified" in source
 
 
 @pytest.mark.skipif(not HAVE_R, reason="Rscript not on PATH")
 def test_check_mde_deterministic_on_fixture(fixture_root):
     inp = review.gather("_fixture2")
+    from reproscope.statistical import AnalysisDesign
+    inp.focal_contract.design = AnalysisDesign(family="independent_t", contrast="condition difference",
+        independent_unit="participant", n_total=58, group_ns=[29,29], variance_assumption="equal",
+        alternative="two-sided", evidence="fixture generation design")
     rec = review.check_mde(inp)
     assert rec.state == "complete"
-    assert rec.response["method"] == "deterministic"
+    assert rec.response["method"].startswith("deterministic")
     assert rec.response["design"] == mde.TWO_GROUP
     assert rec.response["n_analysed"] == 58
     assert rec.response["mde_standardised"] == pytest.approx(0.7486596, abs=1e-4)
@@ -224,7 +228,7 @@ def test_check_mde_abstains_on_an_uncovered_design(fixture_root, monkeypatch):
     inp = review.gather("_fixture2")
     rec = review.check_mde(inp)
     assert rec.state == "abstained"
-    assert "not one of the designs" in rec.abstain_reason
+    assert "structured design missing" in rec.abstain_reason
     assert rec.meta.model_calls == []
 
 
@@ -257,15 +261,15 @@ def test_focal_passages_window(fixture_root):
 def test_broad_prompt_carries_one_script_and_diffs(fixture_root):
     inp = review.gather("_fixture2")
     material, provenance = review.broad_material(inp)
-    # opus_1 reproduces the focal claim exactly; glm_1 is off by 0.01
-    assert provenance["canonical_replica"] == "opus_1"
-    assert provenance["diffed_replicas"] == ["glm_1"]
-    assert "pooled_sd <- sqrt" in material          # the canonical script in full
-    assert "## Canonical replica script — opus_1 / analysis.R" in material
-    # glm_1 arrives as a diff, not as a second full script
-    assert "## Replica glm_1 — unified diff against opus_1" in material
-    assert "## Canonical replica script — glm_1" not in material
-    assert "+fit <- t.test(contribution ~ condition, data = d)" in material
+    assert provenance["canonical_replica"] is None  # legacy traces lack accepted audits
+    assert "no accepted executed replica" in material
+    for replica in inp.replicas:
+        replica.trace["hardcoding_audit"] = {"verdict": "clean"}
+    material, provenance = review.broad_material(inp)
+    assert provenance["canonical_replica"] == "glm_1"  # stable ID, regardless of numeric proximity
+    assert provenance["diffed_replicas"] == ["opus_1"]
+    assert "## Canonical replica script — glm_1" in material
+    assert provenance["source_snapshots"]
     # the paper's methods and focal passages, not the whole paper
     assert "independent-samples" in material
     assert "Cooperation between strangers is fragile" not in material
@@ -296,7 +300,7 @@ def test_run_calls_each_check_once_on_the_tier_it_belongs_on(fixture_root, monke
                                ledger_id=f"call-{step}", text="", duration_s=0.0)
 
     monkeypatch.setattr(review.llm, "call", fake_call)
-    out = stage2.run("_fixture2")
+    out = stage2.run_extended("_fixture2")
 
     assert [s[0] for s in seen] == ["causal_language", "alignment", "broad"]  # no mde call
     tiers = {step: (tier, cap) for step, tier, cap, _ in seen}
@@ -315,13 +319,13 @@ def test_run_calls_each_check_once_on_the_tier_it_belongs_on(fixture_root, monke
 
     # a second run reuses everything
     seen.clear()
-    assert stage2.run("_fixture2")["skipped"] is True
+    assert stage2.run_extended("_fixture2")["skipped"] is True
     assert seen == []
 
     # an edited prompt clears the stage marker and rebuilds the check that used it
     broad_prompt = fixture_root / "reproscope" / "prompts" / "stage2_broad.md"
     broad_prompt.write_text(broad_prompt.read_text() + "\nOne more instruction.\n")
-    stage2.run("_fixture2")
+    stage2.run_extended("_fixture2")
     assert [s[0] for s in seen] == ["broad"]
 
 
@@ -405,7 +409,7 @@ def test_assemble_and_render_with_one_abstained_check(fixture_root):
     md = review.render_md(inp, out, records)
     assert "## 2. Minimum detectable effect" in md
     assert "_Abstained: Rscript failed_" in md
-    assert "### Not verifiable" in md
+    assert "### Evidence not anchored" in md
     assert "a Bonferroni correction was applied" in md
     assert "`opus_1`: Student" in md
     assert "`call1`" in md
@@ -433,3 +437,69 @@ def test_check_record_roundtrip(fixture_root):
     assert not review.reusable(loaded, {"paper.txt": "different"})
     assert json.loads(review.check_path("_fixture2", "broad").read_text())["check"] == "broad"
     assert rec.state == "complete"
+
+
+@pytest.mark.parametrize("variance", ["unknown", "unequal"])
+def test_power_abstains_without_a_supported_variance_assumption(fixture_root, variance):
+    from reproscope.statistical import AnalysisDesign
+    inp = review.gather("_fixture2")
+    inp.focal_contract.design = AnalysisDesign(family="independent_t", contrast="difference",
+        independent_unit="participant", n_total=58, group_ns=[29,29], alternative="two-sided",
+        variance_assumption=variance, evidence="fixture design")
+    assert review.check_mde(inp).state == "abstained"
+
+
+def test_alignment_material_scopes_focal_evidence_without_raw_perturbations():
+    from types import SimpleNamespace
+    inp=SimpleNamespace(focal={'analysis_id':'a1'},readiness={
+        'variable_bindings':[{'analysis_id':'a1','input_columns':['x','y']},{'analysis_id':'a2','input_columns':['other']}],
+        'per_analysis_state':{'a1':'complete','a2':'abstained'}, 'huge_profile':'z'*100000})
+    choices={'r':{'open_choices':[{'choice':'tail unknown'}], 'execution_evidence':{
+        'analyses':{'a1':{'status':'verified','n':12,'alternative':'two-sided','perturbation_status':'verified'},
+                    'a2':{'status':'unverified','reason':'other'}}, 'perturbation':{'raw':'x'*100000}}}}
+    readiness, compact=review.alignment_material(inp,choices)
+    assert readiness['variable_bindings']==[{'analysis_id':'a1','input_columns':['x','y']}]
+    assert compact['r']['execution_evidence']['analyses']['a1']['n']==12
+    assert compact['r']['execution_evidence']['analyses']['a1']['perturbation_status']=='verified'
+    assert 'a2' not in compact['r']['execution_evidence']['analyses']
+    assert len(json.dumps([readiness,compact]))<2000
+
+
+def test_hierarchical_methods_heading_supplies_assignment_evidence():
+    from reproscope.stage2.review import methods_section
+    text='3. Experiment one\n3.1. Method\n3.1.1. Participants\nParticipants received both conditions.\n3.1.2. Procedure\nTrial order was randomised.\n3.2. Results\nObserved values.\n'
+    methods=methods_section(text)
+    assert methods.startswith('3.1. Method')
+    assert 'Trial order was randomised.' in methods
+    assert 'Observed values' not in methods
+
+
+def test_anchor_quote_wrappers_are_presentation_only_but_word_changes_still_fail():
+    from reproscope.stage2.review import verify_anchors
+    source={'s':'The maximumlikelihood estimate was computed.'}
+    found=verify_anchors([{'source_id':'s','anchor':'“The maximumlikelihood estimate was computed.”'},
+                          {'source_id':'s','anchor':'“The maximum-likelihood estimate was computed.”'}],source)
+    assert found[0]['anchor_verified'] and not found[1]['anchor_verified']
+
+
+def test_default_stage_asks_only_correctness_and_reuses_complete_review(fixture_root,monkeypatch):
+    import reproscope.stage2 as stage2
+    from reproscope.stage2 import correctness
+    seen=[]
+    response=correctness.Response(coding=correctness.Answer(answer='no_clear_error_found',summary='Inspected available code.'),
+        interpretation=correctness.Answer(answer='no_clear_error_found',summary='No demonstrated contradiction.'),
+        scope='Both available replica scripts and supplied source material.')
+    def call(step,prompt,**kwargs):
+        seen.append(step)
+        assert 'Answer exactly two questions' in prompt
+        assert '[source_id=script:glm_1]' in prompt and '[source_id=script:opus_1]' in prompt
+        return SimpleNamespace(parsed=response,ledger_id='check-call',error=None)
+    monkeypatch.setattr(correctness.review_backend,'call',call)
+    result=stage2.run('_fixture2')
+    assert seen==['correctness']
+    doc=json.loads(result['review'].read_text())
+    assert doc['mode']=='correctness' and doc['narrow'] is None
+    assert stage2.run('_fixture2')['skipped']
+    assert seen==['correctness']
+    with pytest.raises(ValueError,match='only correctness'):
+        stage2.run('_fixture2',force_steps={'causal_language'})

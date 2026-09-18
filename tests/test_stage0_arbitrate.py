@@ -21,6 +21,8 @@ def claim(claim_id="c001", value=5.91, precision=2, kind="t", page=3, label="Res
         precision=precision,
         importance=kw.pop("importance", "supporting"),
         description=kw.pop("description", None),
+        source_region=kw.pop("source_region", "paragraph:paired-comparison"),
+        quantity_role="inferential",
         location=SlimLocation(page=page, kind="text", label=label, cell=kw.pop("cell", None)),
         **kw,
     )
@@ -32,6 +34,8 @@ def sandbox(tmp_path, monkeypatch):
     monkeypatch.setattr(paths, "ROOT", tmp_path)
     real = Path(__file__).resolve().parents[1]
     shutil.copytree(real / "reproscope" / "prompts", tmp_path / "reproscope" / "prompts")
+    from reproscope import source_layout
+    monkeypatch.setattr(source_layout, "build", lambda pdf: {"pdf_sha256": None, "pages": []})
     return tmp_path
 
 
@@ -72,10 +76,10 @@ def test_agreements_conflicts_and_singletons_are_separated():
     assert by_source["A"].claim.value == 41
 
 
-def test_agreement_tolerates_the_coarser_reported_precision():
+def test_different_printed_precision_and_values_require_resolution():
     a = ClaimList(claims=[claim(value=5.9, precision=1)])
     b = ClaimList(claims=[claim(value=5.91, precision=2)])
-    assert [r.source for r in arbitrate.partition(a, b)] == ["agreed"]
+    assert [r.source for r in arbitrate.partition(a, b)] == ["conflict"]
 
 
 def test_a_different_label_is_not_the_same_claim():
@@ -107,6 +111,7 @@ def test_two_sentences_on_one_page_are_not_a_value_conflict():
                 value=0.209,
                 kind="p_value",
                 description="Target ratings by ruminators were not significantly different, p = .209.",
+                source_region="paragraph:target-ratings",
             )
         ]
     )
@@ -194,10 +199,11 @@ def test_only_disagreements_and_singletons_reach_a_model(sandbox, monkeypatch):
             parsed=arbitrate.ArbitrationBatch(
                 items=[
                     arbitrate.ArbitrationItem(
-                        item_id=i["item_id"], decision="correct", value=0.23, note="printed"
+                        item_id=i["item_id"], decision="correct", value=0.23, note="printed",
+                        corrected_claim=SlimClaim(**{**i["candidate_claims"][0], "value": 0.23})
                     )
                     if i.get("candidate_values")
-                    else arbitrate.ArbitrationItem(item_id=i["item_id"], decision="keep")
+                    else arbitrate.ArbitrationItem(item_id=i["item_id"], decision="keep", corrected_claim=SlimClaim(**i["candidate_claims"][0]))
                     for i in items
                 ]
             ),
@@ -209,7 +215,7 @@ def test_only_disagreements_and_singletons_reach_a_model(sandbox, monkeypatch):
 
     records, calls = arbitrate.run(FakeManifest(), a, b, [], inputs={})
 
-    assert len(sent) == 1 and sent[0]["tier"] == "vision_a"
+    assert len(sent) == 1 and sent[0]["tier"] == "arbiter"
     # Two items only: the conflicting r and the singleton n. The agreed t is untouched.
     assert {i["value"] for i in sent[0]["items"]} == {None, 41.0}
     assert len(sent[0]["items"]) == 2
@@ -223,7 +229,7 @@ def test_only_disagreements_and_singletons_reach_a_model(sandbox, monkeypatch):
     assert [r.claim_id for r in records] == ["c001", "c002", "c003"]  # page order, then label
 
 
-def test_an_unresolved_headline_claim_escalates_and_a_supporting_one_does_not(sandbox, monkeypatch):
+def test_unresolved_required_source_fields_escalate_regardless_of_importance(sandbox, monkeypatch):
     a = ClaimList(
         claims=[
             claim("c001", value=5.91, importance="headline"),
@@ -263,13 +269,10 @@ def test_an_unresolved_headline_claim_escalates_and_a_supporting_one_does_not(sa
 
     records, _ = arbitrate.run(FakeManifest(), a, b, [], inputs={})
 
-    assert steps == ["arbitrate:batch1/vision_a", "arbitrate:strong/strong"]
-    # The headline claim was dropped by the strong pass; the supporting one stays, at low confidence.
-    assert [r.value for r in records] == [0.32]
-    assert records[0].confidence == "low"
-    assert records[0].extraction.arbiter_note == "unresolved"
+    assert steps == ["arbitrate:batch1/arbiter", "arbitrate:strong/strong"]
+    assert records == []  # both unresolved source readings were escalated and dropped
     summary = json.loads((paths.run_dir("_arb", 0) / "arbitration.json").read_text())
-    assert (summary["n_escalated"], summary["n_singleton"], len(summary["dropped"])) == (1, 2, 1)
+    assert (summary["n_escalated"], summary["n_singleton"], len(summary["dropped"])) == (2, 2, 2)
 
 
 def test_a_failed_batch_leaves_every_item_unresolved(sandbox, monkeypatch):
@@ -301,3 +304,129 @@ def test_claims_json_is_reused_until_a_prompt_changes(sandbox, monkeypatch):
     assert rebuilt[0].meta.prompt_versions["stage0_arbitrate"] == artifacts.prompt_version(
         "stage0_arbitrate"
     )
+
+
+def test_decision_trace_keeps_original_candidates_after_final_renumbering():
+    from reproscope.stage0.extract import ClaimList, SlimClaim, SlimLocation
+    a=SlimClaim(claim_id='original_a',quantity_kind='t',value=4.71,source_quote='The result t(27) = 4.71',location=SlimLocation(page=1,kind='text'))
+    b=a.model_copy(update={'claim_id':'original_b','target_model':'paired t'})
+    rows=arbitrate.partition(ClaimList(claims=[a]),ClaimList(claims=[b]),['',a.source_quote])
+    rows[0].item_id='i001'; rows[0].decision_calls=['cheap_call','strong_call']
+    records=arbitrate.to_records(rows,'A','B',artifacts.ArtifactMeta(artifact='ClaimRecord'))
+    trace=arbitrate.decision_trace(rows,records)
+    assert trace[0]['source_claim_ids']=={'A':'original_a','B':'original_b'}
+    assert trace[0]['claim_id']=='c001' and trace[0]['decision_calls']==['cheap_call','strong_call']
+
+
+def test_rival_local_id_is_accepted_only_for_same_physical_token():
+    a=claim('reader_a',source_token_id='p003:word:0')
+    b=a.model_copy(update={'claim_id':'reader_b'})
+    resolution=arbitrate.Resolution(a,'conflict',b)
+    arbitrate.apply_decision(resolution,arbitrate.ArbitrationItem(item_id='i1',decision='correct',corrected_claim=b))
+    assert not resolution.unresolved and resolution.claim.claim_id=='reader_a'
+    resolution=arbitrate.Resolution(a,'conflict',b)
+    wrong=b.model_copy(update={'source_token_id':'p003:another:0'})
+    arbitrate.apply_decision(resolution,arbitrate.ArbitrationItem(item_id='i1',decision='correct',corrected_claim=wrong))
+    assert resolution.unresolved
+
+
+def test_keep_can_reconcile_semantic_wording_but_cannot_change_literal():
+    a=claim(target_outcome='reaction time')
+    resolution=arbitrate.Resolution(a,'A')
+    b=a.model_copy(update={'target_outcome':'reaction_time'})
+    arbitrate.apply_decision(resolution,arbitrate.ArbitrationItem(item_id='i1',decision='keep',corrected_claim=b))
+    assert not resolution.unresolved
+    resolution=arbitrate.Resolution(a,'A')
+    arbitrate.apply_decision(resolution,arbitrate.ArbitrationItem(item_id='i1',decision='keep',corrected_claim=b.model_copy(update={'value':9})))
+    assert resolution.unresolved
+
+
+def test_duplicate_source_peers_are_reviewed_together_at_batch_boundaries():
+    from reproscope.stage0.arbitrate import _joint_source_batches,Resolution
+    from reproscope.stage0.extract import SlimClaim,SlimLocation
+    items=[]
+    for i in range(5):
+        r=Resolution(claim=SlimClaim(claim_id=f'c{i}',location=SlimLocation(page=1)),source='A')
+        r.note='source validation: duplicate source occurrence requires reconciliation'
+        items.append((f'i{i}',r))
+    batches=_joint_source_batches(items,[['i0','i3']],size=2)
+    assert any({i for i,_ in b}=={'i0','i3'} for b in batches)
+    assert sorted(i for b in batches for i,_ in b)==[f'i{i}' for i in range(5)]
+    assert 'wrong source_token_id' in items[0][1].note
+    assert 'i0, i3' in items[3][1].note
+
+
+def test_source_repair_rechecks_new_collisions_with_previously_accepted_records(sandbox, monkeypatch):
+    from reproscope import source_integrity
+    a = arbitrate.Resolution(claim('a', source_token_id='wrong'), 'A')
+    b = arbitrate.Resolution(claim('b', source_token_id='right'), 'B')
+    a.item_id, b.item_id = 'ia', 'ib'
+    b.unresolved = False
+    meta = artifacts.ArtifactMeta(artifact='ClaimRecord')
+    records = arbitrate.to_records([a, b], 'A', 'B', meta)
+    records[0].state = 'abstained'
+    records[0].abstain_reason = 'wrong physical source pointer'
+    reviewed = []
+
+    def review(manifest, prompt, tier, step, batch, *args, **kwargs):
+        reviewed.append([iid for iid, _ in batch])
+        decisions = {}
+        for iid, res in batch:
+            decision = 'drop' if iid == 'ib' else 'correct'
+            decisions[iid] = arbitrate.ArbitrationItem(
+                item_id=iid, decision=decision,
+                corrected_claim=res.claim.model_copy(update={'source_token_id': 'right'}))
+        return decisions, step
+
+    def validate(records, *args, **kwargs):
+        if len(records) == 2:
+            for record in records:
+                record.state = 'abstained'
+                record.abstain_reason = 'duplicate source occurrence requires reconciliation'
+                record.occurrence_id = 'same-physical-number'
+        else:
+            records[0].source_validation = 'visual_adjudicated'
+
+    monkeypatch.setattr(arbitrate, '_call_batch', review)
+    monkeypatch.setattr(source_integrity, 'validate_sources', validate)
+    repaired = arbitrate._repair_sources(FakeManifest(), [a, b], records,
+        [Path('p1'), Path('p2'), Path('p3')], sandbox, meta, [], [], {}, {})
+    assert reviewed == [['ia'], ['ia', 'ib']]
+    assert len(repaired) == 1 and repaired[0].state == 'complete'
+    assert b.dropped
+
+
+def test_source_repair_stops_after_four_failed_passes(sandbox, monkeypatch):
+    from reproscope import source_integrity
+    a = arbitrate.Resolution(claim('a'), 'A')
+    a.item_id = 'ia'
+    meta = artifacts.ArtifactMeta(artifact='ClaimRecord')
+    records = arbitrate.to_records([a], 'A', 'B', meta)
+    def invalidate(records, *args, **kwargs):
+        records[0].state = 'abstained'
+        records[0].abstain_reason = 'source evidence unresolved'
+    invalidate(records)
+    calls = []
+    monkeypatch.setattr(arbitrate, '_call_batch', lambda *a, **k: ({}, 'failed'))
+    monkeypatch.setattr(source_integrity, 'validate_sources', invalidate)
+    repaired = arbitrate._repair_sources(FakeManifest(), [a], records,
+        [Path('p1'), Path('p2'), Path('p3')], sandbox, meta, calls, [], {}, {})
+    assert calls == ['failed'] * 4
+    assert repaired[0].state == 'abstained'
+
+
+def test_source_repair_can_correct_a_known_rivals_bad_physical_pointer():
+    a = claim('reader_a', source_token_id='wrong')
+    b = a.model_copy(update={'claim_id': 'reader_b'})
+    resolution = arbitrate.Resolution(a, 'conflict', b)
+    corrected = b.model_copy(update={'source_token_id': 'right'})
+    arbitrate.apply_decision(resolution, arbitrate.ArbitrationItem(
+        item_id='i1', decision='correct', corrected_claim=corrected), source_repair=True)
+    assert not resolution.unresolved
+    assert resolution.claim.claim_id == 'reader_a'
+    assert resolution.claim.source_token_id == 'right'
+    assert resolution.source_claim_ids == {'A': 'reader_a', 'B': 'reader_b'}
+    unrelated = corrected.model_copy(update={'claim_id': 'unrelated'})
+    arbitrate.apply_decision(resolution, arbitrate.ArbitrationItem(
+        item_id='i1', decision='correct', corrected_claim=unrelated), source_repair=True)
+    assert resolution.unresolved

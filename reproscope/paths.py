@@ -99,6 +99,7 @@ def done_path(stage_dir: Path) -> Path:
 
 
 def is_done(stage_dir: Path, inputs: dict[str, str]) -> bool:
+    from . import provenance
     p = done_path(stage_dir)
     if not p.exists():
         return False
@@ -106,17 +107,21 @@ def is_done(stage_dir: Path, inputs: dict[str, str]) -> bool:
         prev: dict[str, Any] = json.loads(p.read_text())
     except json.JSONDecodeError:
         return False
-    return prev.get("inputs") == inputs
+    return (prev.get("inputs") == inputs
+            and prev.get("implementation") == provenance.implementation()
+            and prev.get("outputs") == provenance.outputs(Path(stage_dir)))
 
 
 def mark_done(stage_dir: Path, inputs: dict[str, str]) -> Path:
     from datetime import datetime, timezone
+    from . import provenance
 
     p = done_path(stage_dir)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(
         json.dumps(
-            {"inputs": inputs, "created": datetime.now(timezone.utc).isoformat()},
+            {"inputs": inputs, "created": datetime.now(timezone.utc).isoformat(),
+             "implementation": provenance.implementation(), "outputs": provenance.outputs(stage_dir)},
             indent=2,
             sort_keys=True,
         )

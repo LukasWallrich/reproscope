@@ -1,0 +1,36 @@
+[
+  {
+    "paper": "petersen",
+    "aligned": true,
+    "clickWorks": true,
+    "referenceRetained": true,
+    "rDownloads": 4,
+    "selection_changed": true,
+    "verification_rows": 8,
+    "all_spec_evidence": true,
+    "specifications": 12,
+    "records": 135,
+    "evidence": 135,
+    "search_shown": 1,
+    "groups": 4,
+    "document": 1250,
+    "viewport": 1250
+  },
+  {
+    "paper": "hurst",
+    "aligned": true,
+    "clickWorks": true,
+    "referenceRetained": true,
+    "rDownloads": 2,
+    "selection_changed": true,
+    "verification_rows": 10,
+    "all_spec_evidence": true,
+    "specifications": 36,
+    "records": 262,
+    "evidence": 262,
+    "search_shown": 1,
+    "groups": 2,
+    "document": 1250,
+    "viewport": 1250
+  }
+]

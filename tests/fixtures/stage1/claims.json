@@ -7,10 +7,21 @@
     "quantity_kind": "mean",
     "value": 4.09,
     "precision": 2,
-    "uncertainty": {"sd": 0.66},
-    "location": {"page": 3, "kind": "text", "label": "Results, first sentence"},
+    "uncertainty": {
+      "sd": 0.66
+    },
+    "location": {
+      "page": 3,
+      "kind": "text",
+      "label": "Results, first sentence"
+    },
     "description": "Mean closeness rating in the attention condition.",
-    "state": "complete"
+    "state": "complete",
+    "source_quote": "M = 4.09",
+    "source_validation": "text_anchored",
+    "quantity_role": "descriptive",
+    "occurrence_id": "c1",
+    "quantity_id": "c1"
   },
   {
     "claim_id": "c2",
@@ -20,10 +31,21 @@
     "quantity_kind": "mean",
     "value": 3.27,
     "precision": 2,
-    "uncertainty": {"sd": 0.69},
-    "location": {"page": 3, "kind": "text", "label": "Results, first sentence"},
+    "uncertainty": {
+      "sd": 0.69
+    },
+    "location": {
+      "page": 3,
+      "kind": "text",
+      "label": "Results, first sentence"
+    },
     "description": "Mean closeness rating in the control condition.",
-    "state": "complete"
+    "state": "complete",
+    "source_quote": "M = 3.27",
+    "source_validation": "text_anchored",
+    "quantity_role": "descriptive",
+    "occurrence_id": "c2",
+    "quantity_id": "c2"
   },
   {
     "claim_id": "c3",
@@ -33,9 +55,18 @@
     "quantity_kind": "t",
     "value": 4.69,
     "precision": 2,
-    "location": {"page": 3, "kind": "text", "label": "Results, first sentence"},
+    "location": {
+      "page": 3,
+      "kind": "text",
+      "label": "Results, first sentence"
+    },
     "description": "Student's t statistic for the difference in closeness between the attention and control conditions, with 58 degrees of freedom.",
-    "state": "complete"
+    "state": "complete",
+    "source_quote": "t(58) = 4.69",
+    "source_validation": "text_anchored",
+    "quantity_role": "inferential",
+    "occurrence_id": "c3",
+    "quantity_id": "c3"
   },
   {
     "claim_id": "c4",
@@ -45,9 +76,18 @@
     "quantity_kind": "p_value",
     "value": "<.001",
     "precision": 3,
-    "location": {"page": 3, "kind": "text", "label": "Results, first sentence"},
+    "location": {
+      "page": 3,
+      "kind": "text",
+      "label": "Results, first sentence"
+    },
     "description": "Two-sided p value of the t test comparing closeness between conditions, reported as below a threshold.",
-    "state": "complete"
+    "state": "complete",
+    "source_quote": "p < .001",
+    "source_validation": "text_anchored",
+    "quantity_role": "inferential",
+    "occurrence_id": "c4",
+    "quantity_id": "c4"
   },
   {
     "claim_id": "c5",
@@ -57,8 +97,17 @@
     "quantity_kind": "d",
     "value": 1.21,
     "precision": 2,
-    "location": {"page": 3, "kind": "text", "label": "Results, first sentence"},
+    "location": {
+      "page": 3,
+      "kind": "text",
+      "label": "Results, first sentence"
+    },
     "description": "Cohen's d for the condition difference in closeness, using the pooled standard deviation.",
-    "state": "complete"
+    "state": "complete",
+    "source_quote": "d = 1.21",
+    "source_validation": "text_anchored",
+    "quantity_role": "inferential",
+    "occurrence_id": "c5",
+    "quantity_id": "c5"
   }
 ]

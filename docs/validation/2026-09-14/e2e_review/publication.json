@@ -1,0 +1,22 @@
+[
+  {
+    "case": "petersen",
+    "url": "https://reproscope-petersen-2017-v7.surge.sh/",
+    "http_status": 200,
+    "bytes": 220930,
+    "sha256": "8923c38f2e3e72886eb93db787830b4c13fc0f3140fc3e5e74cd34ddc3d733f1",
+    "acceptance": "passed",
+    "comment_overlay": true,
+    "checked_at": "2026-09-15T15:44:42.926477+00:00"
+  },
+  {
+    "case": "hurst",
+    "url": "https://reproscope-hurst-2017-v1.surge.sh/",
+    "http_status": 200,
+    "bytes": 399022,
+    "sha256": "c2f4370a03b87763e550d8d9974e95a82736a9a2e70bf221e5e3c35e1443e722",
+    "acceptance": "passed",
+    "comment_overlay": true,
+    "checked_at": "2026-09-15T15:44:43.547846+00:00"
+  }
+]

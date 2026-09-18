@@ -11,3 +11,18 @@ __pycache__/
 scratch*
 corpus/_fixture*/
 corpus/*/paper.txt
+
+# Fresh intake also preserves deposits outside data/. Only corpus manifests are shared.
+/corpus/*/*
+!/corpus/*/manifest.json
+
+# Source inventories, model transcripts and execution snapshots are local run evidence.
+/validation_benchmarks/
+/docs/validation/**
+!/docs/validation/**/
+!/docs/validation/**/*.md
+!/docs/validation/**/*acceptance.json
+!/docs/validation/**/*qa.json
+!/docs/validation/**/*publication*.json
+!/docs/validation/**/figures/*.png
+/docs/validation/**/snapshot/

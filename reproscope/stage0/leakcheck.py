@@ -117,14 +117,22 @@ def _kinds(claim: Any) -> set[str]:
 # "t(27.4)". They follow from the sample size the contract must state, so they are
 # not reported values. The label is required so that "CI (0.12, 0.45)" keeps its bounds.
 _DF_GROUP = re.compile(r"(?<![A-Za-z])(?:t|F|z|Z|r|Q|W|H|U|chi2|χ2|χ²)\s*\(\s*[\d.,\s]+\)")
+_DF_LABEL = re.compile(r"\b(?:df(?:[_ ]?(?:num|den|numerator|denominator|1|2))?|degrees?\s+of\s+freedom)\s*[=:]\s*\d+(?:\.\d+)?", re.I)
+_DF_KEYS = {"df", "df1", "df2", "df_num", "df_den", "df_numerator", "df_denominator", "degrees_of_freedom"}
 
 
 def _uncertainty_numbers(unc: Any) -> list[float]:
     """Numbers hidden inside an uncertainty record (se, ci bounds, sd)."""
     if unc is None:
         return []
-    text = json.dumps(unc) if not isinstance(unc, str) else unc
+    if isinstance(unc, dict):
+        return [number for key, value in unc.items() if key.casefold() not in _DF_KEYS
+                for number in _uncertainty_numbers(value)]
+    if isinstance(unc, list):
+        return [number for value in unc for number in _uncertainty_numbers(value)]
+    text = str(unc)
     text = _DF_GROUP.sub(" ", text)
+    text = _DF_LABEL.sub(" ", text)
     return [float(t) for t in re.findall(r"-?\d*\.?\d+", text) if t not in {".", "-"}]
 
 
@@ -276,6 +284,7 @@ def scan(
     design_numbers: Iterable[float] = (),
     paper_id: str | None = None,
     result_claim_ids: Iterable[str] = (),
+    method_collisions: list | None = None,
 ) -> list[dict[str, Any]]:
     """Every occurrence of a reported value in the given blind files.
 
@@ -309,9 +318,25 @@ def scan(
         path = Path(path)
         if not path.exists():
             continue
+        trusted_spans=[]
+        if path.name=='TASK.md':
+            from .. import artifacts
+            try:
+                base=artifacts.load_prompt('stage1_replica_task')
+                extended=base+'\n\n'+artifacts.load_prompt('stage1_adjusted_protocol')
+                content=path.read_text()
+                if content in {base,extended}:
+                    trusted_spans=[m.span(1) for m in re.finditer(r'\bconfidence_level\s*[:=]\s*(0\.95)\b',content)]
+            except OSError:pass
         for location, text in segments(path):
             for form, cids, pat in patterns:
                 for m in pat.finditer(text):
+                    if not location and m.span() in trusted_spans:
+                        if method_collisions is not None:
+                            method_collisions.append({'file':path.name,'value':form,'claim_ids':cids,
+                                'basis':'CI coverage in an exact registered generic task template',
+                                'template_sha256':artifacts.sha256_file(path)})
+                        continue
                     start = max(0, m.start() - 60)
                     hits.append(
                         {

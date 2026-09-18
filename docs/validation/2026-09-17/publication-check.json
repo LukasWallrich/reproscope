@@ -1,0 +1,28 @@
+[
+  {
+    "url": "https://reproscope-petersen-2017-v7.surge.sh/",
+    "http_status": 200,
+    "same_multiverse_data": true,
+    "local_html_sha256": "be4d75e43af14ddf3c1dfa74dd4ee65f4fa9e0ad70c64cd309534bbc1622acf6",
+    "specr_downloads": 4,
+    "matrix_figures": 4,
+    "reference_lines": 0,
+    "no_internal_json_blockquote": true,
+    "rounding_caption": true,
+    "private_path_free": true,
+    "all_specs_verified": true
+  },
+  {
+    "url": "https://reproscope-hurst-2017-v1.surge.sh/",
+    "http_status": 200,
+    "same_multiverse_data": true,
+    "local_html_sha256": "4c05ad2c7b5c5108d0fabd35856dc05f518f54c6d937724a1704598f6cb278f5",
+    "specr_downloads": 2,
+    "matrix_figures": 2,
+    "reference_lines": 1,
+    "no_internal_json_blockquote": true,
+    "rounding_caption": true,
+    "private_path_free": true,
+    "all_specs_verified": true
+  }
+]

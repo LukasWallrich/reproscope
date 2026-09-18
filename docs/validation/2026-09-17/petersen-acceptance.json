@@ -1,0 +1,223 @@
+{
+  "paper_id": "Petersen_Cognition_2017_yJwG_v7_20260914",
+  "passed": true,
+  "blockers": [],
+  "limitations": [],
+  "scope": "Development integration validation; model-assisted extraction benchmark, not human or held-out accuracy.",
+  "benchmark_current": true,
+  "extraction": {
+    "clean_source_occurrences": 136,
+    "accepted_correct": 135,
+    "accepted_count": 135,
+    "accepted_recall": 0.9926470588235294,
+    "accepted_precision": 1.0,
+    "correct_metadata_fields": null,
+    "scope": "Paper-specific development benchmark. Source-only candidate inventory and full-page root visual audit; frozen denominator. A separate model judges candidate meanings against that inventory and paper text. This is not independent human or held-out validation. Meaning review accepts synonyms but requires the right study, outcome, comparison, statistic and aggregation."
+  },
+  "computation": {
+    "counts": {
+      "computed": 124,
+      "unavailable": 9,
+      "invalid_input": 2
+    },
+    "unresolved_claim_ids": []
+  },
+  "replicas": {
+    "sonnet_1": {
+      "accepted": true,
+      "methods": {
+        "verified": 28
+      }
+    },
+    "opus_1": {
+      "accepted": true,
+      "methods": {
+        "verified": 28
+      }
+    }
+  },
+  "diagnosis": {
+    "complete": true,
+    "expected_groups": 22,
+    "missing": [],
+    "extra": [],
+    "stale": false
+  },
+  "multiverse": {
+    "generator": "general",
+    "state": "complete",
+    "dimensions": {
+      "outliers": [
+        "iqr_trim_differences",
+        "none_all_retained"
+      ],
+      "location_estimator": [
+        "mean_paired_t",
+        "trimmed_mean_yuen20",
+        "wilcoxon_signed_rank"
+      ],
+      "interval_construction": [
+        "bootstrap_percentile_ci",
+        "classical_t_ci",
+        "rank_biserial_bootstrap_ci",
+        "yuen_winsorized_t_ci"
+      ],
+      "multiplicity_correction": [
+        "holm_bonferroni_family_of_3",
+        "unadjusted"
+      ],
+      "outcome_scale": [
+        "log_v",
+        "raw_v_letters_per_s"
+      ]
+    },
+    "n_specs": 12,
+    "grid_size": 12,
+    "groups": [
+      {
+        "name": "exp1_v_85db_minus_nocue_raw",
+        "metric": "mean_difference",
+        "n": 7,
+        "min": 22.665023833333333,
+        "max": 25.79421028571429,
+        "median": 25.79421028571429,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "mean_raw_difference_zero",
+            "n": 6,
+            "n_p": 6,
+            "p_min": 6.678289491683246e-05,
+            "p_max": 0.0002003486847504974,
+            "significant": 6
+          },
+          {
+            "null": "trimmed_mean_raw_difference_zero",
+            "n": 1,
+            "n_p": 1,
+            "p_min": 0.001560409226879304,
+            "p_max": 0.001560409226879304,
+            "significant": 1
+          }
+        ],
+        "changes": [
+          {
+            "factor": "outliers",
+            "matched_sets": 2,
+            "max_change": 0.0,
+            "max_p_change": 0.0,
+            "max_interval_width_change": 0.0
+          },
+          {
+            "factor": "location_estimator",
+            "matched_sets": 0,
+            "max_change": null,
+            "max_p_change": null,
+            "max_interval_width_change": null
+          },
+          {
+            "factor": "interval_construction",
+            "matched_sets": 3,
+            "max_change": 0.0,
+            "max_p_change": 0.0,
+            "max_interval_width_change": 1.4559203645694154
+          },
+          {
+            "factor": "multiplicity_correction",
+            "matched_sets": 2,
+            "max_change": 0.0,
+            "max_p_change": 0.00013356578983366493,
+            "max_interval_width_change": 0.0
+          }
+        ]
+      },
+      {
+        "name": "exp1_v_85db_vs_nocue_proportional",
+        "metric": "log_ratio",
+        "n": 3,
+        "min": 0.29662012780124364,
+        "max": 0.3041780454371214,
+        "median": 0.3041780454371214,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "mean_log_ratio_zero",
+            "n": 2,
+            "n_p": 2,
+            "p_min": 2.9588529460597918e-05,
+            "p_max": 2.9588529460597918e-05,
+            "significant": 2
+          },
+          {
+            "null": "trimmed_mean_log_ratio_zero",
+            "n": 1,
+            "n_p": 1,
+            "p_min": 0.0006613235528298412,
+            "p_max": 0.0006613235528298412,
+            "significant": 1
+          }
+        ],
+        "changes": [
+          {
+            "factor": "location_estimator",
+            "matched_sets": 0,
+            "max_change": null,
+            "max_p_change": null,
+            "max_interval_width_change": null
+          },
+          {
+            "factor": "interval_construction",
+            "matched_sets": 1,
+            "max_change": 0.0,
+            "max_p_change": 0.0,
+            "max_interval_width_change": 0.015250959120108987
+          }
+        ]
+      },
+      {
+        "name": "exp1_v_85db_vs_nocue_rank_proportional",
+        "metric": "r",
+        "n": 1,
+        "min": 0.7881773399014779,
+        "max": 0.7881773399014779,
+        "median": 0.7881773399014779,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "signed_rank_symmetry_zero_log",
+            "n": 1,
+            "n_p": 1,
+            "p_min": 9.319186210632324e-05,
+            "p_max": 9.319186210632324e-05,
+            "significant": 1
+          }
+        ],
+        "changes": []
+      },
+      {
+        "name": "exp1_v_85db_vs_nocue_rank_raw",
+        "metric": "r",
+        "n": 1,
+        "min": 0.7931034482758621,
+        "max": 0.7931034482758621,
+        "median": 0.7931034482758621,
+        "null_value": 0.0,
+        "inference": [
+          {
+            "null": "signed_rank_symmetry_zero_raw",
+            "n": 1,
+            "n_p": 1,
+            "p_min": 8.20159912109375e-05,
+            "p_max": 8.20159912109375e-05,
+            "significant": 1
+          }
+        ],
+        "changes": []
+      }
+    ],
+    "reference_status": "verified",
+    "perturbation_status": "verified"
+  },
+  "metered_cost_usd": 0.1257585,
+  "report": "/Users/lukaswallrich/Documents/Coding/reproduction_pipeline/runs/Petersen_Cognition_2017_yJwG_v7_20260914/report/report.html"
+}

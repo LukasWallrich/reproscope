@@ -29,6 +29,8 @@ def sandbox(tmp_path, monkeypatch):
     shutil.copytree(real / "reproscope" / "prompts", tmp_path / "reproscope" / "prompts")
     shutil.copy2(real / "models.toml", tmp_path / "models.toml")
     install.install(tmp_path)
+    (tmp_path / "runs/_fixture/stage0/leak_audit.json").write_text(json.dumps({
+        "packet_fingerprint": blind.packet_fingerprint("_fixture"), "blinding_status": "no_leak_detected"}))
     return tmp_path
 
 
@@ -49,15 +51,10 @@ def test_sign_gate_fails_before_bands():
     assert g["direction_flipped"] is False
 
 
-def test_a_two_group_contrast_is_graded_on_the_flipped_value():
-    """t and d record which group was subtracted from which, which is a coding choice."""
+def test_unexplained_reverse_contrast_fails_without_normalisation():
     g = match.grade("t", 25.19, -25.189506378, precision=2)
-    assert g["band"] == "A"
-    assert g["direction_flipped"] is True and g["sign_match"] is False
-    assert g["replicated_used"] == pytest.approx(25.189506378)
-
-    d = match.grade("d", 1.21, -1.209, precision=2)
-    assert d["band"] == "A" and d["direction_flipped"] is True
+    assert g["band"] == "fail" and not g["direction_flipped"]
+    assert g["replicated_used"] < 0
 
 
 def test_a_flipped_contrast_that_still_misses_keeps_the_sign_gate_verdict():
@@ -136,23 +133,23 @@ def test_sigma_rule_uses_the_replica_se():
     assert match.grade("t", 4.69, 5.0, se=0.2)["std_diff"] == pytest.approx(1.55)
 
 
-def test_unit_rescale_is_tried_only_when_flagged():
+def test_linker_prose_does_not_authorise_a_favourable_rescale():
     flagged = match.grade_with_unit_check(
         "mean", 45.0, 0.45, unit_note="analyst reports a proportion, paper reports a percentage"
     )
-    assert flagged["band"] == "A" and "x100" in flagged["unit_check"]
-    assert flagged["replicated_used"] == pytest.approx(45.0)
+    assert flagged["band"] == "fail" and "x100" not in flagged["unit_check"]
+    assert flagged["replicated_used"] == pytest.approx(0.45)
 
     unflagged = match.grade_with_unit_check("mean", 45.0, 0.45, unit_note="none")
     assert unflagged["band"] == "fail" and unflagged["unit_check"] == "none"
 
 
-def test_sign_flip_rescale_recovers_a_reversed_contrast():
+def test_linker_prose_cannot_override_the_sign_gate():
     """A coefficient keeps the sign gate, so only a flagged unit note can flip it."""
     g = match.grade_with_unit_check("coefficient", 1.21, -1.21,
                                     unit_note="contrast coded control - attention")
-    assert g["band"] == "A" and "sign flipped" in g["unit_check"]
-    assert g["replicated_used"] == pytest.approx(1.21)
+    assert g["band"] == "fail" and not g["direction_flipped"]
+    assert g["replicated_used"] == pytest.approx(-1.21)
 
 
 def _interval(prefix, estimate, bounds, replicated, *, estimate_ci, n):
@@ -208,47 +205,22 @@ def _ci_case(reported_lower, reported_upper, replicated_lower, replicated_upper,
     return {"d1": by_id["d"], "lo": by_id["lo"], "hi": by_id["hi"]}
 
 
-def test_ci_bounds_of_a_flipped_contrast_are_graded_on_the_mirrored_interval():
-    by_id = _ci_case(0.42, 0.93, -0.93, -0.42)
-    assert by_id["d1"].direction_flipped is True
-    for cid, value in (("lo", 0.42), ("hi", 0.93)):
-        assert by_id[cid].band == "A"
-        assert by_id[cid].direction_flipped is True
-        assert by_id[cid].replicated == pytest.approx(value)
+@pytest.mark.parametrize("estimate_ci", [False, True])
+def test_neighbouring_estimate_cannot_authorise_ci_mirroring(estimate_ci):
+    rows = _ci_case(.35, .55, -.55, -.35, estimate_ci=estimate_ci)
+    assert all(row.band == "fail" and not row.direction_flipped for row in rows.values())
+    assert rows["lo"].replicated == -.55
+    assert rows["hi"].replicated == -.35
 
 
-def test_mirroring_pairs_each_bound_with_the_other_end_of_the_interval():
-    """The replica's lower bound answers the reported upper bound, and the other way."""
-    by_id = _ci_case(0.35, 0.55, -0.5497926155, -0.3511951204)
-    assert by_id["lo"].band == "A" and by_id["lo"].replicated == pytest.approx(0.3511951204)
-    assert by_id["hi"].band == "A" and by_id["hi"].replicated == pytest.approx(0.5497926155)
-
-
-def test_bounds_pair_through_the_sample_size_when_the_estimate_carries_no_interval():
-    by_id = _ci_case(0.35, 0.55, -0.5497926155, -0.3511951204, estimate_ci=False)
-    assert by_id["lo"].band == "A" and by_id["lo"].replicated == pytest.approx(0.3511951204)
-    assert by_id["hi"].band == "A" and by_id["hi"].replicated == pytest.approx(0.5497926155)
-
-
-def test_two_intervals_in_one_analysis_pair_within_their_own_sample():
-    """Two analyses of one contract on different samples: bounds must not cross over."""
-    by_id = _mirror(
-        _interval("a", 0.45, (0.42, 0.49), (-0.4866738134, -0.4155786250),
-                  estimate_ci=False, n=12502),
-        _interval("b", 0.45, (0.35, 0.55), (-0.5497926155, -0.3511951204),
-                  estimate_ci=False, n=1607),
-    )
-    assert by_id["alo"].replicated == pytest.approx(0.4155786250)
-    assert by_id["ahi"].replicated == pytest.approx(0.4866738134)
-    assert by_id["blo"].replicated == pytest.approx(0.3511951204)
-    assert by_id["bhi"].replicated == pytest.approx(0.5497926155)
-    assert all(by_id[k].band == "A" for k in ("alo", "ahi", "blo", "bhi"))
-
-
-def test_a_bound_mirroring_cannot_explain_keeps_its_own_grade():
-    by_id = _ci_case(0.42, 0.93, -0.4866738134, -0.4155786250)
-    assert by_id["lo"].band == "A" and by_id["lo"].direction_flipped is True
-    assert by_id["hi"].band == "fail" and by_id["hi"].direction_flipped is False
+def test_declared_orientation_transforms_interval_and_se_together():
+    with pytest.raises(ValueError, match="provenance"):
+        match.apply_declared_transform(-.45, scale=-1, ci=[-.55, -.35])
+    canonical = match.apply_declared_transform(-.45, scale=-1, ci=[-.55, -.35], se=.05,
+                                               provenance="intake:contrast-control-to-treatment")
+    assert canonical["value"] == .45
+    assert canonical["ci"] == [.35, .55]
+    assert canonical["se"] == .05
 
 
 def test_missing_replicated_value_fails():
@@ -267,7 +239,7 @@ def test_assemble_gives_the_replica_only_the_blind_material(sandbox):
     packet = json.loads((work / "CONTRACT.json").read_text())
     assert [a["analysis_id"] for a in packet["analyses"]] == ["a1"]
     quantities = packet["analyses"][0]["quantities"]
-    assert [q["claim_id"] for q in quantities] == ["c1", "c2", "c3", "c4", "c5"]
+    assert [q["claim_id"] for q in quantities] == ["c3", "c4", "c5"]  # means use the default descriptive route
     assert all("value" not in q for q in quantities)
     assert "unassigned" not in packet
     assert "reproduce the analyses" in (work / "TASK.md").read_text()
@@ -290,8 +262,8 @@ def test_claims_no_contract_claims_go_to_unassigned(sandbox):
     doc["claims"].append({"claim_id": "c9", "description": "orphan quantity"})
     src.write_text(json.dumps(doc))
     packet = blind.blind_packet("_fixture", src)
-    assert [c["claim_id"] for c in packet["unassigned"]] == ["c9"]
-    assert blind.bound_claim_ids(packet) == {"c1", "c2", "c3", "c4", "c5", "c9"}
+    assert packet.get("unassigned", []) == []  # orphan has no validated source record
+    assert blind.bound_claim_ids(packet) == {"c3", "c4", "c5"}
 
 
 def test_assemble_blocks_when_a_reported_value_leaks(sandbox):
@@ -435,6 +407,7 @@ def _install_replica(root: Path, replica_id: str, results: dict) -> None:
         artifacts.ReplicaDecisionTrace(
             replica_id=replica_id, family=replica_id.split("_")[0], ran=True,
             model_formula="closeness ~ condition", open_choices=["pooled variance"],
+            hardcoding_audit={"verdict": "clean", "hits": []},
             meta=artifacts.ArtifactMeta(artifact="ReplicaDecisionTrace", stage="1"),
         ),
         rdir / "trace.json",
@@ -557,7 +530,10 @@ def test_targeted_abstains_when_the_agent_writes_no_outcome(sandbox, monkeypatch
     calls = _fake_llm(monkeypatch, text="I ran out of time.", ok=True, error=None,
                       ledger_id="call1")
 
-    rec = targeted.run("_fixture", _missed_focal_result())
+    result = _missed_focal_result()
+    result.source_coverage = {"accepted_claim_ids": ["c3"]}
+    result.method_fidelity = {"glm_1": {"analyses": {"a1": {"status": "verified"}}}}
+    rec = targeted.run("_fixture", result)
     assert rec.triggered is True
     assert rec.outcome == "abstained" and rec.state == "abstained"
     assert rec.started_from == "glm_1"
@@ -583,18 +559,178 @@ def test_the_agents_diagnosis_section_is_taken_verbatim():
     assert targeted._split_diagnosis("No section here.") is None
 
 
-def test_diagnosis_reuses_the_targeted_section_without_a_call(sandbox, monkeypatch):
-    artifacts.save(
-        artifacts.TargetedReconstruction(
-            triggered=True, outcome="reachable",
-            diagnosis="The analysts kept the two excluded participants.",
-            meta=artifacts.ArtifactMeta(artifact="TargetedReconstruction", stage="1"),
-        ),
-        sandbox / "runs" / "_fixture" / "stage1" / "targeted.json",
-    )
-    calls = _fake_llm(monkeypatch)
 
-    text = diagnose.run("_fixture").read_text()
-    assert "kept the two excluded participants" in text
-    assert "unblinded conjecture" in text.lower()
-    assert calls == []
+def test_blind_packet_is_invariant_to_irrelevant_result_prose(sandbox):
+    source=sandbox/'runs/_fixture/stage0/blind_contract.json'
+    before=blind.blind_packet('_fixture',source)
+    doc=json.loads(source.read_text())
+    for c in doc['claims']:
+        c['description']='A huge positive, statistically significant result supports the theory.'
+        c['source_quote']='t = 99.99, p < .0001'
+        c['value']=99.99
+        c['comparator']='<'
+    source.write_text(json.dumps(doc))
+    assert blind.blind_packet('_fixture',source)==before
+
+
+def test_analysis_plan_edit_changes_replica_fingerprint(tmp_path):
+    (tmp_path/'out').mkdir()
+    p=tmp_path/'out/analysis_plan.json'
+    p.write_text('{"analyses":[]}')
+    before=replicas.replica_outputs(tmp_path)
+    p.write_text('{"analyses":[{"family":"paired_t"}]}')
+    assert replicas.replica_outputs(tmp_path)!=before
+
+
+def test_packet_keeps_binding_operations_without_validation_metadata(sandbox):
+    s0=sandbox/'runs/_fixture/stage0'
+    p=s0/'readiness.json'; doc=json.loads(p.read_text())
+    doc['variable_bindings']=[dict(analysis_id='a1',contract_field='outcome',file='d.csv',chosen='x',
+        input_columns=['x'],numeric_parsing='strict_float',allowed_range=[0,1],
+        candidate_columns=['wrong','x'],note='observed result is 4.69')]
+    p.write_text(json.dumps(doc))
+    packet=blind.blind_packet('_fixture',s0/'blind_contract.json')
+    binding=packet['analyses'][0]['variable_bindings'][0]
+    assert binding['chosen']=='x' and binding['numeric_parsing']=='strict_float'
+    assert not {'allowed_range','candidate_columns','note'} & binding.keys()
+
+
+def test_stage0_scans_final_binding_operations_before_model_audit(sandbox,monkeypatch):
+    from reproscope.stage0 import redact
+    s0=sandbox/'runs/_fixture/stage0'
+    p=s0/'readiness.json'; doc=json.loads(p.read_text())
+    doc['variable_bindings']=[dict(analysis_id='a1',contract_field='outcome',file='d.csv',chosen='x',
+        input_columns=['x'],transformation='Add the reported value 4.69')]
+    p.write_text(json.dumps(doc))
+    monkeypatch.setattr(redact,'scrub_texts',lambda manifest,items: ({i['id']:i['text'] for i in items},[]))
+    monkeypatch.setattr(redact,'leak_audit',lambda *a: pytest.fail('numeric packet leak must block before model audit'))
+    report,_=redact.run(paths.manifest('_fixture'),blind.claims('_fixture'),blind.contracts('_fixture'),force=True)
+    assert not report.scan_clean
+    assert any(h['file']=='CONTRACT.json' for h in report.delivered_packet_scan_hits)
+
+
+@pytest.mark.parametrize("produced_results", [True, False])
+def test_interrupted_verification_keeps_generation_call_receipt(sandbox,monkeypatch,produced_results):
+    from reproscope import config,llm
+    rid='opus_1'; work=blind.assemble('_fixture',rid); rdir=work.parent
+    (work/'out/analysis.py').write_text('print("done")')
+    if produced_results:
+        (work/'out/results.json').write_text('{"results":[{"claim_id":"c1","value":1}]}')
+    else:
+        (work/'out/results.json').unlink(missing_ok=True)
+    (work/'out/trace.json').write_text('{}')
+    spec=config.replicas()['opus']
+    (rdir/'generation_receipt.json').write_text(json.dumps({'inputs':replicas.generation_inputs('_fixture',spec),
+        'outputs':replicas.replica_outputs(work),'model_calls':['original-generation'],
+        'usage':{'route':'claude_p','duration_s':123,'cost_usd':0}}))
+    monkeypatch.setattr(replicas.replica_env,'ensure_base_env',lambda:None)
+    monkeypatch.setattr(replicas,'rerun_script',lambda *a,**kw:{'exit_code':0 if produced_results else 1,'regenerated_results':produced_results,'results_match_agent':produced_results,'n_values':1 if produced_results else 0})
+    monkeypatch.setattr(replicas.audit,'fix_severity',lambda p,fixes,c:(fixes,None))
+    monkeypatch.setattr(replicas.audit,'hardcoding_audit',lambda *a:({'verdict':'clean'},'audit-call'))
+    monkeypatch.setattr(llm,'call',lambda *a,**k:pytest.fail('completed generation must not repeat'))
+    trace=replicas.run_one('_fixture','opus',rid,spec)
+    assert trace.meta.model_calls==['original-generation','audit-call']
+    assert trace.usage['duration_s']==123
+
+    assert trace.ran is produced_results
+
+
+def test_extra_result_ids_are_reported_as_output_protocol_failure(tmp_path):
+    import shutil
+    from reproscope import replica_env
+    if not Path(replica_env.base_python()).exists():pytest.skip('replica environment not installed')
+    work=tmp_path/'work';(work/'out').mkdir(parents=True);(work/'data').mkdir()
+    (work/'CONTRACT.json').write_text('{"analyses":[{"analysis_id":"a","quantities":[{"claim_id":"c"}]}]}')
+    output={'results':[{'claim_id':'invented-member','analysis_id':'a','value':1}]}
+    (work/'out/results.json').write_text(json.dumps(output))
+    script=work/'out/analysis.py'
+    script.write_text('from pathlib import Path\nPath("out/results.json").write_text('+repr(json.dumps(output))+')\n')
+    checks=replicas.rerun_script(work,script,tmp_path/'checks')
+    assert checks['script_execution_status']=='executed'
+    assert checks['output_protocol_status']=='invalid'
+    assert 'not requested by the packet' in checks['output_protocol_error']
+    assert not checks['results_match_agent']
+
+
+def test_named_t_family_bound_is_not_restricted_to_correlation_range():
+    from reproscope.stage1.match import direct_link
+    import json
+    output=json.dumps({'results':[{'claim_id':'t_bound','analysis_id':'a','value':[-2.3,1.4,3.7],'member_ids':['m1','m2','m3'],'n':20}]})
+    linked=direct_link('t_bound',output,quantity_kind='t',comparator='<=',aggregation='max',member_ids=['m1','m2','m3'])
+    assert linked.error is None
+    assert linked.value==3.7
+
+
+def test_p_equality_uses_printed_precision_without_relaxing_significance_bound():
+    from reproscope.stage1.match import grade
+    assert grade('p_value',.001,.00058149,precision=3)['band']=='A'
+    strict=grade('p_value',.05,.051,precision=2,comparator='<')
+    assert strict['band']=='fail' and strict['bound_satisfied'] is False
+    assert not strict.get('bound_rounding_compatible')
+    rounded=grade('p_value',.465,.464515,precision=3,comparator='>=')
+    assert rounded['band']=='fail' and rounded['bound_satisfied'] is False
+    assert rounded['bound_rounding_compatible'] is True
+    effect=grade('r',.42,.416672,precision=2,comparator='>')
+    assert effect['band']=='fail' and effect['bound_rounding_compatible'] is True
+
+
+def test_printed_equality_uses_declared_half_up_rounding():
+    from reproscope.stage1.match import grade
+    assert grade('p_value',.003,.0025,precision=3)['band']=='A'
+
+
+def test_binding_scope_justification_cannot_disclose_results_in_replica_packet(sandbox):
+    s0=paths.run_dir('_fixture',0);p=s0/'readiness.json';doc=json.loads(p.read_text())
+    baseline=blind.blind_packet('_fixture',s0/'blind_contract.json')
+    aid=baseline['analyses'][0]['analysis_id']
+    doc['binding_scope']={aid:{'basis':'conventional_reconstruction','convention_id':'condition_matched_columns',
+        'assumptions':['The effect held significantly in all conditions.'],'alternatives':['The reported direction was positive.']}}
+    p.write_text(json.dumps(doc))
+    packet=blind.blind_packet('_fixture',s0/'blind_contract.json')
+    scope=next(a['binding_scope'] for a in packet['analyses'] if a['analysis_id']==aid)
+    assert scope=={'basis':'conventional_reconstruction','convention_id':'condition_matched_columns'}
+    assert 'held significantly' not in json.dumps(packet)
+
+
+def test_blinding_preserves_coefficient_units_without_source_result_prose(sandbox):
+    s0=sandbox/'runs/_fixture/stage0';source=s0/'blind_contract.json'
+    claim_path=s0/'claims.json';records=json.loads(claim_path.read_text());doc=json.loads(source.read_text())
+    cid=doc['contracts'][0]['claim_ids'][0]
+    for items in (records,doc['claims']):
+        target=next(c for c in items if c['claim_id']==cid)
+        target.update(quantity_kind='coefficient',quantity_kind_raw='coefficient',description='Standardized regression coefficient (beta), p < .003')
+    claim_path.write_text(json.dumps(records));source.write_text(json.dumps(doc))
+    packet=blind.blind_packet('_fixture',source)
+    q=next(q for a in packet['analyses'] for q in a['quantities'] if q['claim_id']==cid)
+    assert q['quantity_kind_raw']=='beta'
+    assert '.003' not in json.dumps(q) and 'Standardized regression coefficient' not in q['description']
+    next(c for c in records if c['claim_id']==cid)['description']='Unstandardized regression coefficient (b)'
+    claim_path.write_text(json.dumps(records))
+    q=next(q for a in blind.blind_packet('_fixture',source)['analyses'] for q in a['quantities'] if q['claim_id']==cid)
+    assert q['quantity_kind_raw']=='b'
+
+
+def test_readiness_member_prose_cannot_reintroduce_observed_sample_counts(sandbox):
+    s0=sandbox/'runs/_fixture/stage0';path=s0/'readiness.json'
+    ready=json.loads(path.read_text());source=s0/'blind_contract.json'
+    packet=blind.blind_packet('_fixture',source);aid=packet['analyses'][0]['analysis_id']
+    ready.setdefault('analysis_families',{})[aid]={'members':[{'member_id':'m','file':'data/x.csv','x':'a','y':'b','condition':'A versus B','sample_rule':'All 999 observed participants','evidence':'The result was 3.5','numeric_parsing':'strict_float'}]}
+    path.write_text(json.dumps(ready))
+    member=next(a for a in blind.blind_packet('_fixture',source)['analyses'] if a['analysis_id']==aid)['members'][0]
+    assert 'sample_rule' not in member and 'evidence' not in member
+    assert member['x']=='a' and member['y']=='b'
+
+
+@pytest.mark.parametrize('label',['R2','R-squared','R²','R^2'])
+def test_blinding_preserves_explicit_r_squared_statistic_identity(sandbox,label):
+    s0=sandbox/'runs/_fixture/stage0';source=s0/'blind_contract.json'
+    records=json.loads((s0/'claims.json').read_text())
+    payload=json.loads(source.read_text());cid=payload['contracts'][0]['claim_ids'][0]
+    target=next(c for c in records if c['claim_id']==cid);target.update(quantity_kind='other',quantity_kind_raw='other',quantity_role='inferential',description=label+' for the regression model')
+    (s0/'claims.json').write_text(json.dumps(records))
+    q=next(c for c in payload['claims'] if c['claim_id']==cid);q.update(quantity_kind='other',quantity_kind_raw='other',quantity_role='inferential')
+    source.write_text(json.dumps(payload))
+    packet=blind.blind_packet('_fixture',source)
+    q=next(q for a in packet['analyses'] for q in a['quantities'] if q['claim_id']==cid)
+    assert q['quantity_kind_raw']=='r2'
+    assert label not in q['description']

@@ -124,8 +124,9 @@ def test_bands_count_only_replicas_that_ran(synthetic):
     assert opus["n"] == 8  # 4 claims x 2 replicas; glm_1's rows excluded
     assert opus["bands"] == {"A": 3, "B": 1, "C": 1, "fail": 1, "not_found": 2, "abstained": 0}
     assert opus["n_found"] == 6
-    assert opus["share_a"] == pytest.approx(3 / 8)
-    assert opus["share_ab"] == pytest.approx(4 / 8)
+    assert opus["share_a"] == pytest.approx(3 / 6)
+    assert opus["share_ab"] == pytest.approx(4 / 6)
+    assert opus["end_to_end_ab"] == pytest.approx(4 / 8)
 
 
 def test_a_row_without_a_replicated_value_is_not_found_not_a_failed_match(synthetic):
@@ -134,7 +135,7 @@ def test_a_row_without_a_replicated_value_is_not_found_not_a_failed_match(synthe
     assert _group(r, "opus")["match"]["all"]["bands"]["not_found"] == 2
 
 
-def test_abstained_rows_are_excluded_from_the_denominators():
+def test_abstentions_remain_in_coverage_and_end_to_end_denominators():
     rows = [
         {"band": "A", "replicated": 1.0, "state": "complete"},
         {"band": "B", "replicated": 1.1, "state": "complete"},
@@ -149,7 +150,8 @@ def test_abstained_rows_are_excluded_from_the_denominators():
     assert stats["bands"]["abstained"] == 2
     # Only the two usable (non-abstained) rows count towards found/A/AB shares.
     assert stats["n_found"] == 2
-    assert stats["share_found"] == 1.0
+    assert stats["share_found"] == 0.5
+    assert stats["end_to_end_ab"] == 0.5
     assert stats["share_a"] == pytest.approx(0.5)
     assert stats["share_ab"] == pytest.approx(1.0)
 
@@ -164,8 +166,9 @@ def test_headline_and_focal_subsets(synthetic):
 def test_a_group_with_no_running_replica_yields_na(synthetic):
     r = evaluate.evaluate([synthetic])
     glm = _group(r, "glm")["match"]["all"]
-    assert glm["n"] == 0
-    assert glm["share_found"] is None and glm["share_a"] is None
+    assert glm["n"] == 4
+    assert glm["share_found"] == 0 and glm["share_a"] is None
+    assert glm["end_to_end_ab"] == 0
 
 
 def test_fix_severities_and_hardcoding_verdicts(synthetic):
@@ -221,30 +224,31 @@ def test_focal_d_uses_the_reported_d_claim(synthetic):
     block = evaluate.evaluate([synthetic])["per_paper"][0]
     fd = block["focal_d"]
     assert fd["source"] == "reported d claim" and fd["reported"] == pytest.approx(1.0)
-    assert set(fd["replicas"]) == {"opus_1", "opus_2", "glm_1"}
+    assert set(fd["replicas"]) == {"opus_1", "opus_2"}
 
 
-def test_focal_d_converts_from_t_when_no_d_claim(synthetic):
+def test_focal_d_does_not_guess_a_conversion_from_t(synthetic):
     for row in synthetic["match_rows"]:
         row["quantity_kind"] = "t"
     fd = evaluate.evaluate([synthetic])["per_paper"][0]["focal_d"]
-    assert fd["source"] == "converted from t"
-    assert fd["reported"] == pytest.approx(2 * 1.0 / 27 ** 0.5)
-    assert "independent groups" in fd["note"]
+    assert fd["source"] is None
+    assert fd["reported"] is None
+    assert "design-verified" in fd["note"]
 
 
 def test_within_and_between_family_focal_spread(synthetic):
     focal = evaluate.evaluate([synthetic])["per_paper"][0]["focal"]
     assert focal["within_family"]["opus"]["n"] == 2
     assert focal["within_family"]["opus"]["max_abs_diff"] == pytest.approx(0.0)
-    assert focal["between_family_range"] == pytest.approx(0.0)  # glm_1 also reports c1 = 1.0
+    assert focal["between_family_range"] is None  # only one family returned accepted values
     assert focal["scale"] == "d"
 
 
 def test_markdown_prints_na_where_a_metric_is_missing(synthetic):
     md = evaluate.render_md(evaluate.evaluate([synthetic]))
     glm_lines = [ln for ln in md.splitlines() if ln.startswith("| glm |")]
-    assert glm_lines and all("n/a" in ln for ln in glm_lines)
+    assert glm_lines and any("n/a" in ln for ln in glm_lines)
+    assert any("0%" in ln for ln in glm_lines)
     assert "### synth" in md
 
 
@@ -262,14 +266,14 @@ def test_fixture_run_end_to_end(tmp_path: Path):
     for label in ("glm", "opus"):
         g = _group(result, label)
         assert (g["launched"], g["ran"]) == (1, 1)
-        assert g["match"]["all"]["n"] == 5
-        assert g["match"]["all"]["share_ab"] == 1.0
+        assert g["match"]["all"]["n"] == 0  # historical fixture lacks source validation
+        assert g["match"]["all"]["share_ab"] is None
         assert g["blind_hits"]["total"] is None  # the fixture traces predate the check
 
     block = result["per_paper"][0]
     assert block["targeted"]["outcome"] == "not_triggered"
     assert block["focal"]["quantity"]["claim_id"] == "c3"
-    assert block["focal_d"]["source"] == "converted from t"
+    assert block["focal_d"]["source"] is None
 
     jp, mp = evaluate.write(result, tmp_path)
     assert jp.exists() and "reproscope v0 pilot" in mp.read_text()
@@ -289,3 +293,32 @@ def test_loading_does_not_create_directories(tmp_path, monkeypatch):
     paper = evaluate.load_paper("nothing_here")
     assert paper["replicas"] == [] and paper["match_rows"] == []
     assert list((tmp_path / "runs").iterdir()) == []
+
+
+def test_packet_requests_survive_an_entirely_missing_match_table(synthetic):
+    synthetic['eligible_claim_ids'] = ['c1', 'c2']
+    synthetic['analysis_of'] = {'c1': 'a1', 'c2': 'a1'}
+    synthetic['match_rows'] = []
+    result = evaluate.evaluate([synthetic])
+    group = _group(result, 'opus')
+    assert group['match']['all']['n'] == 4
+    assert group['match']['all']['coverage'] == 0
+    assert group['match']['all']['end_to_end_ab'] == 0
+    assert group['analysis_macro_end_to_end'] == 0
+
+
+def test_audit_rejection_cannot_retain_legacy_good_grades(synthetic):
+    synthetic['replicas'][0]['acceptance'] = 'rejected'
+    result = evaluate.evaluate([synthetic])
+    statuses = _group(result, 'opus')['match']['all']['statuses']
+    assert statuses['invalid'] == 4
+
+
+def test_exact_precision_is_not_the_tolerance_band():
+    rows = [{**_row('c1', 'r1', 'A'), 'exact_reported_precision': True},
+            {**_row('c2', 'r1', 'A'), 'exact_reported_precision': False},
+            {'claim_id': 'c3', 'replica_id': 'r1', 'state': 'abstained'}]
+    stats = evaluate._subset_stats(rows)
+    assert stats['share_ab'] == 1
+    assert stats['exact_precision_share'] == .5
+    assert stats['end_to_end_exact'] == 1/3

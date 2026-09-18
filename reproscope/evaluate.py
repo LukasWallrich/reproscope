@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import config, paths
+from . import config, paths, cohort
 from . import focal as focal_mod
 
 BANDS = ("A", "B", "C", "fail", "not_found", "abstained")
@@ -81,7 +81,7 @@ def tier_of(family: str, route: str | None = None) -> str:
     recorded in its own trace.
     """
     spec = config.replicas().get(family)
-    r = spec.route if spec else route
+    r = route or (spec.route if spec else None)
     if r in config.SUBSCRIPTION_ROUTES:
         return "frontier"
     if r == "opencode":
@@ -97,19 +97,11 @@ def _runs_root() -> Path:
 
 
 def paper_ids(include_fixtures: bool = False) -> list[str]:
-    root = _runs_root()
-    if not root.is_dir():
-        return []
-    def is_run(d: Path) -> bool:
-        # a run directory holds a ledger or at least one stage directory; runs/logs
-        # holds neither (its stage*.log files are files, not directories)
-        return (d / "ledger.jsonl").exists() or any(p.is_dir() for p in d.glob("stage*"))
-
-    return sorted(
-        d.name
-        for d in root.iterdir()
-        if d.is_dir() and is_run(d) and (include_fixtures or not d.name.startswith("_"))
-    )
+    """Default membership is explicit; fixture discovery is opt-in for development."""
+    ids = [p["run_id"] for p in cohort.load()["papers"]]
+    if include_fixtures:
+        ids += [p.name for p in _runs_root().glob("_*") if p.is_dir()]
+    return sorted(set(ids))
 
 
 def _ledger_by_replica(rows: list[dict]) -> dict[str, dict[str, float | None]]:
@@ -164,7 +156,7 @@ def _focal(paper_id: str, stage0: Path, stage3: Path) -> tuple[dict | None, str 
         return None, None
 
 
-def load_paper(paper_id: str) -> dict[str, Any]:
+def load_paper(paper_id: str, planned_replicas: list[str] | None = None) -> dict[str, Any]:
     """Everything the aggregation needs for one paper, as plain dicts."""
     run = _runs_root() / paper_id
     stage0, stage1, stage3 = run / "stage0", run / "stage1", run / "stage3"
@@ -175,6 +167,7 @@ def load_paper(paper_id: str) -> dict[str, Any]:
         ledger_rows = [json.loads(ln) for ln in lp.read_text().splitlines() if ln.strip()]
     per_replica_cost = _ledger_by_replica(ledger_rows)
 
+    from .stage1.audit import acceptance
     replicas: list[dict[str, Any]] = []
     rep_root = stage1 / "replicas"
     if rep_root.is_dir():
@@ -194,11 +187,42 @@ def load_paper(paper_id: str) -> dict[str, Any]:
                 "exit_code": checks.get("exit_code"),
                 "fixes": (trace or {}).get("fixes") or [],
                 "hardcoding_verdict": audit.get("verdict"),
+                "acceptance": acceptance(audit),
                 "blind_hits": len(hits) if isinstance(hits, list) else _as_float(hits),
                 **{k: v for k, v in (per_replica_cost.get(rid) or {}).items()},
             })
 
+    if planned_replicas is not None:
+        replicas = [r for r in replicas if r["replica_id"] in planned_replicas]
+        present = {r["replica_id"] for r in replicas}
+        for rid in planned_replicas:
+            if rid not in present:
+                replicas.append({"replica_id": rid, "family": family_of(rid), "route": None,
+                                 "model": None, "has_trace": False, "ran": False, "fixes": [],
+                                 "hardcoding_verdict": None, "blind_hits": None})
     match = _read_json(stage1 / "match.json") or {}
+    if planned_replicas is not None:
+        planned = set(planned_replicas)
+        requested = {r["claim_id"] for r in match.get("rows", [])}
+        rows_by_key = {(r["claim_id"], r["replica_id"]): r for r in match.get("rows", [])
+                       if r["replica_id"] in planned}
+        for cid in requested:
+            for rid in planned:
+                rows_by_key.setdefault((cid, rid), {"claim_id": cid, "replica_id": rid,
+                    "state": "abstained", "band": None, "outcome_status": "replica_failed",
+                    "abstain_reason": "planned attempt has no validated result"})
+        match["rows"] = list(rows_by_key.values())
+    from .stage1.blind import blind_packet, bound_claim_ids
+    packet_path = stage0 / "blind_contract.json"
+    eligible = bound_claim_ids(blind_packet(paper_id, packet_path)) if packet_path.exists() else None
+    contracts = _read_json(stage0 / "contracts.json") or []
+    analysis_of = {cid: c["analysis_id"] for c in contracts for cid in c.get("claim_ids", [])}
+    claims = _read_json(stage0 / "claims.json") or []
+    quantities = {c["claim_id"]: c.get("quantity_id") or c["claim_id"] for c in claims}
+    readiness = _read_json(stage0 / "readiness.json") or {}
+    for row in match.get("rows", []):
+        row["analysis_id"] = row.get("analysis_id") or analysis_of.get(row["claim_id"])
+        row["quantity_id"] = quantities.get(row["claim_id"], row["claim_id"])
     claims = _read_json(stage0 / "claims.json") or []
     importance = {
         c.get("claim_id"): c.get("importance")
@@ -216,6 +240,10 @@ def load_paper(paper_id: str) -> dict[str, Any]:
         "paper_id": paper_id,
         "replicas": replicas,
         "match_rows": match.get("rows", []),
+        "eligible_claim_ids": sorted(eligible) if eligible is not None else None,
+        "analysis_of": analysis_of,
+        "intake_states": readiness.get("per_analysis_state", {}),
+        "intake_outcomes": readiness.get("per_analysis_outcome", {}),
         "summaries": match.get("summaries", []),
         "importance": importance,
         "focal": focal,
@@ -245,22 +273,33 @@ def _band_of(row: dict) -> str:
 
 
 def _subset_stats(rows: list[dict]) -> dict[str, Any]:
-    if not rows:
-        return {"n": 0, "n_abstained": 0, "n_found": None, "share_found": None,
-                "bands": dict.fromkeys(BANDS, 0), "share_a": None, "share_ab": None}
+    # One request is one paper x claim x replica; repeated serialized rows do
+    # not add weight. Legacy rows retain their explicit abstention state.
+    rows = list({(r.get("paper_id"), r.get("quantity_id") or r.get("claim_id"), r.get("replica_id"))
+                 if r.get("claim_id") and r.get("replica_id") else ("unkeyed", i): r
+                 for i, r in enumerate(rows)}.values())
     counts = Counter(_band_of(r) for r in rows)
     n = len(rows)
     n_abstained = counts["abstained"]
-    usable = n - n_abstained
-    found = usable - counts["not_found"]
+    usable = n - n_abstained - counts["not_found"]
+    matched = counts["A"] + counts["B"]
+    statuses = Counter(r.get("outcome_status") or ("graded" if r.get("state") != "abstained" else "unbound") for r in rows)
+    known_precision = [r["exact_reported_precision"] for r in rows
+                       if _band_of(r) not in {"abstained", "not_found"}
+                       and isinstance(r.get("exact_reported_precision"), bool)]
     return {
-        "n": n,
-        "n_abstained": n_abstained,
-        "n_found": found if usable else None,
-        "share_found": (found / usable) if usable else None,
+        "n_precision_checked": len(known_precision),
+        "exact_precision_share": sum(known_precision) / len(known_precision) if known_precision else None,
+        "end_to_end_exact": sum(known_precision) / n if n and len(known_precision) == usable else None,
+        "n": n, "n_abstained": n_abstained,
+        "n_found": usable if n else None,
+        "share_found": usable / n if n else None,
+        "coverage": usable / n if n else None,
+        "end_to_end_ab": matched / n if n else None,
         "bands": {b: counts[b] for b in BANDS},
-        "share_a": (counts["A"] / usable) if usable else None,
-        "share_ab": ((counts["A"] + counts["B"]) / usable) if usable else None,
+        "statuses": dict(statuses),
+        "share_a": counts["A"] / usable if usable else None,
+        "share_ab": matched / usable if usable else None,
     }
 
 
@@ -268,7 +307,7 @@ def _group_row(label: str, paper_slices: list[tuple[dict, list[dict]]]) -> dict[
     """One family or tier row: run counts, match shares, fixes, audits, blinding, cost."""
     reps = [r for _, rs in paper_slices for r in rs]
     ran_ids_by_paper = [
-        (paper, {r["replica_id"] for r in rs if r.get("ran")}) for paper, rs in paper_slices
+        (paper, {r["replica_id"] for r in rs}) for paper, rs in paper_slices
     ]
 
     # match statistics pool the rows of every replica that ran, across papers
@@ -278,13 +317,18 @@ def _group_row(label: str, paper_slices: list[tuple[dict, list[dict]]]) -> dict[
     for paper, ids in ran_ids_by_paper:
         if not ids:
             continue
-        sel = [r for r in paper["match_rows"] if r.get("replica_id") in ids]
+        sel = [{**r, "paper_id": paper["paper_id"]} for r in paper["match_rows"] if r.get("replica_id") in ids]
         pooled_rows += sel
         headline_rows += [r for r in sel
                           if paper["importance"].get(r.get("claim_id")) == "headline"]
         fids = set((paper.get("focal") or {}).get("claim_ids") or [])
         focal_rows += [r for r in sel if r.get("claim_id") in fids]
 
+    analyses = defaultdict(list)
+    for row in pooled_rows:
+        if row.get("analysis_id"):
+            analyses[(row["paper_id"], row["analysis_id"])].append(row)
+    analysis_scores = [_subset_stats(rows)["end_to_end_ab"] for rows in analyses.values()]
     fixes = Counter()
     n_fixes = 0
     for r in reps:
@@ -305,6 +349,13 @@ def _group_row(label: str, paper_slices: list[tuple[dict, list[dict]]]) -> dict[
 
     return {
         "label": label,
+        "analysis_macro_end_to_end": _mean([x for x in analysis_scores if x is not None]),
+        "analysis_macro_bound_rows": sum(len(rows) for rows in analyses.values()),
+        "analysis_macro_unbound_rows": sum(not r.get("analysis_id") for r in pooled_rows),
+        "paper_macro_end_to_end": _mean([
+            value for paper, rs in paper_slices
+            if (value := _subset_stats([r for r in paper["match_rows"]
+                                       if r.get("replica_id") in {x["replica_id"] for x in rs}])["end_to_end_ab"]) is not None]),
         "launched": len(reps),
         "ran": sum(1 for r in reps if r.get("ran")),
         "failed": sum(1 for r in reps if r.get("has_trace") and not r.get("ran")),
@@ -401,30 +452,40 @@ def _focal_d(paper: dict) -> dict[str, Any]:
             "replicas": {},
         }
 
-    def conv(t: float | None) -> float | None:
-        return 2 * t / math.sqrt(df) if t is not None else None
-
-    return {
-        "source": "converted from t",
-        "note": (f"d = 2t/sqrt(df) with df = {df:g}; assumes two independent groups of "
-                 f"equal size"),
-        "reported": conv(next((_as_float(r.get("reported")) for r in t_rows), None)),
-        "replicas": {r["replica_id"]: conv(_as_float(r.get("replicated"))) for r in t_rows
-                     if r.get("replicated") is not None},
-    }
+    return {"source": None, "note": "No design-verified conversion from t to d is available.",
+            "reported": None, "replicas": {}}
 
 
 def evaluate(papers: list[dict[str, Any]]) -> dict[str, Any]:
     """Aggregate loaded paper records into family, tier, per-paper and per-replica views."""
     # tier is derived here, not at load, so a synthetic record only needs family + route
     for paper in papers:
+        requested = (set(paper["eligible_claim_ids"]) if paper.get("eligible_claim_ids") is not None
+                     else {row["claim_id"] for row in paper["match_rows"]})
+        rows = {(row["claim_id"], row["replica_id"]): row for row in paper["match_rows"] if row["claim_id"] in requested}
+        for rep in paper["replicas"]:
+            for cid in requested:
+                key = (cid, rep["replica_id"])
+                if not rep.get("ran"):
+                    rows[key] = {"claim_id": cid, "replica_id": rep["replica_id"], "state": "abstained",
+                                 "outcome_status": "replica_failed", "replicated": None, "band": None}
+                elif rep.get("acceptance", "accepted") != "accepted":
+                    rows[key] = {"claim_id": cid, "replica_id": rep["replica_id"], "state": "abstained",
+                                 "outcome_status": "invalid" if rep.get("acceptance") == "rejected" else "audit_unresolved",
+                                 "replicated": None, "band": None}
+                elif key not in rows:
+                    rows[key] = {"claim_id": cid, "replica_id": rep["replica_id"], "state": "abstained",
+                                 "outcome_status": "omitted", "replicated": None, "band": None}
+        for row in rows.values():
+            row["analysis_id"] = row.get("analysis_id") or paper.get("analysis_of", {}).get(row["claim_id"])
+        paper["match_rows"] = list(rows.values())
         focal_ids = set((paper.get("focal") or {}).get("claim_ids") or [])
         focal_values, _ = _focal_values(paper)
         for r in paper["replicas"]:
             r["tier"] = tier_of(r["family"], r.get("route"))
             # per-replica match counts, so every pooled share in the tables re-derives
             own = [row for row in paper["match_rows"]
-                   if row.get("replica_id") == r["replica_id"]] if r.get("ran") else []
+                   if row.get("replica_id") == r["replica_id"]]
             r["match"] = {
                 "all": _subset_stats(own),
                 "headline": _subset_stats(
@@ -462,6 +523,8 @@ def evaluate(papers: list[dict[str, Any]]) -> dict[str, Any]:
                for s in paper["summaries"]]
         paper_blocks.append({
             "paper_id": paper["paper_id"],
+            "intake_outcomes": paper.get("intake_outcomes", {}),
+            "intake_states": paper.get("intake_states", {}),
             "n_claims_scored": len({r.get("claim_id") for r in paper["match_rows"]}) or None,
             "families": [_group_row(f, [(paper, rs)]) for f, rs in sorted(fams.items())],
             "decision_agreement_mean": _mean([a for a in agreements if a is not None]),
@@ -520,6 +583,7 @@ def _runs_cells(g: dict) -> list[str]:
         _int(m["all"]["n"]) if m["all"]["n"] else NA,
         _pct(m["all"]["share_found"]), _pct(m["all"]["share_a"]), _pct(m["all"]["share_ab"]),
         _pct(m["headline"]["share_ab"]), _pct(m["focal"]["share_ab"]),
+        _pct(m["all"]["coverage"]), _pct(m["all"]["end_to_end_ab"]),
     ]
 
 
@@ -556,17 +620,17 @@ def render_md(result: dict[str, Any]) -> str:
     out.append(f"Generated {result['generated']}. "
                f"Papers: {', '.join(result['papers']) if result['papers'] else 'none'}.")
     out.append("")
-    out.append("Match shares are over every claim × replica pair that Stage 1 scored in "
-               "`match.json`, restricted to replicas that ran. A pair whose replica produced "
-               "no value for the claim, or whose link step failed, is *abstained* and left out "
-               "of the denominators. `n/a` means the metric could not be computed from the "
-               "files present.")
+    out.append("Conditional match shares use accepted numeric outputs. Coverage and end-to-end "
+               "success use eligible planned requests, including missing and failed attempts. "
+               "Outcomes distinguish omissions, linking failures, audit uncertainty, and invalid results.")
+    out.append("A+B is a tolerance-based agreement measure, not exact reproduction at reported precision. "
+               "Paper and analysis means weight those units equally. n/a means the required evidence is unavailable.")
     out.append("")
 
     out.append("## Runs and reproduction, by family")
     out.append("")
     header = ["family", "launched", "ran", "failed", "no trace", "pairs scored",
-              "found", "A", "A+B", "headline A+B", "focal A+B"]
+              "found/requested", "conditional A", "conditional A+B", "headline A+B", "focal A+B", "coverage", "end-to-end A+B"]
     rows = [_runs_cells(g) for g in result["families"]]
     rows += [_runs_cells(g) for g in result["tiers"]]
     out.append(_table(header, rows))
@@ -621,7 +685,7 @@ def render_md(result: dict[str, Any]) -> str:
         out.append("")
         out.append(_table(
             ["family", "launched", "ran", "failed", "no trace", "pairs scored",
-             "found", "A", "A+B", "headline A+B", "focal A+B"],
+             "found/requested", "conditional A", "conditional A+B", "headline A+B", "focal A+B", "coverage", "end-to-end A+B"],
             [_runs_cells(g) for g in block["families"]] or [["(no replicas)"] + [NA] * 10],
         ))
         out.append("")
@@ -706,17 +770,35 @@ def main(argv: list[str] | None = None) -> int:
         description="Aggregate Stage 1 replica outcomes across papers into "
                     "docs/evaluation/pilot_eval.{json,md}.",
     )
-    p.add_argument("--papers", nargs="+", help="paper ids (default: every run except _fixtures)")
+    p.add_argument("--papers", nargs="+", help="explicit development subset (cannot be used for final cohort writeup)")
+    p.add_argument("--cohort", type=Path, default=None, help="shared evaluation manifest")
     p.add_argument("--include-fixtures", action="store_true",
                    help="also include runs whose id starts with _")
     p.add_argument("--out-dir", default=None, help="default docs/evaluation")
     args = p.parse_args(argv)
 
-    ids = args.papers or paper_ids(include_fixtures=args.include_fixtures)
+    manifest = cohort.load(args.cohort) if not args.papers else None
+    if manifest:
+        cohort.validate_runs(manifest)
+    ids = args.papers or [p["run_id"] for p in manifest["papers"]]
+    if args.include_fixtures:
+        ids = sorted(set(ids) | {p.name for p in _runs_root().glob("_*") if p.is_dir()})
+        manifest = None  # a discovery-based development subset has no final-cohort stamp
     if not ids:
         print("no runs found under runs/")
         return 1
-    result = evaluate([load_paper(pid) for pid in ids])
+    lineups = {p["run_id"]: p["replicas"] for p in manifest["papers"]} if manifest else {}
+    result = evaluate([load_paper(pid, lineups.get(pid)) for pid in ids])
+    result["cohort"] = manifest
+    if manifest:
+        from .validation import check
+        result["preflight"] = check(manifest)
+    result["validation_status"] = "development; held-out validation not established"
+    if manifest:
+        if not result["preflight"].get("all_runs_current", False):
+            result["validation_status"] += "; existing run artifacts require regeneration/reverification"
+        elif not result["preflight"].get("all_runs_release_ready", False):
+            result["validation_status"] += "; artifacts current; semantic release requirements remain unmet"
     out_dir = Path(args.out_dir) if args.out_dir else paths.ROOT / "docs" / "evaluation"
     jp, mp = write(result, out_dir)
     print(render_md(result))

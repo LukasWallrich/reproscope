@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from .. import artifacts, llm, paths
+from .. import artifacts, llm, paths, review_backend
 from .. import focal as focal_mod
 from ..artifacts import (
     AlignmentCheck,
@@ -80,7 +80,7 @@ def reusable(
     """Whether a record on disk still stands: same inputs, same prompts, complete."""
     return bool(
         record
-        and record.state == "complete"
+        and record.state in {"complete", "abstained"}
         and record.meta is not None
         and record.meta.inputs == inputs
         and not artifacts.prompt_stale(record, prompts)
@@ -127,12 +127,18 @@ class CausalLanguageResponse(BaseModel):
     abstract_quotes: list[str] = []
     design_basis: list[str] = []
     reasoning: str
+    assignment_evidence: str | None = None
+    intervention_contrast: str | None = None
+    measured_outcome: str | None = None
+    mechanism_identified: bool | None = None
 
 
 class OpenChoiceItem(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     choice: str
+    execution_field: str | None = None
+    analysis_id: str | None = None
     options: list[str] = []
     replica_choices: dict[str, str] = {}
     matters_for_claim: bool | None = None
@@ -155,6 +161,9 @@ class BroadFinding(BaseModel):
     severity: Literal["major", "minor", "note"]
     category: Literal["coding_error", "analytical_choice", "measurement", "reporting"]
     anchor: str
+    source_id: str | None = None
+    evidence_status: Literal["observed", "hypothesis", "unsupported"] = "unsupported"
+    diagnostic_ids: list[str] = []
     location: str | None = None
     comment: str
     checkable_by: str | None = None
@@ -215,12 +224,12 @@ def _read_json(path: Path) -> Any | None:
 
 _HEADING_MAX_CHARS = 60  # a wrapped body line is longer than any section heading
 _METHODS_HEAD = re.compile(
-    r"^(\d+\.?\s*)?(method|methods|materials and methods|participants)\b", re.I
+    r"^(\d+(?:\.\d+)*\.?\s*)?(method|methods|materials and methods|participants)\b", re.I
 )
-_METHODS_END = re.compile(r"^(\d+\.?\s*)?(results|discussion)\b", re.I)
+_METHODS_END = re.compile(r"^(\d+(?:\.\d+)*\.?\s*)?(results|discussion)\b", re.I)
 _ABSTRACT_HEAD = re.compile(r"^(abstract|summary)\b[:.]?$", re.I)
 _ABSTRACT_END = re.compile(
-    r"^(\d+\.?\s*)?(introduction|keywords?|highlights|background|method|methods)\b", re.I
+    r"^(\d+(?:\.\d+)*\.?\s*)?(introduction|keywords?|highlights|background|method|methods)\b", re.I
 )
 _PARA_SPLIT = re.compile(r"\n\s*\n")
 ABSTRACT_MAX_CHARS = 4000  # papers whose layer carries no heading after the abstract
@@ -320,6 +329,11 @@ def gather(paper_id: str) -> Stage2Inputs:
     # The stage marker covers the prompts as well as the files: an edited prompt must
     # clear it, otherwise the stage is skipped before any check can see the change.
     hashes: dict[str, str] = {f"prompt:{n}": artifacts.prompt_version(n) for n in PROMPTS}
+    from .. import provenance
+    hashes["review_backend"] = review_backend.fingerprint()
+    hashes["implementation"] = provenance.implementation("review_backend.py", "llm.py", "stage2/review.py", "stage2/mde.py", "focal.py", "statistical.py", "artifacts.py", "stage2/correctness.py", "stage2/__init__.py")
+    hashes["prompt:stage2_correctness"] = artifacts.prompt_version("stage2_correctness")
+    hashes.update(provenance.corpus(paper_id))
 
     def note(name: str, path: Path) -> None:
         if path.exists():
@@ -348,6 +362,7 @@ def gather(paper_id: str) -> Stage2Inputs:
         note(f"stage0/{name}", s0 / name)
     note_artifact("stage1/match.json", s1 / "match.json", artifacts.ComparableResult)
 
+    note("stage1/diagnosis.json", s1 / "diagnosis.json")
     claims_raw = _read_json(s0 / "claims.json") or []
     claims = [ClaimRecord.model_validate(c) for c in claims_raw]
     contracts_raw = _read_json(s0 / "contracts.json") or []
@@ -436,7 +451,7 @@ def gather(paper_id: str) -> Stage2Inputs:
 def _subset(hashes: dict[str, str], *prefixes: str, exclude: tuple[str, ...] = ()) -> dict[str, str]:
     return {
         k: v for k, v in hashes.items()
-        if any(k.startswith(p) for p in prefixes) and k not in exclude
+        if (k in {"implementation", "review_backend"} or k.startswith("data:") or any(k.startswith(p) for p in prefixes)) and k not in exclude
     }
 
 
@@ -498,33 +513,13 @@ def _row_distance(row: dict[str, Any]) -> float:
 
 
 def canonical_replica(inp: Stage2Inputs) -> tuple[Replica | None, str]:
-    """The replica whose focal estimate is closest to the reported value.
-
-    Ties break on replica id, so the choice is the same on every run. Only replicas
-    with a script are eligible; without match rows for the focal claim the first
-    such replica by id is used.
-    """
-    eligible = sorted((r for r in inp.replicas if r.script_text), key=lambda r: r.replica_id)
-    if not eligible:
-        return None, "no replica wrote a script"
-    focal_ids = set(inp.focal["claim_ids"]) if inp.focal else set()
-    focal_id = inp.focal["focal_quantity"]["claim_id"] if inp.focal else None
-    rows = (inp.match or {}).get("rows") or []
-    scoped = [r for r in rows if r.get("claim_id") == focal_id] \
-        or [r for r in rows if r.get("claim_id") in focal_ids]
-    distances: dict[str, float] = {}
-    for row in scoped:
-        rid = row.get("replica_id")
-        if rid is None:
-            continue
-        distances[rid] = min(distances.get(rid, float("inf")), _row_distance(row))
-    if not distances:
-        return eligible[0], "no match row for the focal claim; first replica with a script by id"
-    best = min(eligible, key=lambda r: (distances.get(r.replica_id, float("inf")), r.replica_id))
-    d = distances.get(best.replica_id)
-    if d is None or d == float("inf"):
-        return best, "no usable match distance for the focal claim; first replica by id"
-    return best, f"closest to the reported focal value on the match table (|difference| = {d:g})"
+    """Stable accepted baseline; numerical proximity never selects the method."""
+    from ..stage1.audit import acceptance
+    eligible = sorted((r for r in inp.replicas if r.script_text
+                       and r.trace.get("ran")
+                       and acceptance(r.trace.get("hardcoding_audit") or {}) == "accepted"),
+                      key=lambda r: r.replica_id)
+    return (eligible[0], "first accepted executed replica by stable ID") if eligible else (None, "no accepted executed replica with source")
 
 
 def replica_diffs(canonical: Replica, others: list[Replica], cap: int = DIFF_LINE_CAP) -> list[tuple[str, str]]:
@@ -601,6 +596,9 @@ def _column_line(col: dict[str, Any]) -> str:
         bits.append(f"range={col.get('min')}..{col.get('max')}")
     if col.get("mean") is not None:
         bits.append(f"mean={col['mean']}")
+    for diagnostic in ("sd", "skewness", "n_nonfinite"):
+        if col.get(diagnostic) is not None:
+            bits.append(f"{diagnostic}={col[diagnostic]} (computed column diagnostic)")
     return "  - " + " | ".join(bits)
 
 
@@ -657,11 +655,12 @@ def check_causal_language(inp: Stage2Inputs, *, force: bool = False) -> CheckRec
         "stage2_causal_language",
         focal_claim=_focal_claim_text(inp),
         abstract=abstract_section(inp.paper_text),
+        methods=(methods_section(inp.paper_text) or ""),
         passages=passages,
         contract=(inp.focal_contract.model_dump_json(indent=2) if inp.focal_contract
                   else "(no contract available)"),
     )
-    r = llm.call(
+    r = review_backend.call(
         "causal_language",
         prompt,
         paper_id=inp.paper_id,
@@ -681,11 +680,20 @@ def check_causal_language(inp: Stage2Inputs, *, force: bool = False) -> CheckRec
     payload = r.parsed.model_dump()
     # Quotes are checked against the whole paper, not just the passages the model saw:
     # a quote invented from a nearby sentence should still fail.
-    payload["quotes_verified"] = _verify_quotes(payload, inp.paper_text)
+    shown_source = abstract_section(inp.paper_text) + "\n" + passages + "\n" + (methods_section(inp.paper_text) or "")
+    payload["quotes_verified"] = _verify_quotes(payload, shown_source)
+    payload["evidence_status"] = "source_located" if payload["quotes_verified"] and all(payload["quotes_verified"].values()) else "unverified"
+    assignment = payload.get("assignment_evidence") or ""
+    statistical_basis = any(re.search(r"large effect|small p|statistically significant|n\s*=|p\s*[<=>]", basis, re.I) for basis in payload.get("design_basis", []))
+    if not assignment or normalise(assignment) not in normalise(shown_source) or statistical_basis:
+        payload["evidence_status"] = "unverified"
+        payload["validation_reason"] = "assignment evidence absent/unanchored or statistical results used to support identification"
+    payload["causal_scope"] = "intervention contrast; mechanism identification assessed separately"
     payload["focal_claim_rule"] = inp.focal_rule
     return write_check(
         inp.paper_id, "causal_language", inputs=inputs, prompt_versions=versions,
         model_calls=calls, response=payload,
+        abstain_reason="causal design evidence not anchored" if payload["evidence_status"] == "unverified" else None,
     )
 
 
@@ -699,33 +707,29 @@ def _verify_quotes(payload: dict[str, Any], paper_text: str) -> dict[str, bool]:
 
 
 def _focal_n(inp: Stage2Inputs) -> tuple[int | None, str]:
-    """n for the power calculation, preferring what the replicas actually analysed.
-
-    Every claim of the focal analysis counts: a replica often reports n on the test
-    statistic's row only, so restricting to the curve quantity's own claim would
-    throw the number away.
-    """
-    claim_ids = set(inp.focal["claim_ids"]) if inp.focal else set()
-    ns: list[int] = []
+    """Prefer independently verified focal sample sizes from accepted executions."""
+    if not inp.focal:
+        return None, "no focal binding"
+    from ..stage1.audit import acceptance
+    analysis_id = inp.focal.get("analysis_id")
+    ns = []
     for rep in inp.replicas:
-        for row in (rep.results or {}).get("results", []) if isinstance(rep.results, dict) else []:
-            if row.get("n") is None:
-                continue
-            if not claim_ids or row.get("claim_id") in claim_ids:
-                ns.append(int(row["n"]))
+        trace = rep.trace
+        evidence = (trace.get("execution_evidence") or {}).get("analyses", {}).get(analysis_id, {})
+        if (not trace.get("ran") or acceptance(trace.get("hardcoding_audit") or {}) != "accepted"
+                or evidence.get("status") != "verified"):
+            continue
+        value = evidence.get("n")
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 1 and float(value).is_integer():
+            ns.append(int(value))
     if ns:
-        mode = max(set(ns), key=ns.count)
-        source = f"replica results.json (n = {sorted(set(ns))}; modal value used)" if len(set(ns)) > 1 \
-            else "replica results.json"
-        return mode, source
-    files = (inp.readiness or {}).get("files") or []
-    rows = [f.get("rows") for f in files if f.get("rows")]
-    if rows:
-        return int(max(rows)), "readiness record row count (no replica reported n)"
-    reported = getattr(getattr(inp.manifest, "focal_claim", None), "reported", None)
-    if reported is not None and reported.n:
-        return int(reported.n), "manifest focal_claim.reported.n"
-    return None, "no source for n"
+        if len(set(ns)) != 1:
+            return None, f"focal analysis sample unresolved across verified replicas: {sorted(set(ns))}"
+        return ns[0], "independently verified focal analysis sample (accepted executions agree)"
+    design = inp.focal_contract.design if inp.focal_contract else None
+    if design and design.n_total:
+        return design.n_total, "structured focal design; executed sample not independently verified"
+    return None, "no independently verified or structured analysis-level sample count"
 
 
 def check_mde(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
@@ -750,28 +754,43 @@ def check_mde(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
 
     ct = inp.focal_contract
     n, n_source = _focal_n(inp)
-    formula = next((r.trace.get("model_formula") for r in inp.replicas if r.trace.get("model_formula")), None)
-    design = (
-        mde_mod.classify_design(
-            ct.model_type if ct else None,
-            n_predictors=len(ct.predictors) if ct else 0,
-            n_covariates=len(ct.covariates) if ct else 0,
-            formula=formula,
-        )
-        if ct is not None
-        else None
-    )
-
+    design = None
+    structured = ct.design if ct else None
+    group_ns = None
+    if structured:
+        design = {"independent_t": mde_mod.TWO_GROUP, "paired_t": mde_mod.PAIRED,
+                  "correlation": mde_mod.CORRELATION}.get(structured.family)
+        if structured.n_total and n and structured.n_total != n:
+            n, n_source = None, "structured design and executed sample disagree"
+        group_ns = structured.group_ns or None
+    if structured and structured.family == "paired_t" and structured.alternative == "unknown" and n and not ct.covariates:
+        conditional = {tail: mde_mod.compute(mde_mod.PAIRED, n,
+            script_path=paths.run_dir(inp.paper_id, 2) / "mde_power.R", alternative=tail)
+            for tail in ("two-sided", "greater", "less")}
+        return write_check(inp.paper_id, "mde", inputs=inputs, prompt_versions={}, model_calls=[],
+            response={"conditional": conditional, "author_alternative": None,
+                      "missing_prerequisite": "test direction", "n_source": n_source},
+            abstain_reason="author test direction unknown; conditional MDEs supplied")
+    if not structured or structured.alternative == "unknown" or (ct and ct.covariates):
+        design = None
+    if design == mde_mod.TWO_GROUP and structured.variance_assumption != "equal":
+        design = None
+    if design == mde_mod.TWO_GROUP and not group_ns:
+        design = None  # never invent an equal split from a total or subgroup count
     if design is not None and n:
         try:
             script_path = paths.run_dir(inp.paper_id, 2) / "mde_power.R"
             result = mde_mod.compute(
                 design, n,
                 script_path=script_path,
+                group_ns=group_ns,
+                alternative=structured.alternative,
                 extra_assumptions=[f"n taken from: {n_source}"],
             )
-            result["r_script"] = str(script_path.relative_to(paths.ROOT))
-            result["design_source"] = f"contract model_type = {ct.model_type!r}"
+            if script_path.exists():
+                result["r_script"] = str(script_path.relative_to(paths.ROOT))
+            result["design_source"] = "structured focal design"
+            result["structured_design"] = structured.model_dump()
             return write_check(
                 inp.paper_id, "mde", inputs=inputs, prompt_versions={},
                 model_calls=[], response=result,
@@ -780,8 +799,13 @@ def check_mde(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
             reason = f"the power computation failed: {e}"
     elif design is None:
         reason = (
-            f"model_type {ct.model_type!r} is not one of the designs the power "
-            "computation covers" if ct is not None
+            "; ".join(filter(None, [
+                "structured design missing" if not structured else None,
+                "unsupported design family" if structured and structured.family not in {"paired_t", "independent_t", "correlation"} else None,
+                "test direction unknown" if structured and structured.alternative == "unknown" else None,
+                "covariate-adjusted power unsupported" if ct and ct.covariates else None,
+                "equal-variance assumption unresolved" if structured and structured.family == "independent_t" and structured.variance_assumption != "equal" else None,
+                "group counts missing" if structured and structured.family == "independent_t" and not group_ns else None])) if ct is not None
             else "no estimand contract to read the design from"
         )
     else:
@@ -794,6 +818,28 @@ def check_mde(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
 
 
 # --- check 3: alignment ---------------------------------------------------
+
+
+def alignment_material(inp: Stage2Inputs, open_choices: dict) -> tuple[dict, dict]:
+    """Focal bindings and compact verification fields; raw receipts stay on disk."""
+    aid = inp.focal.get("analysis_id") if inp.focal else None
+    rd = inp.readiness or {}
+    readiness = {k:rd.get(k) for k in ("unit_of_observation", "keys", "missing_sentinels") if k in rd}
+    for key in ("per_analysis_state", "per_analysis_outcome", "per_analysis_reasons", "analysis_families",
+                "sample_selections", "groupings", "source_identity_problems"):
+        readiness[key] = {aid:rd[key][aid]} if aid in (rd.get(key) or {}) else {}
+    readiness["variable_bindings"] = [b for b in rd.get("variable_bindings", []) if b.get("analysis_id") == aid]
+    fields = {"status", "family", "x", "y", "alternative", "n", "effect_metric", "included_ids",
+              "reason", "problems", "quantities_checked", "method_scope", "perturbation_status",
+              "plan_status", "support_status", "computation_status", "protocol_normalisation"}
+    compact = {}
+    for rid, data in open_choices.items():
+        evidence = data["execution_evidence"]
+        focal = evidence.get("analyses", {}).get(aid)
+        compact[rid] = {"execution_evidence": {"analyses": {aid:{k:v for k,v in focal.items() if k in fields}} if focal else {},
+                       "reason": evidence.get("reason"), "scope": "focal analysis; raw perturbation receipts omitted"},
+                       "open_choices": data["open_choices"]}
+    return readiness, compact
 
 
 def check_alignment(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
@@ -813,6 +859,7 @@ def check_alignment(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
 
     open_choices = {
         r.replica_id: {
+            "execution_evidence": r.trace.get("execution_evidence") or {},
             "open_choices": r.trace.get("open_choices") or [],
             "model_formula": r.trace.get("model_formula"),
             "filters": r.trace.get("filters") or [],
@@ -821,15 +868,16 @@ def check_alignment(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
         }
         for r in inp.replicas
     }
+    focal_readiness, focal_choices = alignment_material(inp, open_choices)
     prompt = artifacts.load_prompt(
         "stage2_alignment",
         claim=_focal_claim_text(inp),
         contract=(inp.focal_contract.model_dump_json(indent=2) if inp.focal_contract
                   else "(no contract available)"),
-        readiness=json.dumps(inp.readiness, indent=2) if inp.readiness else "(no readiness record)",
-        open_choices=json.dumps(open_choices, indent=2, default=str),
+        readiness=json.dumps(focal_readiness, indent=1),
+        open_choices=json.dumps(focal_choices, indent=1, default=str),
     )
-    r = llm.call(
+    r = review_backend.call(
         "alignment",
         prompt,
         paper_id=inp.paper_id,
@@ -848,6 +896,16 @@ def check_alignment(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
         )
     payload = r.parsed.model_dump()
     payload["traced_open_choices"] = {k: v["open_choices"] for k, v in open_choices.items()}
+    payload["execution_evidence"] = {k: v["execution_evidence"] for k, v in open_choices.items()}
+    for item in payload.get("open_choices", []):
+        item["candidate_replica_choices"] = dict(item.get("replica_choices") or {})
+        field, aid = item.get("execution_field"), item.get("analysis_id")
+        item["replica_choice_validation"] = {}
+        for rid in item["candidate_replica_choices"]:
+            evidence = open_choices.get(rid, {}).get("execution_evidence", {}).get("analyses", {}).get(aid, {})
+            known = evidence.get("status") == "verified" and field in {"family", "x", "y", "alternative", "n", "effect_metric", "included_ids"} and evidence.get(field) is not None
+            item["replica_choices"][rid] = str(evidence[field]) if known else "unknown (execution field not verified)"
+            item["replica_choice_validation"][rid] = "verified" if known else "unverified"
     payload["focal_claim_rule"] = inp.focal_rule
     return write_check(
         inp.paper_id, "alignment", inputs=inputs, prompt_versions=versions,
@@ -873,7 +931,7 @@ def normalise(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().casefold()
 
 
-def verify_anchors(findings: list[dict[str, Any]], sources: dict[str, str]) -> list[dict[str, Any]]:
+def verify_anchors(findings: list[dict[str, Any]], sources: dict[str, str], diagnostics: dict | None = None) -> list[dict[str, Any]]:
     """Mark each finding with whether its anchor occurs verbatim in a source.
 
     Findings are kept either way; review.md lists the unverified ones separately.
@@ -882,8 +940,90 @@ def verify_anchors(findings: list[dict[str, Any]], sources: dict[str, str]) -> l
     out = []
     for f in findings:
         anchor = normalise(f.get("anchor") or "")
-        found = [name for name, text in hay.items() if anchor and anchor in text]
-        out.append({**f, "anchor_verified": bool(found), "anchor_found_in": found})
+        if len(anchor) > 1 and anchor[0] == anchor[-1] and anchor[0] in {'"', "'"}:
+            anchor = anchor[1:-1].strip()
+        selected = f.get("source_id")
+        found = [name for name, text in hay.items() if len(anchor) >= 8 and anchor in text
+                 and (selected is None or selected == name)]
+        requested = f.get("diagnostic_ids") or []
+        records = diagnostics or {}
+        diagnostic_status = ("executed" if requested and all(records.get(k, {}).get("status") == "computed" for k in requested)
+                             else "unknown_reference" if requested else "not_requested")
+        out.append({**f, "anchor_verified": bool(found), "anchor_found_in": found,
+                    "source_support": "located_only; entailment requires review" if found else "unlocated",
+                    "diagnostic_status": diagnostic_status})
+    return out
+
+
+class AnchorPatch(BaseModel):
+    index: int
+    anchor: str | None
+    note: str
+
+
+class AnchorPatches(BaseModel):
+    patches: list[AnchorPatch]
+
+
+def repair_broad_anchors(inp, findings, sources):
+    """Repair source locators only; keep original findings and literal validation."""
+    missing={i:f for i,f in enumerate(findings) if not f.get('anchor_verified')}
+    if not missing:
+        return findings, []
+    from .. import response_cache
+    selected={f.get('source_id') for f in missing.values()}
+    shown={sid:text for sid,text in sources.items() if sid in selected}
+    prompt=("Return a minimal locator patch for each indexed finding. Do not change its comment, severity, evidence status or conclusion. "
+            "The original anchor was not found literally in its named source. Copy a short exact quotation from that same source "
+            "that supports locating this finding, without enclosing quotation marks, added hyphens or rewording. "
+            "If no supporting quotation exists, return anchor=null and explain. This checks source location, not full entailment.\n"
+            +json.dumps({'findings':missing,'sources':shown}))
+    cache=paths.run_dir(inp.paper_id,2)/'logs/broad_anchor_repair.response.json'
+    key=response_cache.key(prompt,AnchorPatches,[], 'strong_alt' if __import__('os').environ.get('REPROSCOPE_REVIEW_BACKEND')=='strong_alt' else 'cheap')
+    saved=response_cache.read(cache,key,AnchorPatches)
+    if saved:
+        patches,call_id=saved
+    else:
+        result=review_backend.call('broad_anchor_repair',prompt,paper_id=inp.paper_id,stage='2',tier='cheap',schema=AnchorPatches,
+            log_path=cache.with_suffix('.log'))
+        if result.parsed is None:return findings,[result.ledger_id] if result.ledger_id else []
+        patches,call_id=result.parsed,result.ledger_id
+        response_cache.write(cache,key,patches,call_id or '')
+    indices=[patch.index for patch in patches.patches]
+    if len(indices)!=len(set(indices)) or set(indices)!=set(missing):
+        raise ValueError('anchor repair must cover exactly the unresolved finding indices')
+    for patch in patches.patches:
+        if patch.anchor is not None:
+            original=findings[patch.index]
+            candidate={**original,'anchor':patch.anchor,'anchor_original':original['anchor'],'anchor_repair_note':patch.note}
+            checked=verify_anchors([candidate],sources,profile_diagnostics(inp))[0]
+            if checked['anchor_verified']:findings[patch.index]=checked
+    return findings,[call_id] if call_id else []
+
+
+def profile_diagnostics(inp: Stage2Inputs) -> dict:
+    """Expose already executed column profiles with stable identifiers and provenance.
+
+    These observations can support distribution/boundary facts; they cannot verify
+    a proposed explanation such as fitting bias or a causal mechanism.
+    """
+    import hashlib
+    try:
+        schema = json.loads(inp.schema_text)
+    except (ValueError, TypeError):
+        return {}
+    out = {}
+    for file in schema.get("files", []):
+        for table in file.get("tables", []):
+            for column in table.get("columns", []):
+                values = {k: column[k] for k in ("sd", "skewness", "n_nonfinite", "min", "max") if column.get(k) is not None}
+                if not values:
+                    continue
+                record = {"file": file.get("path"), "table": table.get("table"), "column": column.get("name"),
+                          "values": values, "status": "computed", "source_hash": inp.hashes.get("stage0/schema"),
+                          "code": "reproscope.stage0.readiness._column_summary"}
+                key = "diag_" + hashlib.sha256(json.dumps(record, sort_keys=True).encode()).hexdigest()[:16]
+                out[key] = record
     return out
 
 
@@ -904,6 +1044,7 @@ def broad_material(inp: Stage2Inputs, diff_cap: int = DIFF_LINE_CAP) -> tuple[st
         f"## Results and discussion passages carrying the focal claim\n\n{passages}",
         f"## Data schema (stage0/schema.json)\n\n{schema_summary(inp.schema_text)}",
     ]
+    blocks.append("## Executed column diagnostics (reference diagnostic_ids exactly)\n\n" + json.dumps(profile_diagnostics(inp), sort_keys=True))
     provenance: dict[str, Any] = {"canonical_replica": None, "canonical_replica_reason": why,
                                   "diffed_replicas": [], "diff_line_cap": diff_cap}
     if canonical is not None:
@@ -933,7 +1074,10 @@ def broad_material(inp: Stage2Inputs, diff_cap: int = DIFF_LINE_CAP) -> tuple[st
         "## Match summary for the focal analysis (one JSON object per line)\n\n"
         + _lines_json(focal_match_summary(inp))
     )
-    return "\n\n".join(blocks), provenance
+    import hashlib
+    snapshots = {"src_" + hashlib.sha256(block.encode()).hexdigest()[:16]: block for block in blocks}
+    provenance["source_snapshots"] = snapshots
+    return "\n\n".join(f"[source_id={sid}]\n{block}" for sid, block in snapshots.items()), provenance
 
 
 def check_broad(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
@@ -956,15 +1100,27 @@ def check_broad(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
         prompt = artifacts.load_prompt("stage2_broad", material=material)
         if len(prompt) // 4 <= BROAD_TOKEN_BUDGET:
             break
-    r = llm.call(
-        "broad",
-        prompt,
-        paper_id=inp.paper_id,
-        stage=STAGE,
-        tier="strong",
-        schema=BroadResponse,
-        log_path=paths.run_dir(inp.paper_id, 2) / "logs" / "broad.log",
-    )
+    # A verifier-only change can reuse a completed response when the exact
+    # shown snapshots, prompt, input data and actual model identity are unchanged.
+    from .. import ledger, config
+    import os
+    source_path = paths.run_dir(inp.paper_id,2)/'broad_evidence_sources.json'
+    spec=config.tier('strong_alt' if os.environ.get('REPROSCOPE_REVIEW_BACKEND')=='strong_alt' else 'strong')
+    prior_calls={row['id']:row for row in ledger.rows(inp.paper_id)}
+    comparable=lambda h:{k:v for k,v in h.items() if k not in {'implementation','review_backend'}}
+    can_revalidate=bool(not force and existing and existing.response and existing.meta
+        and not artifacts.prompt_stale(existing,prompts)
+        and comparable(existing.meta.inputs)==comparable(inputs)
+        and source_path.exists() and json.loads(source_path.read_text())==provenance['source_snapshots']
+        and existing.meta.model_calls and all(prior_calls.get(cid,{}).get('route')==spec.route and prior_calls.get(cid,{}).get('model')==spec.model for cid in existing.meta.model_calls))
+    if can_revalidate:
+        raw={'summary':existing.response.get('summary'),'findings':[{k:f.get(k) for k in BroadFinding.model_fields} for f in existing.response['findings']]}
+        r=llm.LLMResult(text='',parsed=BroadResponse.model_validate(raw),ledger_id=existing.meta.model_calls[0])
+    else:
+        r = review_backend.call(
+            "broad", prompt, paper_id=inp.paper_id, stage=STAGE, tier="strong", schema=BroadResponse,
+            log_path=paths.run_dir(inp.paper_id, 2) / "logs" / "broad.log",
+        )
     versions = _versions(*prompts)
     calls = [r.ledger_id] if r.ledger_id else []
     if r.parsed is None:
@@ -974,13 +1130,19 @@ def check_broad(inp: Stage2Inputs, *, force: bool = False) -> CheckRecord:
             abstain_reason=r.error or "model returned no valid referee findings",
         )
     payload = r.parsed.model_dump()
-    # Anchors are checked against everything on disk, not only what the prompt carried.
-    sources = {"paper.txt": inp.paper_text, "schema.json": inp.schema_text}
-    for rep in inp.replicas:
-        if rep.script_text:
-            sources[f"{rep.replica_id}/{rep.script_path.name}"] = rep.script_text  # type: ignore[union-attr]
-    payload["findings"] = verify_anchors(payload.get("findings") or [], sources)
+    sources = provenance.pop("source_snapshots")
+    snapshot_path = paths.run_dir(inp.paper_id, 2) / "broad_evidence_sources.json"
+    snapshot_path.write_text(json.dumps(sources, indent=2) + "\n")
+    payload["findings"] = verify_anchors(payload.get("findings") or [], sources, profile_diagnostics(inp))
+    payload["findings"], repair_calls = repair_broad_anchors(inp, payload["findings"], sources)
+    calls += repair_calls
+    payload["executed_diagnostics"] = profile_diagnostics(inp)
     payload["anchor_sources"] = sorted(sources)
+    payload["source_snapshot_hash"] = artifacts.sha256_file(snapshot_path)
+    from ..stage1.audit import acceptance
+    payload["execution_counts"] = {
+        "planned": len(inp.replicas), "ran": sum(bool(r.trace.get("ran")) for r in inp.replicas),
+        "audit_status": {r.replica_id: acceptance(r.trace.get("hardcoding_audit") or {}) for r in inp.replicas}}
     payload["focal_claim_rule"] = inp.focal_rule
     payload.update(provenance)
     return write_check(
@@ -1004,6 +1166,8 @@ def assemble(inp: Stage2Inputs, records: dict[str, CheckRecord]) -> AnalysisRevi
     if cl.response:
         p = cl.response
         causal = CausalLanguageRating(
+            state=cl.state, abstain_reason=cl.abstain_reason,
+            evidence_status=p.get("evidence_status"),
             rating=(
                 f"language={p.get('language_strength')}; "
                 f"design_supports={p.get('design_inference_strength')}; "
@@ -1020,6 +1184,9 @@ def assemble(inp: Stage2Inputs, records: dict[str, CheckRecord]) -> AnalysisRevi
     if md.response:
         p = md.response
         mde_check = MdeCheck(
+            state=md.state, abstain_reason=md.abstain_reason,
+            conditional=p.get("conditional"), author_alternative=p.get("author_alternative"),
+            missing_prerequisite=p.get("missing_prerequisite"),
             assumptions=list(p.get("assumptions") or []),
             curve=[{"effect": float(c["effect"]), "power": float(c["power"])}
                    for c in (p.get("curve") or []) if "effect" in c and "power" in c],
@@ -1041,6 +1208,7 @@ def assemble(inp: Stage2Inputs, records: dict[str, CheckRecord]) -> AnalysisRevi
             if not per_replica.get(rid):
                 per_replica[rid] = list(choices)
         alignment = AlignmentCheck(
+            state=al.state, abstain_reason=al.abstain_reason,
             verdict=p.get("verdict"),
             open_choices_per_replica=per_replica,
             note=p.get("reasoning"),
@@ -1067,6 +1235,11 @@ def assemble(inp: Stage2Inputs, records: dict[str, CheckRecord]) -> AnalysisRevi
                     anchor_verified=f.get("anchor_verified"),
                     anchor_found_in=f.get("anchor_found_in") or [],
                     checkable_by=f.get("checkable_by"),
+                    source_id=f.get("source_id"),
+                    evidence_status=f.get("evidence_status", "unsupported"),
+                    source_support=f.get("source_support", "unlocated"),
+                    diagnostic_ids=f.get("diagnostic_ids") or [],
+                    diagnostic_status=f.get("diagnostic_status", "not_requested"),
                 )
                 for f in findings
             ],
@@ -1159,17 +1332,23 @@ def render_md(inp: Stage2Inputs, review: AnalysisReview, records: dict[str, Chec
 
     # 2. MDE
     L += ["## 2. Minimum detectable effect", ""]
+    conditional = (records["mde"].response or {}).get("conditional")
+    if conditional:
+        L += ["Author test direction is unresolved. These calculations are conditional on the named alternative, not attributed author settings.", "", "| Alternative | MDE (dz), 80% power, alpha .05 |", "|---|---:|"]
+        for alternative, values in conditional.items():
+            L.append(f"| {alternative} | {values['mde_standardised']:.4f} |")
+        L.append("")
     if not abstained("mde"):
         m = review.narrow.mde if review.narrow else None
         p = records["mde"].response or {}
         if m is not None:
-            L.append(f"Computed in R from n and the model form ({p.get('design')} design).")
+            L.append(f"Computed from the declared sample and design: {p.get('method')}.")
             mde_val = p.get("mde_standardised")
             metric = p.get("mde_metric") or p.get("mde_paper_metric") or "standardised effect"
             if mde_val is not None:
                 L.append(
                     f"**MDE at {int(float(p.get('target_power', 0.8)) * 100)}% power "
-                    f"(alpha = {p.get('alpha', 0.05)}, two-sided): {metric} = {mde_val}**"
+                    f"(alpha = {p.get('alpha', 0.05)}, {p.get('alternative', 'two-sided')}): {metric} = {mde_val}**"
                 )
             L += ["", "| effect | power |", "|---:|---:|"]
             for row in m.curve:
@@ -1238,15 +1417,18 @@ def render_md(inp: Stage2Inputs, review: AnalysisReview, records: dict[str, Chec
                 found = getattr(f, "anchor_found_in", None)
                 if found:
                     out.append(f"_Anchor found in: {', '.join(found)}_")
+                out.append(f"_Evidence: {getattr(f, 'evidence_status', 'unsupported')}; "
+                           f"support: {getattr(f, 'source_support', 'unlocated')}; "
+                           f"diagnostic: {getattr(f, 'diagnostic_status', 'not_requested')}._")
                 return out + [""]
 
             for f in verified:
                 L += block(f)
-            L += ["### Not verifiable", ""]
+            L += ["### Evidence not anchored", ""]
             if unverified:
                 L.append(
-                    "The anchor for these findings was not found verbatim in paper.txt, "
-                    "schema.json or any replica script. They are kept for the reader to judge."
+                    "These anchors were not located in the exact source snapshots supplied "
+                    "to the reviewer. The findings remain unverified."
                 )
                 L.append("")
                 for f in unverified:

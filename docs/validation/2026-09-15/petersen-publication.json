@@ -1,0 +1,12 @@
+{
+  "url": "https://reproscope-petersen-2017-v7.surge.sh/",
+  "checks": {
+    "http_200": true,
+    "matches_validated_multiverse": true,
+    "complete_specs": true,
+    "numerical_evidence": true,
+    "comments": true,
+    "no_local_paths": true
+  },
+  "sha256": "be390c8dbe47b019ac2f816c3a71ec6514e9cba9b40401193f3e6378c835ed11"
+}

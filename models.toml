@@ -9,9 +9,14 @@ model = "z-ai/glm-5.3-flash"
 route = "openrouter"
 model = "openai/gpt-5.6-luna"
 
+# Short vision adjudication; independently escalated when unresolved.
+[tiers.arbiter]
+route = "openrouter"
+model = "openai/gpt-5.6-luna"
+
 [tiers.cheap]
 route = "openrouter"
-model = "z-ai/glm-5.3-flash"
+model = "openai/gpt-5.6-luna"
 
 [tiers.mid]                 # readiness and other short judgement calls (Sonnet is not used anywhere)
 route = "claude_p"

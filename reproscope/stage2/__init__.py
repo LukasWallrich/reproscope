@@ -1,4 +1,4 @@
-"""Stage 2 — analysis review: three narrow checks plus one broad referee pass."""
+"""Stage 2 — clear statistical analysis and interpretation errors; extended reviews are opt-in."""
 
 from __future__ import annotations
 
@@ -8,10 +8,11 @@ from . import review as _review
 __all__ = ["run"]
 
 
-STEPS = ("causal_language", "mde", "alignment", "broad")
+EXTENDED_STEPS = ("causal_language", "mde", "alignment", "broad")
+STEPS = ("correctness",)
 
 
-def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None) -> dict:
+def run_extended(paper_id: str, force: bool = False, force_steps: set[str] | None = None) -> dict:
     """Run the four checks, assemble review.json and review.md, mark the stage done."""
     force_steps = force_steps or set()
     stage_dir = paths.run_dir(paper_id, 2)
@@ -39,3 +40,11 @@ def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None)
     paths.mark_done(stage_dir, inp.hashes)
     print(f"stage 2: wrote {stage_dir / 'review.json'} and review.md", flush=True)
     return {"skipped": False, "review": stage_dir / "review.json", "records": records}
+
+
+def run(paper_id: str, force: bool = False, force_steps: set[str] | None = None) -> dict:
+    """Default analysis check: clear statistical analysis errors and clear interpretation errors."""
+    if force_steps and set(force_steps) - set(STEPS):
+        raise ValueError("default Stage 2 supports only correctness; use run_extended for optional broad reviews")
+    from .correctness import run as check_correctness
+    return check_correctness(paper_id, force=force or bool(force_steps))

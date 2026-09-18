@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import tomllib
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .paths import ROOT
 
@@ -16,6 +18,7 @@ SUBSCRIPTION_ROUTES = {"claude_p", "codex"}
 class ModelSpec(BaseModel):
     route: str
     model: str
+    generation_mode: Literal["agentic", "tool_free"] = "agentic"
 
 
 class ReplicaSpec(ModelSpec):
@@ -23,6 +26,10 @@ class ReplicaSpec(ModelSpec):
 
 
 class Config(BaseModel):
+    contract_strategy: Literal["monolithic", "chunked"] = "monolithic"
+    descriptive_readouts: bool = True
+    scoped_multiverse: bool = False
+    multiverse_min_active_dimensions: int = Field(default=0, ge=0)
     tiers: dict[str, ModelSpec]
     replicas: dict[str, ReplicaSpec] = {}
     executor: ModelSpec | None = None
@@ -30,13 +37,17 @@ class Config(BaseModel):
     shadow_prices: dict[str, float] = {}
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16)
+def _parse(text: str) -> Config:
+    return Config.model_validate(tomllib.loads(text))
+
+
 def _load(path_str: str) -> Config:
-    return Config.model_validate(tomllib.loads(Path(path_str).read_text()))
+    return _parse(Path(path_str).read_text())
 
 
 def config(path: Path | None = None) -> Config:
-    return _load(str(path or ROOT / "models.toml"))
+    return _load(str(path or os.environ.get("REPROSCOPE_MODELS") or ROOT / "models.toml"))
 
 
 def tier(name: str) -> ModelSpec:

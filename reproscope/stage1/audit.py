@@ -10,11 +10,24 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from .. import artifacts, llm
+from .. import artifacts, llm, paths
 from ._prompt import fill
 
-MAX_SCRIPT_CHARS = 40_000
 MAX_RESULTS_CHARS = 20_000
+
+
+def acceptance(audit: dict) -> str:
+    """Execution success and analytical acceptance are separate states.
+
+    Suspicious hits need an explicit adjudication with a reason; a numerical
+    coincidence between a literal and an outcome is not proof of hardcoding.
+    """
+    adjudication = audit.get("adjudication") or {}
+    if adjudication.get("reason") and adjudication.get("decision") in {"accepted", "rejected"}:
+        return adjudication["decision"]
+    if audit.get("verdict") == "clean":
+        return "accepted"
+    return "unresolved"
 
 
 class HardcodingHit(BaseModel):
@@ -24,6 +37,8 @@ class HardcodingHit(BaseModel):
     literal: str | None = None
     used_as: str | None = None
     severity: Literal["suspicious", "confirmed"] | None = None
+    affected_claim_ids: list[str] = []
+    dependency_scope: Literal["isolated", "shared_computation", "unknown"] = "unknown"
 
 
 class HardcodingAudit(BaseModel):
@@ -53,18 +68,31 @@ def hardcoding_audit(
     """Return (audit dict for the trace, ledger id)."""
     if not script.strip():
         return {"verdict": "not_run", "hits": [], "note": "no analysis script found"}, None
+    import json
+    source_roles = {}
+    claim_path = paths.run_dir(paper_id, 0) / "claims.json"
+    if claim_path.exists():
+        source_roles = {c["claim_id"]: c.get("quantity_role", "unknown") for c in json.loads(claim_path.read_text())}
     prompt = fill(
         "stage1_hardcoding_audit",
-        script=script[:MAX_SCRIPT_CHARS],
-        results=results[:MAX_RESULTS_CHARS] or "(no results file)",
+        script=script,
+        results=results or "(no results file)",
     )
-    r = llm.call(
+    prompt += "\nCanonical quantity provenance roles (independent of replica identity):\n" + json.dumps(source_roles, sort_keys=True)
+    from .. import review_backend
+    review_call = review_backend.call
+    r = review_call(
         step, prompt, paper_id=paper_id, stage=stage, tier="cheap", schema=HardcodingAudit
     )
     if r.parsed is None:
         return {"verdict": "not_run", "hits": [], "note": f"audit call failed: {r.error}"}, r.ledger_id
     out = r.parsed.model_dump()
+    out["policy_version"] = "quantity-provenance-1"
+    out["source_roles"] = source_roles
     out["prompt_version"] = artifacts.prompt_version("stage1_hardcoding_audit")
+    out["coverage"] = {"full_script": True, "script_chars": len(script),
+                       "results_chars_seen": len(results),
+                       "results_chars_total": len(results)}
     return out, r.ledger_id
 
 
@@ -76,7 +104,8 @@ def fix_severity(
         return fixes, None
     listing = "\n".join(f"{i}. {f.description}" for i, f in enumerate(fixes))
     prompt = fill("stage1_fix_severity", fixes=listing, contracts=contracts_text[:20_000])
-    r = llm.call(
+    from .. import review_backend
+    r = review_backend.call(
         "fix_severity", prompt, paper_id=paper_id, stage="1", tier="cheap", schema=FixRatings
     )
     if r.parsed is None:

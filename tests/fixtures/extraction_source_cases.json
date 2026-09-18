@@ -1,0 +1,447 @@
+{
+  "provenance": "Frozen development extractor output; not independent gold",
+  "a": [
+    {
+      "claim_id": "c008",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "t",
+      "value": 4.71,
+      "comparator": "=",
+      "precision": 2,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "Section 3.2 Results",
+        "cell": "Processing speed v / paired t test, df = 27"
+      },
+      "description": "\"revealed an increase in processing speed, v, t(27) = 4.71\" \u2014 paired t test comparing processing speed v between the 85 dB cue condition and the no cue condition in Experiment 1.",
+      "analysis_label": "Experiment 1 TVA modeling with paired t-tests (no cue vs 85 dB cue)",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c009",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "p_value",
+      "value": 0.001,
+      "comparator": "<",
+      "precision": 3,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "Section 3.2 Results",
+        "cell": "Processing speed v / paired t test"
+      },
+      "description": "p < 0.001 for the paired t test showing an increase in processing speed v (t(27) = 4.71) in the 85 dB cue condition vs no cue.",
+      "analysis_label": "Experiment 1 TVA modeling with paired t-tests (no cue vs 85 dB cue)",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c010",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "d",
+      "value": 0.89,
+      "comparator": "=",
+      "precision": 2,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "Section 3.2 Results",
+        "cell": "Processing speed v / effect size"
+      },
+      "description": "\"dz = 0.89\" \u2014 standardized effect size for the increase in processing speed v (85 dB cue vs no cue) in Experiment 1.",
+      "analysis_label": "Experiment 1 TVA modeling with paired t-tests (no cue vs 85 dB cue)",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c011",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "t",
+      "value": 3.52,
+      "comparator": "=",
+      "precision": 2,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "Section 3.2 Results",
+        "cell": "Perceptual threshold t0 / paired t test, df = 27"
+      },
+      "description": "\"a decrease in the perceptual threshold t0, t(27) = 3.52\" \u2014 paired t test comparing perceptual threshold t0 between the 85 dB cue condition and the no cue condition in Experiment 1.",
+      "analysis_label": "Experiment 1 TVA modeling with paired t-tests (no cue vs 85 dB cue)",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c012",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "p_value",
+      "value": 0.002,
+      "comparator": "=",
+      "precision": 3,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "Section 3.2 Results",
+        "cell": "Perceptual threshold t0 / paired t test"
+      },
+      "description": "p = 0.002 for the paired t test showing a decrease in perceptual threshold t0 (t(27) = 3.52) when a 85 dB cue was presented prior to the letter.",
+      "analysis_label": "Experiment 1 TVA modeling with paired t-tests (no cue vs 85 dB cue)",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c013",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "d",
+      "value": 0.67,
+      "comparator": "=",
+      "precision": 2,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "Section 3.2 Results",
+        "cell": "Perceptual threshold t0 / effect size"
+      },
+      "description": "\"dz = 0.67\" \u2014 standardized effect size for the decrease in perceptual threshold t0 (85 dB cue vs no cue) in Experiment 1.",
+      "analysis_label": "Experiment 1 TVA modeling with paired t-tests (no cue vs 85 dB cue)",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c016",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "supporting",
+      "quantity_kind": "t",
+      "value": 1.24,
+      "comparator": "=",
+      "precision": 2,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "Section 3.2 Results",
+        "cell": "Guessing parameter / paired t test, df = 27"
+      },
+      "description": "\"t(27) = 1.24\" \u2014 paired t test comparing the guessing parameter between the no cue and 85 dB cue conditions; no significant difference was found.",
+      "analysis_label": "Experiment 1 TVA modeling with paired t-tests (no cue vs 85 dB cue)",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c017",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "supporting",
+      "quantity_kind": "p_value",
+      "value": 0.23,
+      "comparator": "=",
+      "precision": 2,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "Section 3.2 Results",
+        "cell": "Guessing parameter / paired t test"
+      },
+      "description": "p = 0.23 for the paired t test on the guessing parameter between conditions (no significant difference).",
+      "analysis_label": "Experiment 1 TVA modeling with paired t-tests (no cue vs 85 dB cue)",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c018",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "supporting",
+      "quantity_kind": "percent",
+      "value": 98.0,
+      "comparator": "=",
+      "precision": 0,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "Section 3.2 Results",
+        "cell": null
+      },
+      "description": "\"For both conditions, the model explained on average 98% of the variance in the data.\" \u2014 variance explained by the TVA model in Experiment 1.",
+      "analysis_label": "Experiment 1 TVA modeling with paired t-tests (no cue vs 85 dB cue)",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c063",
+      "study_id": "study3",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "p_value",
+      "value": 0.001,
+      "comparator": "=",
+      "precision": 3,
+      "uncertainty": null,
+      "location": {
+        "page": 6,
+        "kind": "text",
+        "label": "Section 5.2 Results (Experiment 3)",
+        "cell": null
+      },
+      "description": "p = 0.001 for the paired t test of processing speed (v), no cue vs 40 dB cue.",
+      "analysis_label": "Experiment 3 paired t tests on TVA processing speed (v)",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c120",
+      "study_id": "study3",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "p_value",
+      "value": 0.001,
+      "comparator": "<",
+      "precision": 3,
+      "uncertainty": null,
+      "location": {
+        "page": 7,
+        "kind": "text",
+        "label": "Section 5.2 Results (Experiment 3, late window)",
+        "cell": null
+      },
+      "description": "p < 0.001 for the paired t test of late-window peak pupil dilation, no cue vs 40 dB cue.",
+      "analysis_label": "Experiment 3 peak pupil dilation, late window (800-2000 ms)",
+      "page_corrected": null
+    }
+  ],
+  "b": [
+    {
+      "claim_id": "c008",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "t",
+      "value": 4.71,
+      "comparator": "=",
+      "precision": 2,
+      "uncertainty": "t(27)",
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "3.2 Results",
+        "cell": null
+      },
+      "description": "Paired t tests revealed an increase in processing speed v when an 85 dB cue was presented prior to the target letter, t(27) = 4.71.",
+      "analysis_label": "Experiment 1 paired t tests of TVA parameters",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c009",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "p_value",
+      "value": 0.001,
+      "comparator": "<",
+      "precision": 3,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "3.2 Results",
+        "cell": null
+      },
+      "description": "Paired t tests revealed an increase in processing speed v when an 85 dB cue was presented prior to the target letter, p < 0.001.",
+      "analysis_label": "Experiment 1 paired t tests of TVA parameters",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c010",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "d",
+      "value": 0.89,
+      "comparator": "=",
+      "precision": 2,
+      "uncertainty": "dz",
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "3.2 Results",
+        "cell": null
+      },
+      "description": "Paired t tests revealed an increase in processing speed v when an 85 dB cue was presented prior to the target letter, dz = 0.89.",
+      "analysis_label": "Experiment 1 paired t tests of TVA parameters",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c011",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "t",
+      "value": 3.52,
+      "comparator": "=",
+      "precision": 2,
+      "uncertainty": "t(27)",
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "3.2 Results",
+        "cell": null
+      },
+      "description": "Paired t tests revealed a decrease in perceptual threshold t0 when an 85 dB cue was presented prior to the target letter, t(27) = 3.52.",
+      "analysis_label": "Experiment 1 paired t tests of TVA parameters",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c012",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "p_value",
+      "value": 0.002,
+      "comparator": "=",
+      "precision": 3,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "3.2 Results",
+        "cell": null
+      },
+      "description": "Paired t tests revealed a decrease in perceptual threshold t0 when an 85 dB cue was presented prior to the target letter, p = 0.002.",
+      "analysis_label": "Experiment 1 paired t tests of TVA parameters",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c013",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "d",
+      "value": 0.67,
+      "comparator": "=",
+      "precision": 2,
+      "uncertainty": "dz",
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "3.2 Results",
+        "cell": null
+      },
+      "description": "Paired t tests revealed a decrease in perceptual threshold t0 when an 85 dB cue was presented prior to the target letter, dz = 0.67.",
+      "analysis_label": "Experiment 1 paired t tests of TVA parameters",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c016",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "supporting",
+      "quantity_kind": "t",
+      "value": 1.24,
+      "comparator": "=",
+      "precision": 2,
+      "uncertainty": "t(27)",
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "3.2 Results",
+        "cell": null
+      },
+      "description": "No significant difference was found between conditions for the guessing parameter, t(27) = 1.24.",
+      "analysis_label": "Experiment 1 guessing-parameter comparison",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c017",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "supporting",
+      "quantity_kind": "p_value",
+      "value": 0.23,
+      "comparator": "=",
+      "precision": 2,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "3.2 Results",
+        "cell": null
+      },
+      "description": "No significant difference was found between conditions for the guessing parameter, p = 0.23.",
+      "analysis_label": "Experiment 1 guessing-parameter comparison",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c018",
+      "study_id": "study1",
+      "claim_type": "scalar",
+      "importance": "supporting",
+      "quantity_kind": "percent",
+      "value": 98.0,
+      "comparator": "=",
+      "precision": 0,
+      "uncertainty": null,
+      "location": {
+        "page": 4,
+        "kind": "text",
+        "label": "3.2 Results",
+        "cell": null
+      },
+      "description": "For both conditions, the model explained on average 98% of the variance in the data.",
+      "analysis_label": "Experiment 1 TVA model fit",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c052",
+      "study_id": "study3",
+      "claim_type": "scalar",
+      "importance": "headline",
+      "quantity_kind": "p_value",
+      "value": 0.001,
+      "comparator": "<",
+      "precision": 3,
+      "uncertainty": null,
+      "location": {
+        "page": 6,
+        "kind": "text",
+        "label": null,
+        "cell": null
+      },
+      "description": "Paired t tests between the no cue and 40 dB cue conditions, p < 0.001.",
+      "analysis_label": "Experiment 3 paired comparisons",
+      "page_corrected": null
+    },
+    {
+      "claim_id": "c094",
+      "study_id": "study3",
+      "claim_type": "scalar",
+      "importance": "supporting",
+      "quantity_kind": "p_value",
+      "value": 0.001,
+      "comparator": "=",
+      "precision": 3,
+      "uncertainty": null,
+      "location": {
+        "page": 7,
+        "kind": "text",
+        "label": null,
+        "cell": null
+      },
+      "description": "Paired t test comparing late-window peak pupil dilation between the no cue and 40 dB cue conditions, p = 0.001.",
+      "analysis_label": "Experiment 3 late-window pupil dilation",
+      "page_corrected": null
+    }
+  ]
+}

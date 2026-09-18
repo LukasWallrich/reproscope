@@ -76,8 +76,12 @@ def classify_design(
     text = " ".join(x for x in (model_type, formula) if x)
     if not text.strip():
         return None
-    if _PAIRED.search(text):
+    if re.search(r"anova|interaction|mixed|cluster|multilevel|factorial", text, re.I):
+        return None
+    if re.search(r"paired[- ]?\s*t[- ]?\s*test|matched[- ]pairs?\s*t", text, re.I):
         return PAIRED
+    if _PAIRED.search(text):
+        return None
     if _TWO_GROUP.search(text):
         # power.t.test covers a two-group test only without covariates.
         return TWO_GROUP if n_covariates == 0 else None
@@ -167,10 +171,52 @@ def compute(
     *,
     script_path: Path,
     n_per_group: int | None = None,
+    group_ns: list[int] | None = None,
     metric: str = "Cohen's d",
     extra_assumptions: list[str] | None = None,
+    alternative: str = "two-sided",
 ) -> dict[str, Any]:
     """Power curve and 80%-power MDE for one of the covered designs."""
+    if alternative not in {"two-sided", "greater", "less"}:
+        raise MdeError("power requires a declared test direction")
+    if design == PAIRED:
+        from statsmodels.stats.power import TTestPower
+        power = TTestPower()
+        # Directional MDE is a magnitude in the declared direction.
+        opts = dict(nobs=n, alpha=ALPHA, alternative="larger" if alternative != "two-sided" else "two-sided")
+        effect = float(power.solve_power(power=TARGET_POWER, **opts))
+        return {"design": design, "method": "deterministic: paired difference-score noncentral t",
+                "n_analysed": n, "mde_standardised": effect, "mde_metric": "dz",
+                "alpha": ALPHA, "target_power": TARGET_POWER, "alternative": alternative,
+                "curve": [{"effect": e, "power": float(power.power(e, **opts))} for e in EFFECTS],
+                "assumptions": ["independent participant differences; paired t sampling model",
+                                f"declared alternative: {alternative}"] + (extra_assumptions or []),
+                "caveats": ["MDE is a magnitude; direction is the declared alternative."]}
+    if design == TWO_GROUP and group_ns:
+        from statsmodels.stats.power import TTestIndPower
+
+        if len(group_ns) != 2 or min(group_ns) < 2 or sum(group_ns) != n:
+            raise MdeError("two-group power needs two counts summing to analysis n")
+        n1, n2 = group_ns
+        power = TTestIndPower()
+        opts = dict(nobs1=n1, ratio=n2 / n1, alpha=ALPHA, alternative="larger" if alternative != "two-sided" else "two-sided")
+        return {
+            "design": design, "method": "deterministic: statsmodels TTestIndPower",
+            "n_analysed": n, "group_ns": group_ns,
+            "n_per_group": n1 if n1 == n2 else None,
+            "alpha": ALPHA, "target_power": TARGET_POWER,
+            "mde_standardised": round(float(power.solve_power(power=TARGET_POWER, **opts)), 4),
+            "mde_metric": "Cohen's d",
+            "curve": [{"effect": e, "power": round(float(power.power(e, **opts)), 4)} for e in EFFECTS],
+            "assumptions": ["independent groups; equal population variances; no covariates",
+                            f"group counts = {n1}, {n2}; alpha = .05; alternative = {alternative}",
+                            "standardisation uses the pooled within-group SD"] + (extra_assumptions or []),
+            "caveats": ["Power is conditional on the declared sampling model and sample."],
+        }
+    if design == CORRELATION and alternative != "two-sided":
+        raise MdeError("directional correlation power adapter not implemented")
+    if design == TWO_GROUP and not group_ns and n_per_group is None:
+        raise MdeError("independent-group power requires explicit group counts")
     if design == CORRELATION and not has_pwr() and not install_pwr():
         raise MdeError("R package `pwr` is required for the correlation design and is not installed")
     if design == TWO_GROUP and n_per_group is None:

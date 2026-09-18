@@ -1,0 +1,14 @@
+{
+  "name": "development-v2",
+  "purpose": "Pipeline development; these repeatedly inspected cases do not establish held-out validity.",
+  "papers": [
+    {"paper_id": "Hertel_ClinPsychSci_2018_YabW", "run_id": "Hertel_ClinPsychSci_2018_YabW_v2", "split": "development", "replicas": ["opus_1", "fable_1", "luna_1", "luna_2", "glm_1", "glm_2", "deepseek_1", "deepseek_2"]},
+    {"paper_id": "Ohtsubo_EvoHumanBehavior_2014_zlm2", "run_id": "Ohtsubo_EvoHumanBehavior_2014_zlm2_v2", "split": "development", "replicas": ["opus_1", "fable_1", "luna_1", "luna_2", "glm_1", "glm_2", "deepseek_1", "deepseek_2"]},
+    {"paper_id": "Petersen_Cognition_2017_yJwG", "run_id": "Petersen_Cognition_2017_yJwG_v2", "split": "development", "replicas": ["opus_1", "fable_1", "luna_1", "luna_2", "glm_1", "glm_2", "deepseek_1", "deepseek_2"]}
+  ],
+  "exclusions": [
+    {"paper_id": "Hurst_EvoHumanBehavior_2017_yypJ", "reason": "No v2 run yet; original run excluded from this cohort."},
+    {"paper_id": "Axt_JournExpSocPsych_2018_zK2", "reason": "No v2 run yet; original run excluded from this cohort."}
+  ],
+  "retry_policy": "Count every ledger attempt in observed costs; planned replica requests remain fixed."
+}

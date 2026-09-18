@@ -1,0 +1,61 @@
+# Validated inexpensive profile: Haiku and metered Luna replicas.
+# Sonnet handles selected source tasks and explicitly enabled bounded repairs.
+# Focused Fable recipe adjudication is opt-in through the documented environment flag.
+contract_strategy = "chunked"
+descriptive_readouts = true
+scoped_multiverse = false
+multiverse_min_active_dimensions = 5
+
+[tiers.vision_a]
+route = "claude_p"
+model = "sonnet"
+[tiers.vision_b]
+route = "openrouter"
+model = "openai/gpt-5.6-luna"
+[tiers.arbiter]
+route = "claude_p"
+model = "haiku"
+[tiers.cheap]
+route = "claude_p"
+model = "haiku"
+[tiers.mid]
+route = "codex"
+model = "gpt-5.6-luna"
+[tiers.strong]
+route = "claude_p"
+model = "haiku"
+[tiers.strong_alt]
+route = "codex"
+model = "gpt-5.6-luna"
+[replicas.haiku]
+route = "claude_p"
+model = "haiku"
+generation_mode = "tool_free"
+runs = 1
+[replicas.luna]
+route = "openrouter"
+model = "openai/gpt-5.6-luna"
+generation_mode = "tool_free"
+runs = 1
+[executor]
+route = "claude_p"
+model = "haiku"
+generation_mode = "tool_free"
+
+[shadow_prices]
+"gpt-5.6-luna" = 0.2
+
+# Escalate only records still failing source validation after cheap arbitration.
+[tiers.source_repair]
+route = "claude_p"
+model = "sonnet"
+
+# Contract construction after Haiku omitted most required assignments.
+[tiers.contracts]
+route = "codex"
+model = "gpt-5.6-luna"
+
+# Only repair failed source-to-analysis identities with Sonnet.
+[tiers.contract_repair]
+route = "claude_p"
+model = "sonnet"

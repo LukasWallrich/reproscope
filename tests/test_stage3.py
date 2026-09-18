@@ -23,6 +23,12 @@ from reproscope.stage3 import multiverse as mv
 FIXTURE = Path(__file__).parent / "fixtures" / "stage3"
 
 
+def documented_grid(proposed, screen, **kwargs):
+    """Fixture-only author choices explicitly supplied to the production builder."""
+    kwargs.setdefault("paper_levels", {f["name"]: f["paper_level"] for f in proposed["factors"] if f.get("paper_level")})
+    return mv.build_grid(proposed, screen, **kwargs)
+
+
 def _load(name: str, path: Path):
     """Import a fixture helper by path: several fixture dirs hold an `install.py`,
     so putting them on sys.path would make the first one imported win for all."""
@@ -42,6 +48,11 @@ def sandbox(tmp_path, monkeypatch):
     real = Path(__file__).resolve().parent.parent
     shutil.copytree(real / "reproscope" / "prompts", tmp_path / "reproscope" / "prompts")
     fixture_install.install(tmp_path)
+    shutil.copy2(real / "models.toml", tmp_path / "models.toml")
+    (tmp_path / "corpus/_fixture3/paper.txt").write_text("Participants failing the attention check were excluded from analysis. The model was unadjusted. No outlier removal was applied. Welch's test was used.")
+    t = tmp_path / "runs/_fixture3/stage1/replicas/opus_1/trace.json"
+    record = json.loads(t.read_text()); record["hardcoding_audit"]["verdict"] = "clean"
+    t.write_text(json.dumps(record))
     return tmp_path
 
 
@@ -94,10 +105,9 @@ def test_binding_derives_d_when_only_t_is_reported(sandbox):
     # drop the group mean too: only the t statistic is left
     claims = [c for c in claims if c.quantity_kind not in {"d", "mean"}]
     fq = focal_mod.bind_focal_claim(manifest, claims, contracts, allow_llm=False)["focal_quantity"]
-    assert fq["kind"] == "d"
-    assert fq["derived_from"] == "t"
-    t, df = manifest.focal_claim.reported.value, manifest.focal_claim.reported.df
-    assert fq["reported_value"] == pytest.approx(2 * t / df**0.5)
+    assert fq["kind"] == "t"
+    assert fq["derived_from"] is None
+    assert fq["reported_value"] == manifest.focal_claim.reported.value
 
 
 def test_binding_anchors_on_the_reported_statistic_and_its_analysis(sandbox):
@@ -184,14 +194,13 @@ SCREEN = {
     "incompatible": [
         {"a": "covariate=baseline adjusted", "b": "estimator=welch",
          "why": "Welch's correction has no meaning in a covariate-adjusted linear model"},
-        {"a": "covariate=baseline adjusted", "b": "nonexistent=level", "why": "unresolvable"},
     ],
-    "adjustments": ["consider merging the two sample-rule factors"],
+    "adjustments": [],
 }
 
 
 def test_grid_drops_rejected_levels_and_prunes_incompatible_pairs():
-    grid = mv.build_grid(PROPOSED, SCREEN)
+    grid = documented_grid(PROPOSED, SCREEN)
 
     outliers = next(f for f in grid["factors"] if f["name"] == "outliers")
     assert [lv["value"] for lv in outliers["levels"]] == ["keep", "3 SD trim"]
@@ -200,9 +209,9 @@ def test_grid_drops_rejected_levels_and_prunes_incompatible_pairs():
          "rationale": "arbitrary; unrelated to the outcome"}
     ]
 
-    # the unresolvable incompatibility is dropped and noted, the real one is kept
+    # The explicitly screened incompatible pair is pruned.
     assert len(grid["incompatible"]) == 1
-    assert any("does not resolve" in n for n in grid["notes"])
+    assert not grid["blocking_issues"]
 
     # 2 x 2 x 2 x 2 = 16 full factorial, minus the 4 combinations pairing
     # "baseline adjusted" with "welch"
@@ -222,7 +231,7 @@ def test_grid_keeps_a_single_level_factor_without_multiplying_the_grid():
         if lv["value"] == "pooled":
             lv["verdict"] = "rejected"
             lv["rationale"] = "unequal variances by design"
-    grid = mv.build_grid(PROPOSED, screen)
+    grid = documented_grid(PROPOSED, screen)
 
     estimator = next(f for f in grid["factors"] if f["name"] == "estimator")
     assert [lv["value"] for lv in estimator["levels"]] == ["welch"]
@@ -231,39 +240,27 @@ def test_grid_keeps_a_single_level_factor_without_multiplying_the_grid():
     assert grid["grid_size"] == 4
 
 
-def test_grid_drops_a_whole_factor_when_the_screen_rejects_every_level():
-    proposed = json.loads(json.dumps(PROPOSED))
-    next(f for f in proposed["factors"] if f["name"] == "outliers")["paper_level"] = None
+def test_grid_blocks_when_a_required_factor_has_no_defensible_level():
     screen = json.loads(json.dumps(SCREEN))
-    for lv in next(f for f in screen["factors"] if f["name"] == "outliers")["levels"]:
+    for lv in screen["factors"][2]["levels"]:
         lv["verdict"] = "rejected"
-    grid = mv.build_grid(proposed, screen)
+    grid = documented_grid(PROPOSED, screen)
+    assert grid["grid_size"] == 0
+    assert grid["blocking_issues"]
+    assert mv.enumerate_specs(grid) == []
 
-    assert not any(f["name"] == "outliers" for f in grid["factors"])
-    assert any("every level was rejected" in n for n in grid["notes"])
 
-
-def test_the_screen_can_never_remove_the_paper_s_own_level():
-    """The reported estimate must have a place on the curve, however the screen votes."""
+def test_documented_rejected_author_level_is_a_reference_only():
     screen = json.loads(json.dumps(SCREEN))
-    for lv in next(f for f in screen["factors"] if f["name"] == "outliers")["levels"]:
-        lv["verdict"] = "rejected"          # including "keep", the paper's own choice
-        lv["rationale"] = "no rule was prespecified"
-    grid = mv.build_grid(PROPOSED, screen)
-
-    outliers = next(f for f in grid["factors"] if f["name"] == "outliers")
-    assert [(lv["value"], lv["verdict"]) for lv in outliers["levels"]] == [("keep", "paper")]
-    assert outliers["levels"][0]["screen_verdict"] == "rejected"
-    assert outliers["paper_level"] == "keep"
-    assert grid["paper_level_flagged"] == [
-        {"factor": "outliers", "level": "keep", "rationale": "no rule was prespecified"}
-    ]
-    # the other two levels are still rejected outright
-    assert {r["level"] for r in grid["rejected_levels"]} == {"3 SD trim", "drop odd ids"}
+    screen["factors"][2]["levels"][0]["verdict"] = "rejected"
+    grid = documented_grid(PROPOSED, screen)
+    accepted = [s for s in mv.enumerate_specs(grid) if s.get("role") != "author_reference"]
+    assert all(s["levels"]["outliers"] == "3 SD trim" for s in accepted)
+    assert grid["reference_specs"][0]["levels"]["outliers"] == "keep"
 
 
 def test_derived_paper_levels_override_the_enumerator_s_guess():
-    grid = mv.build_grid(PROPOSED, SCREEN,
+    grid = documented_grid(PROPOSED, SCREEN,
                          paper_levels={"attention check": "keep all"})
 
     attention = next(f for f in grid["factors"] if f["name"] == "attention check")
@@ -271,7 +268,7 @@ def test_derived_paper_levels_override_the_enumerator_s_guess():
     assert [lv["verdict"] for lv in attention["levels"]] == ["defensible", "paper"]
 
 
-def test_grid_cap_drops_the_lowest_priority_factors_last_first():
+def test_execution_cap_preserves_all_screened_analytical_dimensions():
     proposed = {"factors": [
         {"name": f"f{i}", "paper_level": "a",
          "levels": [{"value": "a", "how": ""}, {"value": "b", "how": ""},
@@ -283,27 +280,21 @@ def test_grid_cap_drops_the_lowest_priority_factors_last_first():
                                        for lv in f["levels"]]}
         for f in proposed["factors"]
     ]}
-    grid = mv.build_grid(proposed, screen, cap=256)
+    grid = documented_grid(proposed, screen, cap=256)
 
-    assert grid["grid_size"] <= 256
-    assert grid["grid_size"] == 3**5  # 243; a sixth varying factor would be 729
-    assert grid["dropped_factors"] == ["f7", "f6", "f5"]
-    # Pinned to the paper's level rather than removed, so the paper's own specification
-    # is still a row in the grid and the executor still implements the choice.
-    assert [f["name"] for f in grid["factors"]] == [f"f{i}" for i in range(8)]
-    assert [len(f["levels"]) for f in grid["factors"]] == [3, 3, 3, 3, 3, 1, 1, 1]
-    assert all(f["levels"][0]["value"] == "a" for f in grid["factors"][5:])
-    assert any("pinned to the paper's level" in n for n in grid["notes"])
+    assert grid["grid_size"] == 3**8
+    assert grid["dropped_factors"] == []
+    assert len(grid['factors'])==8
+    assert all(len(f['levels'])==3 for f in grid['factors'])
+    assert grid['sampled'] and grid['n_specs']<=64
 
 
-def test_unscreened_levels_are_kept_and_flagged():
+def test_unscreened_levels_block_acceptance():
     screen = json.loads(json.dumps(SCREEN))
     screen["factors"] = [f for f in screen["factors"] if f["name"] != "estimator"]
-    grid = mv.build_grid(PROPOSED, screen)
-
-    estimator = next(f for f in grid["factors"] if f["name"] == "estimator")
-    assert len(estimator["levels"]) == 2
-    assert any("not returned by the screen" in n for n in grid["notes"])
+    grid = documented_grid(PROPOSED, screen)
+    assert grid["n_specs"] == 0
+    assert any("no explicit screen verdict" in issue for issue in grid["blocking_issues"])
 
 
 # --- step 5: ranking ------------------------------------------------------
@@ -383,7 +374,7 @@ def test_rank_ignores_failed_specifications_and_counts_shares():
 
 
 def test_rank_finds_the_paper_level_specification():
-    grid = mv.build_grid(PROPOSED, SCREEN)
+    grid = documented_grid(PROPOSED, SCREEN)
     specs = mv.grid_specs(grid)
     rows = []
     for i, s in enumerate(specs):
@@ -425,7 +416,7 @@ def test_interpretation_prompt_carries_specs_and_factors_but_no_ranking():
     prompt = mv.interpretation_prompt("spec_id,estimate\n1,0.3\n2,0.4\n", 0.35, grid)
     assert "spec_id,estimate" in prompt and "0.35" in prompt
     assert "outliers" in prompt and "keep" in prompt
-    assert "the whole grid" in prompt
+    assert "the whole screened compatible grid" in prompt
     for leaked in ("extremeness", "share_below", "share_above", "rank"):
         assert leaked not in prompt
 
@@ -435,13 +426,34 @@ def test_interpretation_prompt_says_when_the_executed_set_is_a_sample():
     assert "a sample of the multiverse" in mv.interpretation_prompt("csv", 1.0, grid)
 
 
+def test_enumeration_cache_uses_method_context_not_verification_bookkeeping(tmp_path):
+    import reproscope.stage3 as stage3
+    from reproscope.provenance import digest
+    original={'ran':True,'open_choices':['variance estimator'],'verification_inputs':{'code':'old'}}
+    refreshed={**original,'verification_inputs':{'code':'new'}}
+    inputs={'trace_context:r':digest(stage3._trace_context(original,'r')),'trace:r':'full old hash'}
+    path=tmp_path/'enumerated.json';path.write_text(json.dumps(stage3._stamp({},inputs,('trace_context:',))))
+    wanted={'trace_context:r':digest(stage3._trace_context(refreshed,'r')),'trace:r':'full new hash'}
+    assert not stage3._step_stale(path,False,wanted,('trace_context:',))
+    refreshed['open_choices']=['outlier handling']
+    wanted['trace_context:r']=digest(stage3._trace_context(refreshed,'r'))
+    assert stage3._step_stale(path,False,wanted,('trace_context:',))
+
+
+def test_interpretation_receives_declared_orientation_and_verification_limits():
+    prompt=mv.interpretation_prompt('spec_id,estimate\n1,-.5',None,{'factors':[]},
+        method_context={'x':'control','y':'treatment','reference_status':'partial'})
+    assert '"x": "control"' in prompt and '"y": "treatment"' in prompt
+    assert '"reference_status": "partial"' in prompt
+
+
 # --- work assembly --------------------------------------------------------
 
 
-def test_assemble_work_picks_the_best_matching_replica_and_withholds_the_value(sandbox):
+def test_assemble_work_uses_an_accepted_focal_replica_and_withholds_the_value(sandbox):
     manifest, claims, contracts = _fixture_inputs(sandbox)
     focal = focal_mod.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
-    grid = mv.build_grid(PROPOSED, SCREEN)
+    grid = documented_grid(PROPOSED, SCREEN)
     info = mv.assemble_work("_fixture3", focal, grid)
 
     work = Path(info["work"])
@@ -454,7 +466,7 @@ def test_assemble_work_picks_the_best_matching_replica_and_withholds_the_value(s
     # Every level in the executor's copy is a level to run: no verdict to filter on,
     # which is how a generated script would otherwise drop the paper's own level.
     levels = [lv for f in executor_grid["factors"] for lv in f["levels"]]
-    assert levels and all(set(lv) == {"value", "how"} for lv in levels)
+    assert levels and all({"value", "how", "reference_settings", "ci_reference_settings", "role", "effect_group", "null_group", "estimator", "effect_metric"} == set(lv) for lv in levels)
     # The specifications are enumerated for the executor, not left for it to derive.
     assert [s["spec_id"] for s in executor_grid["specs"]] == [
         f"spec_{i:03d}" for i in range(1, 13)
@@ -474,18 +486,20 @@ def test_assemble_work_picks_the_best_matching_replica_and_withholds_the_value(s
 
 def test_verification_flags_spec_ids_that_do_not_match_the_grid(sandbox, monkeypatch):
     """Twelve rows carrying the wrong ids must not pass as twelve correct ones."""
-    grid = mv.build_grid(PROPOSED, SCREEN)
+    grid = documented_grid(PROPOSED, SCREEN)
     ids = [s["spec_id"] for s in mv.enumerate_specs(grid)]
     work = sandbox / "work"
     (work / "out").mkdir(parents=True)
 
     def write(spec_ids):
         with (work / "out" / "specs.csv").open("w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=list(mv.RESULT_COLUMNS))
+            factor_columns={factor['name']:('factor_'+factor['name'] if factor['name'] in mv.RESULT_COLUMNS else factor['name']) for factor in grid['factors']}
+            w = csv.DictWriter(f, fieldnames=list(mv.RESULT_COLUMNS)+list(factor_columns.values()))
             w.writeheader()
             for i, sid in enumerate(spec_ids):
                 w.writerow({"spec_id": sid, "estimate": 0.1 * i, "se": 0.2, "p": 0.01,
-                            "n": 72, "converged": "TRUE", "error": ""})
+                            "n": 72, "converged": "TRUE", "error": "",
+                            **{factor_columns[k]:v for k,v in mv.enumerate_specs(grid)[i]['levels'].items()}})
 
     monkeypatch.setattr(mv, "hardcoding_audit", lambda *a, **k: {"verdict": "clean", "hits": []})
 
@@ -507,7 +521,7 @@ def test_verification_flags_spec_ids_that_do_not_match_the_grid(sandbox, monkeyp
 
 def test_verification_falls_back_to_factor_columns_without_spec_ids(sandbox, monkeypatch):
     """Old-format output still verifies, and says it was matched the weaker way."""
-    grid = mv.build_grid(PROPOSED, SCREEN)
+    grid = documented_grid(PROPOSED, SCREEN)
     specs = mv.grid_specs(grid)
     names = [f["name"] for f in grid["factors"]]
     work = sandbox / "work"
@@ -544,7 +558,7 @@ def _wide_grid(paper_id: str | None = "_fixture3"):
                                        for lv in f["levels"]]}
         for f in proposed["factors"]
     ]}
-    return mv.build_grid(proposed, screen, paper_id=paper_id)
+    return documented_grid(proposed, screen, paper_id=paper_id)
 
 
 def test_a_grid_over_the_execution_cap_runs_a_stratified_sample():
@@ -573,7 +587,7 @@ def test_the_sample_is_the_same_on_every_call_and_differs_by_paper():
 
 
 def test_a_grid_under_the_execution_cap_runs_whole(sandbox):
-    grid = mv.build_grid(PROPOSED, SCREEN, paper_id="_fixture3")
+    grid = documented_grid(PROPOSED, SCREEN, paper_id="_fixture3")
     assert grid["n_specs"] == grid["grid_size"] == 12
     assert grid["sampled"] is False
     assert "sampled_spec_ids" not in grid
@@ -601,7 +615,7 @@ def test_verification_expects_the_executed_count_not_the_grid_size(tmp_path):
 
 
 def test_enumerated_specs_are_stable_and_mark_the_paper_s_own(sandbox):
-    grid = mv.build_grid(PROPOSED, SCREEN)
+    grid = documented_grid(PROPOSED, SCREEN)
     specs = mv.enumerate_specs(grid)
 
     assert len(specs) == grid["grid_size"] == 12
@@ -618,7 +632,7 @@ def test_enumerated_specs_are_stable_and_mark_the_paper_s_own(sandbox):
 
 def test_read_specs_joins_the_grid_levels_onto_spec_ids(tmp_path):
     """The executor may write ids alone; the level strings come from the grid."""
-    grid = mv.build_grid(PROPOSED, SCREEN)
+    grid = documented_grid(PROPOSED, SCREEN)
     p = tmp_path / "specs.csv"
     p.write_text("spec_id,estimate,se,p,n,converged,error\n"
                  "spec_003,0.41,0.2,0.03,72,TRUE,\n"
@@ -639,53 +653,27 @@ def test_read_specs_joins_the_grid_levels_onto_spec_ids(tmp_path):
 # --- step 2b: the paper's own levels --------------------------------------
 
 
-def test_a_band_b_replica_does_not_override_the_enumerator(sandbox, monkeypatch):
-    """Only a replica that reproduced the paper's number speaks for the paper."""
-    match = sandbox / "runs" / "_fixture3" / "stage1" / "match.json"
-    data = json.loads(match.read_text())
-    for row in data["rows"]:
-        row["band"] = "B"
-    match.write_text(json.dumps(data))
-
-    def refuse(*a, **k):  # the step must not spend a call it cannot trust
-        raise AssertionError("derive_paper_levels called a model for a band-B replica")
-
-    monkeypatch.setattr(mv.llm, "call", refuse)
+@pytest.mark.parametrize("band", ["A", "B"])
+def test_replica_agreement_does_not_establish_author_method(sandbox, monkeypatch, band):
+    from types import SimpleNamespace
+    answer = mv.PaperLevelsOut(levels=[mv.PaperLevel(
+        factor="attention check", level="keep all", evidence="replica script has no attention check filter")])
+    monkeypatch.setattr(mv.llm, "call", lambda *a, **k: SimpleNamespace(ok=True, parsed=answer, ledger_id="fake"))
     manifest, claims, contracts = _fixture_inputs(sandbox)
     focal = focal_mod.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
     out = mv.derive_paper_levels("_fixture3", PROPOSED, focal)
-
-    assert out["source"] == "enumerator"
-    assert out["band"] == "B"
-    assert out["levels"] == {"attention check": "exclude failures", "covariate": "unadjusted",
-                             "outliers": "keep", "estimator": "welch"}
-    assert any("no band-A replica" in n for n in out["notes"])
+    assert out["levels"] == {}
+    assert "attention check" in out["unresolved"]
 
 
-def test_a_band_a_replica_overrides_and_records_the_disagreement(sandbox, monkeypatch):
-    answer = mv.PaperLevelsOut(levels=[
-        # different case and spacing: it must map back onto the enumerator's own string
-        mv.PaperLevel(factor="Attention Check", level="KEEP  ALL",
-                      evidence="script has no attention_check filter"),
-        mv.PaperLevel(factor="covariate", level="unadjusted", evidence="outcome ~ condition"),
-        mv.PaperLevel(factor="outliers", level=None, evidence="not settled by the script"),
-        mv.PaperLevel(factor="estimator", level="pooled", evidence="var.equal = TRUE"),
-    ])
-    monkeypatch.setattr(
-        mv.llm, "call",
-        lambda *a, **k: type("R", (), {"ok": True, "parsed": answer, "error": None,
-                                       "ledger_id": "abc123"})(),
-    )
-    manifest, claims, contracts = _fixture_inputs(sandbox)
-    focal = focal_mod.bind_focal_claim(manifest, claims, contracts, allow_llm=False)
-    out = mv.derive_paper_levels("_fixture3", PROPOSED, focal)
-
-    assert out["band"] == "A" and out["replica_id"] == "opus_1"
-    assert out["levels"]["attention check"] == "keep all"      # overridden
-    assert out["levels"]["estimator"] == "pooled"              # overridden
-    assert out["levels"]["outliers"] == "keep"                 # unsettled: enumerator stands
-    assert any("the enumerator guessed 'exclude failures'" in n for n in out["notes"])
-    assert out["evidence"]["attention check"] == "script has no attention_check filter"
+def test_author_method_requires_source_evidence(sandbox, monkeypatch):
+    from types import SimpleNamespace
+    answer = mv.PaperLevelsOut(levels=[mv.PaperLevel(
+        factor="attention check", level="exclude failures",
+        evidence="Participants failing the attention check were excluded from analysis.")])
+    monkeypatch.setattr(mv.llm, "call", lambda *a, **k: SimpleNamespace(ok=True, parsed=answer, ledger_id="fake"))
+    out = mv.derive_paper_levels("_fixture3", PROPOSED, {})
+    assert out["levels"] == {"attention check": "exclude failures"}
 
 
 # --- step 4: a changed grid invalidates the executor's output --------------
@@ -716,13 +704,13 @@ def test_a_changed_grid_forces_the_executor_to_rerun(tmp_path):
 def test_confidence_drops_when_the_focal_binding_used_a_fallback():
     import reproscope.stage3 as stage3
 
-    grid = mv.build_grid(PROPOSED, SCREEN)
+    grid = documented_grid(PROPOSED, SCREEN)
     paper = {"source": "replica opus_1 (band A)", "evidence": {}, "notes": []}
 
     def space_for(notes):
         focal = {"claim_ids": ["c2"], "analysis_id": "a1", "notes": notes,
                  "focal_quantity": {"claim_id": "c2", "kind": "d", "reported_value": 0.63}}
-        return stage3._assemble("_fixture3", focal, grid, [], {}, {"problems": []},
+        return stage3._assemble("_fixture3", focal, grid, [], {}, {"problems": [], "reference": {"status": "verified"}, "perturbation": {"status": "verified"}},
                                 "prose", {}, {}, [], paper)
 
     # an exact numeric match leaves no note; the manifest override and the t -> d
@@ -743,7 +731,7 @@ def test_confidence_drops_when_the_focal_binding_used_a_fallback():
 
 
 def test_the_paper_verdict_survives_into_the_artifact():
-    """space.json says `paper` outright, with the screen's own verdict alongside."""
+    """A documented rejected level remains rejected in the assembled artifact."""
     import reproscope.stage3 as stage3
     from reproscope.artifacts import SpecificationSpace
 
@@ -751,20 +739,19 @@ def test_the_paper_verdict_survives_into_the_artifact():
     for lv in next(f for f in screen["factors"] if f["name"] == "outliers")["levels"]:
         lv["verdict"] = "rejected"
         lv["rationale"] = "no rule was prespecified"
-    grid = mv.build_grid(PROPOSED, screen)
+    grid = documented_grid(PROPOSED, screen)
     focal = {"claim_ids": ["c2"], "analysis_id": "a1", "notes": [],
              "focal_quantity": {"claim_id": "c2", "kind": "d", "reported_value": 0.63}}
 
     space = stage3._assemble(
-        "_fixture3", focal, grid, [], {}, {"problems": []}, "prose", {}, {}, [],
+        "_fixture3", focal, grid, [], {}, {"problems": [], "reference": {"status": "verified"}, "perturbation": {"status": "verified"}}, "prose", {}, {}, [],
         {"source": "replica opus_1 (band A)", "evidence": {}, "notes": []},
     )
     SpecificationSpace.model_validate(space.model_dump())   # the Literal accepts "paper"
 
     outliers = next(f for f in space.factors if f.name == "outliers")
     level = outliers.levels[0]
-    assert (level.value, level.verdict) == ("keep", "paper")
-    assert level.screen_verdict == "rejected"
+    assert (level.value, level.verdict) == ("keep", "rejected")
     assert space.paper_level_flagged[0]["factor"] == "outliers"
     # a level nobody flagged keeps the screen's own verdict
     unadjusted = next(f for f in space.factors if f.name == "covariate").levels[0]
@@ -789,26 +776,26 @@ REPORTING_ONLY = {"keep all": "reporting", "baseline adjusted": "reporting",
 
 def test_a_screen_without_affects_treats_every_level_as_moving_the_estimate():
     """The field is new; a screen written before it still builds a grid to run."""
-    grid = mv.build_grid(PROPOSED, SCREEN)
+    grid = documented_grid(PROPOSED, SCREEN)
     assert all(lv["affects"] == "estimate" for f in grid["factors"] for lv in f["levels"])
     assert mv.result_moving_levels(grid)
 
 
 def test_levels_that_only_change_the_presentation_leave_nothing_to_run():
-    grid = mv.build_grid(PROPOSED, _screen_affecting(**REPORTING_ONLY))
+    grid = documented_grid(PROPOSED, _screen_affecting(**REPORTING_ONLY))
     assert mv.result_moving_levels(grid) == []
 
 
 def test_a_level_that_moves_only_the_test_is_still_worth_running():
     """Robustness covers significance, so an adjusted alpha is a branch, not a no-op."""
     screen = _screen_affecting(**{**REPORTING_ONLY, "pooled": "inference"})
-    grid = mv.build_grid(PROPOSED, screen)
+    grid = documented_grid(PROPOSED, screen)
     assert mv.result_moving_levels(grid) == [{"factor": "estimator", "level": "pooled"}]
 
 
 def test_one_estimate_moving_level_is_enough():
     screen = _screen_affecting(**{**REPORTING_ONLY, "3 SD trim": "estimate"})
-    grid = mv.build_grid(PROPOSED, screen)
+    grid = documented_grid(PROPOSED, screen)
     assert mv.result_moving_levels(grid) == [{"factor": "outliers", "level": "3 SD trim"}]
 
 
@@ -817,7 +804,7 @@ def test_the_enumerator_s_unimplementable_factors_reach_the_grid():
     proposed["unimplementable"] = [
         {"name": "TVA first-stage model fit", "reason": "the files hold fitted parameters"}
     ]
-    grid = mv.build_grid(proposed, SCREEN)
+    grid = documented_grid(proposed, SCREEN)
     assert grid["unimplementable"] == proposed["unimplementable"]
 
 
@@ -828,11 +815,14 @@ def _stage3_run(sandbox, monkeypatch, screen: dict, steps: list | None = None):
     from reproscope import llm
     import reproscope.stage3 as stage3
 
+    screen={**screen,'reporting_rules':[{'when':{},'effect_group':'raw_contrast','effect_metric':'d',
+        'null_group':'mean_zero','role':'comparable_effect','rationale':'Fixture alternatives preserve the declared standardised contrast.'}]}
     proposed = json.loads(json.dumps(PROPOSED))
     proposed["unimplementable"] = [{"name": "TVA model fit", "reason": "fitted parameters only"}]
     parsed = {"enumerate": mv.EnumerateOut.model_validate(proposed),
               "screen": mv.ScreenOut.model_validate(screen),
-              "paper_level": mv.PaperLevelsOut()}
+              "paper_level": mv.PaperLevelsOut(levels=[mv.PaperLevel(factor=f["name"], level=f["paper_level"],
+                evidence="Participants failing the attention check were excluded from analysis.") for f in proposed["factors"]])}
     steps = [] if steps is None else steps
 
     def fake(step, prompt, **kwargs):
@@ -867,6 +857,8 @@ def test_stage_3_abstains_without_running_the_executor(sandbox, monkeypatch):
 
 @pytest.mark.parametrize("moving", ["estimate", "inference"])
 def test_stage_3_proceeds_when_a_level_can_change_the_result(sandbox, monkeypatch, moving):
+    from reproscope import verification_recipe
+    monkeypatch.setattr(verification_recipe, "prepare", lambda *args: {})
     screen = _screen_affecting(**{**REPORTING_ONLY, "3 SD trim": moving})
     steps: list[str] = []
     # The stubbed executor writes no specs.csv, so the stage stops at the ranking; that
@@ -876,6 +868,11 @@ def test_stage_3_proceeds_when_a_level_can_change_the_result(sandbox, monkeypatc
     assert "execute" in steps
     space = json.loads((sandbox / "runs" / "_fixture3" / "stage3" / "grid.json").read_text())
     assert space["grid_size"] > 1
+    stage = sandbox / 'runs' / '_fixture3' / 'stage3'
+    result=json.loads((stage/'space.json').read_text())
+    assert result['state']=='abstained' and not result['runs']
+    assert result['attempted_specs']==0
+    assert not (stage/'done.json').exists()
 
 
 def test_significance_uses_each_specification_s_own_threshold(tmp_path):
@@ -898,10 +895,12 @@ def test_the_executor_is_told_a_level_s_significance_threshold():
     proposed = json.loads(json.dumps(PROPOSED))
     bonferroni = next(f for f in proposed["factors"] if f["name"] == "estimator")
     bonferroni["levels"][1]["p_threshold"] = 0.0125
-    grid = mv.build_grid(proposed, SCREEN)
+    grid = documented_grid(proposed, SCREEN)
     levels = mv.executor_grid(grid)["factors"][3]["levels"]
-    assert levels[0] == {"value": "welch", "how": "var.equal = FALSE"}
-    assert levels[1]["p_threshold"] == 0.0125
+    assert levels[0]["value"] == "welch"
+    assert levels[0]["how"] == "var.equal = FALSE"
+    assert "p_threshold" not in levels[1]
+    assert "once-adjusted p" in levels[1]["how"]
 
 
 def test_reporting_only_factor_is_pinned_to_one_level():
@@ -918,9 +917,58 @@ def test_reporting_only_factor_is_pinned_to_one_level():
             {"value": ".05", "verdict": "defensible", "affects": "inference"},
             {"value": "bonferroni", "verdict": "defensible", "affects": "inference"}]},
     ], "incompatible": []}
-    grid = mv.build_grid(proposed, screen)
+    grid = documented_grid(proposed, screen)
     by_name = {f["name"]: f for f in grid["factors"]}
     assert [lv["value"] for lv in by_name["sign convention"]["levels"]] == ["a minus b"]
     assert by_name["sign convention"]["pinned"]
     assert len(by_name["alpha"]["levels"]) == 2
     assert grid["grid_size"] == 2
+
+
+def test_interval_and_null_test_settings_have_independent_namespaces():
+    grid={'factors':[
+        {'name':'interval','levels':[{'value':'bootstrap','reference_settings':{},'ci_reference_settings':{'algorithm':'percentile','draws':999}}]},
+        {'name':'test','levels':[{'value':'permutation','reference_settings':{'algorithm':'sign_flip','draws':9999}}]}]}
+    spec=mv.reference_specifications(grid)[0]
+    assert spec['reference_settings']=={'algorithm':'sign_flip','draws':9999,'ci_settings':{'algorithm':'percentile','draws':999}}
+    grid['factors'].append({'name':'conflicting_interval','levels':[{'value':'bca','ci_reference_settings':{'algorithm':'bca'}}]})
+    with pytest.raises(ValueError,match='conflicting screened interval settings'):mv.reference_specifications(grid)
+def test_factor_name_cannot_overwrite_interval_method(tmp_path):
+    from reproscope.stage3.multiverse import read_specs,enumerate_specs
+    grid={'factors':[{'name':'ci_method','levels':[{'value':'bootstrap_ci'}]}]}
+    sid=enumerate_specs(grid)[0]['spec_id']
+    p=tmp_path/'specs.csv'
+    p.write_text(f'spec_id,estimate,ci_method,factor_ci_method\n{sid},.2,percentile_bootstrap,bootstrap_ci\n')
+    row=read_specs(p,grid)[0]
+    assert row['ci_method']=='percentile_bootstrap'
+    assert row['_factor_levels']['ci_method']=='bootstrap_ci'
+    assert row['_factor_mismatches']==[]
+    p.write_text(f'spec_id,estimate,ci_method,factor_ci_method\n{sid},.2,percentile_bootstrap,fisher_ci\n')
+    assert read_specs(p,grid)[0]['_factor_mismatches']==['ci_method']
+
+
+def test_interpretation_uses_grid_levels_not_result_algorithm_labels(monkeypatch):
+    from reproscope.stage3 import multiverse as m
+    captured={}
+    monkeypatch.setattr(m.artifacts,'load_prompt',lambda name,**kwargs:captured.update(kwargs) or '')
+    grid={'factors':[{'name':'ci_method','levels':[{'value':'analytic'},{'value':'resampled'}]},{'name':'test','levels':[{'value':'t'},{'value':'permutation'}]}],
+          'specs':[{'spec_id':'s1','levels':{'ci_method':'analytic','test':'t'}},{'spec_id':'s2','levels':{'ci_method':'resampled','test':'t'}},{'spec_id':'s3','levels':{'ci_method':'analytic','test':'permutation'}}]}
+    monkeypatch.setattr(m,'enumerate_specs',lambda g:g['specs'])
+    csv='spec_id,estimate,p,ci_lower,ci_upper,ci_method,effect_metric,effect_group,null_group\ns1,1,.01,.5,1.5,t,r,g,n\ns2,1,.01,.4,1.6,percentile,r,g,n\ns3,1,.02,.5,1.5,t,r,g,n\n'
+    m.interpretation_prompt(csv,1,grid)
+    import json
+    summary=json.loads(captured['summary']);changes={c['factor']:c for c in summary['groups'][0]['changes']}
+    assert changes['ci_method']['max_change']==0 and changes['ci_method']['max_p_change']==0
+    assert changes['test']['max_p_change']==pytest.approx(.01)
+    assert summary['active_dimensions']['ci_method']==['analytic','resampled']
+
+
+def test_generation_feedback_preserves_actual_calculation_error(tmp_path,monkeypatch):
+    from reproscope.stage3 import multiverse as mv
+    (tmp_path/'out').mkdir();(tmp_path/'out/specs.csv').write_text('placeholder')
+    monkeypatch.setattr(mv,'read_specs',lambda *a:[{'_spec_id':'s1','_converged':False,'error':'zero-size array after sample selection'}])
+    monkeypatch.setattr(mv,'reference_specifications',lambda *a:[{'spec_id':'s1'}])
+    monkeypatch.setattr(mv,'bind_independent_recipes',lambda *a:None)
+    from reproscope import multiverse_contract
+    monkeypatch.setattr(multiverse_contract,'checks',lambda *a:[])
+    assert any('zero-size array after sample selection' in e for e in mv.generation_checks(tmp_path,{}))

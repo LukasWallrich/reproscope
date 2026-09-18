@@ -177,6 +177,15 @@ def test_forbidden_strings_skip_degrees_of_freedom():
         assert df not in forbidden
 
 
+def test_uncertainty_df_labels_do_not_exempt_real_result_values():
+    assert leakcheck._uncertainty_numbers({"reported": "df=24; SE=0.82", "df": 31,
+                                          "ci": [0.12, 0.45]}) == [0.82, 0.12, 0.45]
+    assert leakcheck._uncertainty_numbers("df1 = 1; df2: 27.4; SD=24") == [24.0]
+    forbidden, _ = leakcheck.forbidden_strings([claim(value=24, precision=0,
+                                                      uncertainty={"reported": "df=24"})])
+    assert "24" in forbidden  # A statistic of 24 still leaks; this is not a value whitelist.
+
+
 # --- the scan -------------------------------------------------------------
 
 
@@ -338,6 +347,13 @@ def record(**kw):
     return artifacts.ClaimRecord.model_validate(claim(**kw))
 
 
+def atomic_contract(**kwargs):
+    kwargs.setdefault("claim_ids", ["c001"])
+    kwargs.setdefault("identity", contracts.AnalysisIdentity(study="study1", outcome="intimacy",
+                       contrast="condition", model="paired_t", sample="complete"))
+    return contracts.SlimContract(**kwargs)
+
+
 PAPER = "Participants were 40 students. Intimacy differed by condition, t(27) = 5.91, p < .001."
 
 
@@ -350,7 +366,7 @@ def test_combined_call_writes_contracts_and_methods(stage0_root, monkeypatch):
             text="",
             parsed=contracts.ContractsAndMethods(
                 contracts=[
-                    contracts.SlimContract(
+                    atomic_contract(
                         analysis_id="a01",
                         analysis_label="intimacy by condition",
                         model_type="paired t test",
@@ -382,6 +398,39 @@ def test_combined_call_writes_contracts_and_methods(stage0_root, monkeypatch):
     assert calls == [] and ledger == [] and [c.analysis_id for c in again] == ["a01"]
 
 
+def test_contract_identity_repair_is_bounded_and_preserves_all_claims(stage0_root, monkeypatch):
+    calls = []
+
+    def fake_call(step, prompt, **kw):
+        calls.append(step)
+        contract = atomic_contract(analysis_id="a01", claim_ids=[] if len(calls) == 1 else ["c001"])
+        from reproscope.stage0.contract_repairs import ContractRepair
+        parsed = contracts.ContractsAndMethods(contracts=[contract], redacted_methods="# Methods\nParticipants were 40 students.") if len(calls) == 1 else ContractRepair(contracts=[contract])
+        return llm.LLMResult(text="", parsed=parsed, ledger_id=f"L{len(calls)}")
+
+    monkeypatch.setattr(llm, "call", fake_call)
+    records, ledger = contracts.run(Manifest(), [record()], PAPER, {})
+    assert calls == ["contracts", "contracts:identity_repair"]
+    assert records[0].claim_ids == ["c001"] and ledger == ["L1", "L2"]
+
+
+def test_contract_identity_repair_failure_never_publishes_contracts(stage0_root, monkeypatch):
+    calls = []
+
+    def fake_call(step, prompt, **kw):
+        calls.append(step)
+        from reproscope.stage0.contract_repairs import ContractRepair
+        parsed = contracts.ContractsAndMethods(contracts=[atomic_contract(analysis_id="a01", claim_ids=[])], redacted_methods="# Methods\nParticipants were 40 students.") if len(calls) == 1 else ContractRepair()
+        return llm.LLMResult(text="", parsed=parsed, ledger_id="L")
+
+    monkeypatch.setattr(llm, "call", fake_call)
+    with pytest.raises(llm.LLMError, match="invalid analysis identities"):
+        contracts.run(Manifest(), [record()], PAPER, {})
+    assert len(calls) == 3
+    assert not (paths.run_dir("_p", 0) / "contracts.json").exists()
+    assert (paths.run_dir("_p", 0) / "invalid_contracts.json").exists()
+
+
 def test_leak_repair_sends_only_the_offending_sentences(stage0_root, monkeypatch):
     prompts = []
 
@@ -391,7 +440,7 @@ def test_leak_repair_sends_only_the_offending_sentences(stage0_root, monkeypatch
             return llm.LLMResult(
                 text="",
                 parsed=contracts.ContractsAndMethods(
-                    contracts=[contracts.SlimContract(analysis_id="a01")],
+                    contracts=[atomic_contract(analysis_id="a01")],
                     redacted_methods=(
                         "# Methods\n\nParticipants were 40 students recruited on campus.\n"
                         "Intimacy differed between conditions, t(27) = 5.91.\n"
@@ -416,7 +465,7 @@ def test_leak_repair_sends_only_the_offending_sentences(stage0_root, monkeypatch
     contracts.run(Manifest(), [record()], PAPER, {})
 
     repair_step, repair_prompt, kw = prompts[1]
-    assert repair_step == "leak_repair:1" and kw["tier"] == "cheap"
+    assert repair_step.startswith("leak_repair:1:") and kw["tier"] == "cheap"
     assert PAPER not in repair_prompt  # the paper never reaches the repair call
     assert "recruited on campus" not in repair_prompt  # only the leaking sentence goes
     assert "5.91" in repair_prompt
@@ -447,7 +496,7 @@ def test_repair_stops_after_two_rounds_and_leaves_the_hits(stage0_root, monkeypa
     monkeypatch.setattr(llm, "call", fake_call)
     hits, calls = redact.repair(Manifest(), [methods], [record()], [])
 
-    assert rounds == ["leak_repair:1", "leak_repair:2"]
+    assert [step.split(':')[1] for step in rounds] == ['1', '2']
     assert len(calls) == 2
     assert [h["value"] for h in hits] == ["5.91"]  # the caller abstains on these
 
@@ -458,7 +507,7 @@ def _fake_contracts_call(calls):
         return llm.LLMResult(
             text="",
             parsed=contracts.ContractsAndMethods(
-                contracts=[contracts.SlimContract(analysis_id="a01", model_type="paired t test")],
+                contracts=[atomic_contract(analysis_id="a01", model_type="paired t test")],
                 redacted_methods="# Methods\n\nParticipants were 40 students.\n",
             ),
             ledger_id="L1",
@@ -505,9 +554,11 @@ def _slim_claim(page, value, precision=2):
     )
 
 
-def test_verify_claim_pages_reassigns_to_the_one_nearby_page_that_prints_the_value():
+def test_verify_claim_pages_requires_source_quote_before_reassignment():
     texts = ["", "nothing here", "still nothing", "the effect was t(27) = 5.91", "", "", ""]
     claims = [_slim_claim(page=1, value=5.91, precision=2)]
+    assert extract.verify_claim_pages(claims, texts)[0].location.page == 1
+    claims[0].source_quote = "the effect was t(27) = 5.91"
     out = extract.verify_claim_pages(claims, texts)
     assert out[0].location.page == 3
     assert out[0].page_corrected == {"from": 1, "to": 3}
@@ -540,7 +591,7 @@ def test_verify_claim_pages_leaves_a_claim_ambiguous_between_two_nearby_pages():
 # --- readiness ------------------------------------------------------------
 
 
-def test_readiness_prompt_carries_the_schema_and_no_paper_text(stage0_root, monkeypatch):
+def test_readiness_prompt_carries_schema_without_requiring_an_optional_text_copy(stage0_root, monkeypatch):
     data = stage0_root / "corpus" / "_p" / "data"
     data.mkdir()
     (data / "d.csv").write_text("pid,intimacy\n1,4.5\n2,3.5\n")
@@ -572,3 +623,167 @@ def test_readiness_prompt_carries_the_schema_and_no_paper_text(stage0_root, monk
     assert "intimacy" in seen["prompt"]  # schema column and contract field
     assert PAPER not in seen["prompt"] and "t(27)" not in seen["prompt"]
     assert "EstimandContract" not in seen["prompt"]  # contract meta is stripped
+
+
+def test_leak_repair_rejects_changed_ids_without_applying_partial_output(stage0_root, monkeypatch):
+    p = paths.run_dir('_p', 0) / 'blind_contract.json'
+    p.write_text(json.dumps({'description': 'The t statistic was 5.91.'}))
+    original = p.read_text()
+    def fake_call(step, prompt, **kwargs):
+        payload = json.loads(prompt.split('Items:\n')[1].split('\nReturn JSON')[0])
+        assert payload[0]['id'] == 'r0000'
+        return llm.LLMResult(text='', parsed=redact.ScrubOut(items=[
+            redact.ScrubbedText(id='changed', text='[redacted: result]')]), ledger_id='L')
+    monkeypatch.setattr(llm, 'call', fake_call)
+    with pytest.raises(llm.LLMError, match='item IDs'):
+        redact.repair(Manifest(), [p], [record()], [])
+    assert p.read_text() == original
+
+
+def test_dense_partition_preserves_relative_pages_ids_and_all_calls(monkeypatch):
+    from reproscope.stage0 import extract
+    def one(manifest,tier,pages,start,n_pages):
+        assert n_pages==1
+        claim=extract.SlimClaim(claim_id='same',value=start,location=extract.SlimLocation(page=1),source_token_id=f'p{start+1}:token')
+        part=extract.ClaimList(claims=[claim],regions=[extract.RegionCoverage(page=1,kind='table',region_id='table',status='complete',claim_ids=['same'])])
+        return start,part,f'call{start}'
+    monkeypatch.setattr(extract,'_chunk_call',one)
+    start,part,calls=extract._split_chunk(None,'vision_a',[None]*8,4,2)
+    assert start==4 and calls==['call4','call5']
+    assert [c.location.page for c in part.claims]==[1,2]
+    assert [c.source_token_id for c in part.claims]==['p5:token','p6:token']
+    assert not extract.coverage_errors(part,2)
+
+
+def test_partition_cache_migration_requires_every_semantic_input_unchanged():
+    from reproscope.stage0.extract import _compatible_inputs,PARTITION_COMPATIBLE_IMPLEMENTATIONS
+    old={'implementation':next(iter(PARTITION_COMPATIBLE_IMPLEMENTATIONS)),'pdf':'pdf','prompt':'prompt','model':'same'}
+    current={**old,'implementation':'adaptive_partition'}
+    assert _compatible_inputs(old,current)
+    assert not _compatible_inputs(old,{**current,'prompt':'changed'})
+    assert not _compatible_inputs(old,{**current,'model':'different'})
+
+
+def test_bare_decimal_tables_count_towards_the_extraction_output_budget():
+    from reproscope.stage0.extract import _output_density
+    assert _output_density(' '.join(['.52 −.71 0.25']*40))==120
+
+
+def test_blind_contracts_remove_observed_counts_without_losing_design_parameters():
+    c=artifacts.EstimandContract(analysis_id='a',sample_rule='eligible adults',design={'family':'paired_t','n_total':28,'group_ns':[14,14],'null_value':0,'contrast':'x minus y','independent_unit':'participant','evidence':'paired design'})
+    result=redact.blind_contracts([c],{})[0]
+    assert 'n_total' not in result['design'] and 'group_ns' not in result['design']
+    assert result['design']['null_value']==0 and result['sample_rule']=='eligible adults'
+
+
+def test_scrub_cache_tracks_prompt_and_reuses_identical_fragments(stage0_root,monkeypatch):
+    from types import SimpleNamespace
+    calls=[]
+    def chunk(manifest,items,index):
+        calls.append(items)
+        return redact.ScrubOut(items=[redact.ScrubbedText(id=i['id'],text='eligible participants') for i in items]),'call'
+    monkeypatch.setattr(redact,'_scrub_chunk',chunk)
+    man=SimpleNamespace(paper_id='_p');items=[{'id':'a','text':'The 138 participants'},{'id':'b','text':'The 138 participants'}]
+    out,_=redact.scrub_texts(man,items)
+    assert out=={'a':'eligible participants','b':'eligible participants'} and len(calls[0])==1
+    redact.scrub_texts(man,items);assert len(calls)==1
+    monkeypatch.setattr(redact,'SCRUB_PROMPT',redact.SCRUB_PROMPT+' Changed policy.')
+    redact.scrub_texts(man,items);assert len(calls)==2
+    redact.scrub_texts(man,[{'id':'methods_document','text':'original methods'}])
+    redact.scrub_texts(man,[{'id':'methods_document','text':'eligible participants\n'}])
+    assert len(calls)==3
+
+
+def test_ci_constant_collision_requires_exact_registered_template(tmp_path):
+    c=artifacts.ClaimRecord(claim_id='ci',quantity_kind='ci_bound',value=.95,precision=2,importance='headline')
+    task=tmp_path/'TASK.md'
+    task.write_text(artifacts.load_prompt('stage1_replica_task')+'\n\n'+artifacts.load_prompt('stage1_adjusted_protocol'))
+    collisions=[]
+    assert not leakcheck.scan([task],[c],method_collisions=collisions)
+    assert len(collisions)==1 and collisions[0]['claim_ids']==['ci']
+    task.write_text(task.read_text()+'\nPaper-specific addition.')
+    assert leakcheck.scan([task],[c])
+
+
+def test_semantic_leak_repair_anchors_decoded_json_prose(tmp_path):
+    from reproscope.stage0 import redact
+    p=tmp_path/'blind_contract.json'
+    p.write_text(json.dumps({'contracts':[{'sample_rule':'"One participant on medication was excluded".','design':{'null_value':0}}]}))
+    audit={'passage_checks':[{'quote':'"One participant on medication was excluded".','kind':'numeric_result','anchored':True},
+                             {'quote':'unseen finding','kind':'directional_result','anchored':False}]}
+    items=redact.semantic_repair_items([p],audit)
+    assert len(items)==1 and items[0]['location']=='$.contracts[0].sample_rule'
+    redact.apply_repairs([p],items,{items[0]['id']:'Participants on medication were excluded.'})
+    result=json.loads(p.read_text())
+    assert result['contracts'][0]['design']['null_value']==0
+    assert result['contracts'][0]['sample_rule']=='Participants on medication were excluded.'
+
+
+def test_dense_source_scopes_cover_each_physical_occurrence_and_image_only():
+    from reproscope.stage0 import extract
+    ids=[f'p001:n{i}' for i in range(85)]
+    page={'numeric_candidates':[{'source_token_id':v} for v in ids],
+          'marker_candidates':[{'source_token_id':'p001:star'}]}
+    scopes=extract._dense_scopes(page)
+    assert [i for s in scopes for i in s['ids']]==ids+['p001:star']
+    assert all(len(s['ids'])<=40 for s in scopes)
+    assert len([s for s in scopes if s['image_only']])==1
+    claim=extract.SlimClaim(claim_id='c1',source_token_id='p001:n0')
+    part=extract.ClaimList(claims=[claim])
+    assert not extract._scope_errors(part,scopes[0])
+    assert extract._scope_errors(part,scopes[1])
+    assert extract._scope_errors(part,scopes[-1])
+    claim.source_token_id=None
+    assert not extract._scope_errors(part,scopes[-1])
+    assert extract._scope_errors(part,scopes[0])
+
+
+def test_dense_page_partition_merges_and_resumes_completed_source_calls(monkeypatch,tmp_path):
+    from reproscope.stage0 import extract
+    from reproscope import source_layout
+    from types import SimpleNamespace
+    page=tmp_path/'page.png';page.write_bytes(b'original image')
+    layout={'pages':[{'numeric_candidates':[{'source_token_id':f'p001:n{i}'} for i in range(45)]}]}
+    monkeypatch.setattr(source_layout,'build',lambda _:layout)
+    monkeypatch.setattr(extract.paths,'run_dir',lambda *args:tmp_path/'stage0')
+    manifest=SimpleNamespace(paper_id='test',pdf='paper.pdf',path=lambda _:tmp_path/'paper.pdf')
+    calls=[]
+    def one(man,tier,pages,start,n_pages,scope):
+        calls.append(scope['part'])
+        token=scope['ids'][0] if scope['ids'] else None
+        c=extract.SlimClaim(claim_id='c1',source_token_id=token,location=extract.SlimLocation(page=1))
+        part=extract.ClaimList(claims=[c],regions=[extract.RegionCoverage(page=1,kind='table',region_id='r',status='complete',claim_ids=['c1'])])
+        return start,part,f'call{scope["part"]}'
+    monkeypatch.setattr(extract,'_chunk_call',one)
+    _,result,ids=extract._partition_dense_page(manifest,'vision_a',[page],0)
+    assert ids==['call1','call2','call3']
+    assert [c.claim_id for c in result.claims]==['c001','c002','c003']
+    assert len({r.region_id for r in result.regions})==3
+    assert not extract.coverage_errors(result,1)
+    extract._partition_dense_page(manifest,'vision_a',[page],0)
+    assert sorted(calls)==[1,2,3]
+
+
+def test_dense_partitions_keep_visual_rows_together_despite_column_order():
+    from reproscope.stage0.extract import _dense_scopes
+    candidates=[{'source_token_id':f'{x}:{y}','bbox':[x,y,x+1,y+1]} for x in [0,10] for y in [0,10,20]]
+    scopes=_dense_scopes({'numeric_candidates':candidates},limit=3)
+    assert [s['ids'] for s in scopes[:-1]]==[['0:0','10:0'],['0:10','10:10'],['0:20','10:20']]
+
+
+def test_leak_repair_batches_cache_and_apply_complete_scope(stage0_root, monkeypatch):
+    p = paths.run_dir('_p', 0) / 'redacted_methods.md'
+    original = '\n'.join(f'Comparison {i} yielded t = 5.91.' for i in range(85))
+    calls = []
+    def call(step, prompt, **kw):
+        sent = json.loads(prompt.split('Items:\n')[1].split('\nReturn JSON')[0])
+        calls.append(len(sent))
+        return llm.LLMResult(text='', parsed=redact.ScrubOut(items=[
+            redact.ScrubbedText(id=i['id'], text='The t statistic compared conditions.') for i in sent]), ledger_id=step)
+    monkeypatch.setattr(llm, 'call', call)
+    for _ in range(2):
+        p.write_text(original)
+        hits, ids = redact.repair(Manifest(), [p], [record()], [])
+        assert not hits and '5.91' not in p.read_text()
+        assert len(ids) == 3
+    assert sorted(calls) == [5, 40, 40]
